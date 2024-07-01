@@ -1,20 +1,22 @@
 #![no_std]
 #![no_main]
 
+use common::{Packet, PacketError, ADV_ADDRESS, ADV_CRC_INIT, CRC_POLY, FREQ, MAX_PDU};
 use defmt::info;
 use defmt::unwrap;
 use embassy_executor::Spawner;
-use embassy_nrf::gpio::{Level, Output, OutputDrive};
+// use embassy_nrf::gpio::{Level, Output, OutputDrive};
 use embassy_nrf::radio::ble::Mode;
 use embassy_nrf::radio::ble::Radio;
 use embassy_nrf::radio::TxPower;
 use embassy_nrf::{bind_interrupts, peripherals, radio};
-use embassy_time::WithTimeout;
-use embassy_time::{Duration, Timer};
+// use embassy_time::{Duration, Timer};
 use {defmt_rtt as _, panic_probe as _};
+use nrf52840_hal::pac;
+use nrf52840_hal::prelude::*;
+use nrf52840_hal::gpio::{Level, Output, Pin};
 
 use lakers::*;
-use lakers_crypto::{default_crypto, CryptoTrait};
 
 extern crate alloc;
 
@@ -37,15 +39,28 @@ bind_interrupts!(struct Irqs {
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
+    let peripherals = pac::Peripherals::take().unwrap();
+    let p0 = nrf52840_hal::gpio::p0::Parts::new(peripherals.P0);
+    let p1 = nrf52840_hal::gpio::p1::Parts::new(peripherals.P1);
+
+    let mut led_pin_p0_26 = p0.p0_26.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led_pin_p0_8 = p0.p0_08.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led_pin_p0_7 = p0.p0_07.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led_pin_p0_6 = p0.p0_06.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led_pin_p0_5 = p0.p0_05.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+
+    let mut led_pin_p1_07 = p1.p1_07.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led_pin_p1_08 = p1.p1_08.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+
     let mut config = embassy_nrf::config::Config::default();
     config.hfclk_source = embassy_nrf::config::HfclkSource::ExternalXtal;
-    let peripherals = embassy_nrf::init(config);
+    let embassy_peripherals: embassy_nrf::Peripherals = embassy_nrf::init(config);
 
     info!("Starting BLE radio");
-    let mut radio: Radio<'_, _> = Radio::new(peripherals.RADIO, Irqs).into();
+    let mut radio: Radio<'_, _> = Radio::new(embassy_peripherals.RADIO, Irqs).into();
 
-    let mut led = Output::new(peripherals.P0_13, Level::Low, OutputDrive::Standard);
-    led.set_high();
+    //let mut led = Output::new(embassy_peripherals.P0_13, Level::Low, OutputDrive::Standard);
+    //led.set_high();
 
     radio.set_mode(Mode::BLE_1MBIT);
     radio.set_tx_power(TxPower::_0D_BM);

@@ -48,7 +48,7 @@ fn main() {
                 let responder = EdhocResponder::new(
                     lakers_crypto::default_crypto(),
                     EDHOCMethod::StatStat,
-                    R.try_into().unwrap(),
+                    Some(R.try_into().unwrap()),
                     cred_r,
                 );
 

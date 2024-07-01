@@ -1,12 +1,8 @@
 use embassy_nrf::radio::ble::Radio;
-use embassy_nrf::saadc::Time;
-use embassy_nrf::{peripherals, radio};
-use embassy_time::Duration;
 use embassy_time::TimeoutError;
-use embassy_time::WithTimeout;
 use hexlit::hex;
-
-use defmt::info;
+use embedded_hal::digital::v2::OutputPin;
+use nrf52840_hal::gpio::Output;
 
 pub const MAX_PDU: usize = 258;
 pub const FREQ: u32 = 2408;
@@ -18,6 +14,10 @@ pub const CRED_I: &[u8] = &hex!("A2027734322D35302D33312D46462D45462D33372D33322
 pub const I: &[u8] = &hex!("fb13adeb6518cee5f88417660841142e830a81fe334380a953406a1305e8706b");
 pub const R: &[u8] = &hex!("72cc4761dbd4c78f758931aa589d348d1ef874a7e303ede2f140dcf3e6aa4aac");
 pub const CRED_R: &[u8] = &hex!("A2026008A101A5010202410A2001215820BBC34960526EA4D32E940CAD2A234148DDC21791A12AFBCBAC93622046DD44F02258204519E257236B2A0CE2023F0931F1F386CA7AFDA64FCDE0108C224C51EABF6072");
+
+pub const ID_CRED: &[u8] = &hex!("a1044120");
+pub const CRED_PSK: &[u8] =
+    &hex!("A202686D79646F74626F7408A101A30104024132205050930FF462A77A3540CF546325DEA214");
 
 #[derive(Debug)]
 pub enum PacketError {
@@ -123,14 +123,47 @@ impl From<embassy_nrf::radio::Error> for PacketError {
         }
     }
 }
+// pub async fn receive_and_filter(
+//     radio: &mut Radio<'static, embassy_nrf::peripherals::RADIO>,
+//     header: Option<u8>,
+// ) -> Result<Packet, PacketError>{
+//     let mut buffer: [u8; MAX_PDU] = [0x00u8; MAX_PDU];
+//     loop {
+//         radio.receive(&mut buffer).await?;
+//         if let Ok(pckt) = <&[u8] as TryInto<Packet>>::try_into(&(buffer[..])) {
+//             if let Some(header) = header {
+//                 if pckt.pdu[0] == header {
+//                     return Ok(pckt);
+//                 } else {
+//                     continue;
+//                 }
+//             } else {
+//                 // header is None
+//                 return Ok(pckt);
+//             }
+//         } else {
+//             continue;
+//         }
+//     }
+// }
 
-pub async fn receive_and_filter(
+pub async fn receive_and_filter<P>(
     radio: &mut Radio<'static, embassy_nrf::peripherals::RADIO>,
     header: Option<u8>,
-) -> Result<Packet, PacketError> {
+    mut led_pin: Option<&mut P>,
+) -> Result<Packet, PacketError>
+    where 
+        P: OutputPin, <P as nrf52840_hal::prelude::OutputPin>::Error: core::fmt::Debug
+{
     let mut buffer: [u8; MAX_PDU] = [0x00u8; MAX_PDU];
     loop {
+        if let Some(pin) = &mut led_pin {
+            pin.set_high().unwrap();
+        }
         radio.receive(&mut buffer).await?;
+        if let Some(pin) = &mut led_pin {
+            pin.set_low().unwrap();
+        }
         if let Ok(pckt) = <&[u8] as TryInto<Packet>>::try_into(&(buffer[..])) {
             if let Some(header) = header {
                 if pckt.pdu[0] == header {
@@ -146,31 +179,66 @@ pub async fn receive_and_filter(
             continue;
         }
     }
+// }
+
+// pub async fn transmit_and_wait_response(
+//     radio: &mut Radio<'static, embassy_nrf::peripherals::RADIO>,
+//     mut packet: Packet,
+//     filter: Option<u8>
+// ) -> Result<Packet, PacketError> {
+//     let rcvd_packet: Packet = Default::default();
+//     let buffer: [u8; MAX_PDU] = [0x00u8; MAX_PDU];
+
+//     radio.transmit(packet.as_bytes()).await?;
+
+//     let resp = receive_and_filter(radio, filter).await?;
+
+//     Ok(resp)
 }
 
-pub async fn transmit_and_wait_response(
+pub async fn transmit_and_wait_response<P>(
     radio: &mut Radio<'static, embassy_nrf::peripherals::RADIO>,
     mut packet: Packet,
     filter: Option<u8>,
-) -> Result<Packet, PacketError> {
-    let mut rcvd_packet: Packet = Default::default();
-    let mut buffer: [u8; MAX_PDU] = [0x00u8; MAX_PDU];
+    led_pin: &mut P
+) -> Result<Packet, PacketError> 
+    where 
+        P: OutputPin, <P  as nrf52840_hal::prelude::OutputPin>::Error: core::fmt::Debug
+{
+    let rcvd_packet: Packet = Default::default();
+    let buffer: [u8; MAX_PDU] = [0x00u8; MAX_PDU];
 
+    led_pin.set_high().unwrap();
     radio.transmit(packet.as_bytes()).await?;
-    let resp = receive_and_filter(radio, filter).await?;
+    led_pin.set_low().unwrap();
+
+    let resp = receive_and_filter::<P>(radio, filter, None).await?;
 
     Ok(resp)
 }
+// pub async fn transmit_without_response(
+//     radio: &mut Radio<'static, embassy_nrf::peripherals::RADIO>,
+//     mut packet: Packet,
+// ) -> Result<(), PacketError> {
+//     radio.transmit(packet.as_bytes()).await?;
+//     Ok(())
+// }
 
-pub async fn transmit_without_response(
+pub async fn transmit_without_response<P>(
     radio: &mut Radio<'static, embassy_nrf::peripherals::RADIO>,
     mut packet: Packet,
-) -> Result<(), PacketError> {
+    led_pin: &mut P
+) -> Result<(), PacketError> 
+    where 
+        P: OutputPin, <P  as nrf52840_hal::prelude::OutputPin>::Error: core::fmt::Debug
+{
+    led_pin.set_high().unwrap();
     radio.transmit(packet.as_bytes()).await?;
+    led_pin.set_low().unwrap();
     Ok(())
 }
 
-use core::ffi::{c_char, c_void};
+use core::ffi::c_char;
 #[no_mangle]
 pub extern "C" fn strstr(cs: *const c_char, ct: *const c_char) -> *mut c_char {
     panic!("strstr handler!");

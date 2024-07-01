@@ -16,6 +16,7 @@ defmt-or-log = { version = "0.2.1", default-features = false }
 log = { version = "0.4", optional = true }
 defmt = { version = "0.3", optional = true }
 digest = { version = "0.10.7", default-features = false }
+hex = "0.4"
 
 [dev-dependencies]
 lakers-ead-authz = { workspace = true }

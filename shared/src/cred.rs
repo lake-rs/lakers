@@ -4,6 +4,7 @@ pub type BufferCred = EdhocBuffer<192>; // arbitrary size
 pub type BufferKid = EdhocBuffer<16>; // variable size, up to 16 bytes
 pub type BufferIdCred = EdhocBuffer<192>; // variable size, can contain either the contents of a BufferCred or a BufferKid
 pub type BytesKeyAES128 = [u8; 16];
+pub type BytesKeyKid = [u8; 4];
 pub type BytesKeyEC2 = [u8; 32];
 
 #[derive(Clone, Copy, Debug, PartialEq)]
