@@ -751,6 +751,33 @@ impl EADItem {
             .as_ref()
             .map(|v| pyo3::types::PyBytes::new(py, v))
     }
+
+    #[cfg(feature = "python-bindings")]
+    pub fn __repr__(&self) -> String {
+        let crit = if self.is_critical {
+            "critical"
+        } else {
+            "not critical"
+        };
+        if let Some(value) = self.value_bytes().as_ref() {
+            if value.len() > 5 {
+                format!(
+                    "<EADItem label={}, {}, value {:?}… ({} byte)>",
+                    self.label,
+                    crit,
+                    &value[..5],
+                    value.len()
+                )
+            } else {
+                format!(
+                    "<EADItem label={}, {}, value {:?}>",
+                    self.label, crit, value
+                )
+            }
+        } else {
+            format!("<EADItem label={}, {}, no value>", self.label, crit)
+        }
+    }
 }
 
 /// An owned list of External Authorization Data.
