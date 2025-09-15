@@ -22,3 +22,12 @@ def test_initiator():
 def test_responder():
     r = repr(lakers.EdhocResponder(R, CRED_R))
     assert " in state Start" in r
+
+
+def test_credential():
+    cred_r = repr(lakers.Credential(CRED_R))
+    # Not all of that is a guaranteed property, but let's make sure we deliberately change it.
+    assert cred_r.startswith(
+        "Credential(bytes.fromhex('" + CRED_R.hex() + "'), public_key=bytes.fromhex('"
+    )
+    assert cred_r.endswith("'), kid=bytes.fromhex('0a'))")
