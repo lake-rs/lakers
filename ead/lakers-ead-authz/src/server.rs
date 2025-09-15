@@ -166,11 +166,8 @@ fn encode_voucher_response(
     output.extend_from_slice(message_1.as_slice()).unwrap();
 
     output
-        .push(CBOR_MAJOR_BYTE_STRING + 1 + VOUCHER_LEN as u8)
+        .push(CBOR_MAJOR_BYTE_STRING + VOUCHER_LEN as u8)
         .unwrap();
-    // The voucher is double-wrapped in bytes; see
-    // <https://github.com/lake-rs/lakers/issues/382>
-    output.push(0x48).unwrap();
     output.extend_from_slice(voucher).unwrap();
 
     if let Some(opaque_state) = opaque_state {

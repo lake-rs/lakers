@@ -87,11 +87,10 @@ fn parse_voucher_response(
     }
 
     let message_1: EdhocMessageBuffer = decoder.bytes()?.try_into().unwrap();
-    // The voucher is double-wrapped in bytes; see
-    // <https://github.com/openwsn-berkeley/lakers/issues/382>
-    let outer_voucher = decoder.bytes()?;
-    let mut inner_decoder = CBORDecoder::new(outer_voucher);
-    let voucher: BytesVoucher = inner_decoder.bytes_sized(VOUCHER_LEN)?.try_into().unwrap();
+    let voucher: BytesVoucher = decoder
+        .bytes()?
+        .try_into()
+        .map_err(|_| EDHOCError::EADUnprocessable)?;
 
     if array_size == 3 {
         let opaque_state: EdhocMessageBuffer = decoder.bytes()?.try_into().unwrap();
