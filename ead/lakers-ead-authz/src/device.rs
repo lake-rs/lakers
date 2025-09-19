@@ -107,7 +107,12 @@ fn encrypt_enc_id<Crypto: CryptoTrait>(
     let enc_structure = encode_enc_structure(ss);
 
     // ENC_ID = 'ciphertext' of COSE_Encrypt0
-    crypto.aes_ccm_encrypt_tag_8(&k_1, &iv_1, &enc_structure[..], plaintext.as_slice())
+    crypto.aes_ccm_encrypt::<MAX_MESSAGE_SIZE_LEN, AesCcmTag8>(
+        &k_1,
+        &iv_1,
+        &enc_structure[..],
+        plaintext.as_slice(),
+    )
 }
 
 fn encode_ead_1_value(loc_w: &EdhocMessageBuffer, enc_id: &EdhocMessageBuffer) -> EADBuffer {

@@ -126,7 +126,14 @@ pub fn r_parse_message_3(
     crypto: &mut impl CryptoTrait,
     message_3: &BufferMessage3,
 ) -> Result<(ProcessingM3, IdCred, EadItems), EDHOCError> {
-    let plaintext_3 = decrypt_message_3(crypto, &state.prk_3e2m, &state.th_3, message_3);
+    // FIXME: support cipher suite negotiation
+    let plaintext_3 = decrypt_message_3(
+        crypto,
+        &state.prk_3e2m,
+        &state.th_3,
+        message_3,
+        EDHOCSuite::CipherSuite2,
+    );
 
     if let Ok(plaintext_3) = plaintext_3 {
         let decoded_p3_res = decode_plaintext_3(&plaintext_3);
@@ -219,7 +226,14 @@ pub fn r_prepare_message_4(
 ) -> Result<(Completed, BufferMessage4), EDHOCError> {
     // compute ciphertext_4
     let plaintext_4 = encode_plaintext_4(&ead_4)?;
-    let message_4 = encrypt_message_4(crypto, &state.prk_4e3m, &state.th_4, &plaintext_4);
+    // FIXME: support cipher suite negotiation
+    let message_4 = encrypt_message_4(
+        crypto,
+        &state.prk_4e3m,
+        &state.th_4,
+        &plaintext_4,
+        EDHOCSuite::CipherSuite2,
+    );
 
     Ok((
         Completed {
@@ -373,7 +387,14 @@ pub fn i_prepare_message_3(
     );
 
     let plaintext_3 = encode_plaintext_3(id_cred_i.as_encoded_value(), &mac_3, &ead_3)?;
-    let message_3 = encrypt_message_3(crypto, &state.prk_3e2m, &state.th_3, &plaintext_3);
+    // FIXME: support cipher suite negotiation
+    let message_3 = encrypt_message_3(
+        crypto,
+        &state.prk_3e2m,
+        &state.th_3,
+        &plaintext_3,
+        EDHOCSuite::CipherSuite2,
+    );
 
     let th_4 = compute_th_4(crypto, &state.th_3, &plaintext_3, cred_i.bytes.as_slice());
 
@@ -404,7 +425,14 @@ pub fn i_process_message_4(
     crypto: &mut impl CryptoTrait,
     message_4: &BufferMessage4,
 ) -> Result<(Completed, EadItems), EDHOCError> {
-    let plaintext_4 = decrypt_message_4(crypto, &state.prk_4e3m, &state.th_4, &message_4)?;
+    // FIXME: support cipher suite negotiation
+    let plaintext_4 = decrypt_message_4(
+        crypto,
+        &state.prk_4e3m,
+        &state.th_4,
+        &message_4,
+        EDHOCSuite::CipherSuite2,
+    )?;
     let decoded_p4_res = decode_plaintext_4(&plaintext_4);
 
     if let Ok(ead_4) = decoded_p4_res {
