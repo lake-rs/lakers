@@ -1188,6 +1188,13 @@ mod tests {
     const PLAINTEXT_2_SURPLUS_BSTR_ID_CRED_TV: EdhocMessageBuffer =
         EdhocBuffer::new_from_array(&hex!("27413248fa5efa2ebf920bf3"));
 
+    // Other cipher suites
+    const MESSAGE_3_CIPHER_3: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!(
+        "581ae562097bc417dd59194862c4b6e33f47568dba3ee6ba7ed5b048"
+    ));
+    const MESSAGE_4_CIPHER_3: EdhocMessageBuffer =
+        EdhocBuffer::new_from_array(&hex!("509859a3cc4ebba0cb78a4ae26ec9964c0"));
+
     #[test]
     fn test_ecdh() {
         let g_xy = default_crypto().p256_ecdh(&X_TV, &G_Y_TV);
@@ -1364,14 +1371,46 @@ mod tests {
             &PRK_3E2M_TV,
             &TH_3_TV,
             &PLAINTEXT_3_TV,
+            EDHOCSuite::CipherSuite2,
         );
         assert_eq!(message_3, MESSAGE_3_TV);
     }
 
     #[test]
     fn test_decrypt_message_3() {
-        let plaintext_3 =
-            decrypt_message_3(&mut default_crypto(), &PRK_3E2M_TV, &TH_3_TV, &MESSAGE_3_TV);
+        let plaintext_3 = decrypt_message_3(
+            &mut default_crypto(),
+            &PRK_3E2M_TV,
+            &TH_3_TV,
+            &MESSAGE_3_TV,
+            EDHOCSuite::CipherSuite2,
+        );
+        assert!(plaintext_3.is_ok());
+        assert_eq!(plaintext_3.unwrap(), PLAINTEXT_3_TV);
+    }
+
+    #[test]
+    fn test_encrypt_message_3_suite_3() {
+        let message_3 = encrypt_message_3(
+            &mut default_crypto(),
+            &PRK_3E2M_TV,
+            &TH_3_TV,
+            &PLAINTEXT_3_TV,
+            EDHOCSuite::CipherSuite3,
+        );
+        assert_eq!(message_3, MESSAGE_3_CIPHER_3);
+    }
+
+    #[test]
+    fn test_decrypt_message_3_suite_3() {
+        let plaintext_3 = decrypt_message_3(
+            &mut default_crypto(),
+            &PRK_3E2M_TV,
+            &TH_3_TV,
+            &MESSAGE_3_CIPHER_3,
+            EDHOCSuite::CipherSuite3,
+        );
+        println!("{:?}", plaintext_3);
         assert!(plaintext_3.is_ok());
         assert_eq!(plaintext_3.unwrap(), PLAINTEXT_3_TV);
     }
@@ -1473,14 +1512,45 @@ mod tests {
             &PRK_4E3M_TV,
             &TH_4_TV,
             &PLAINTEXT_4_TV,
+            EDHOCSuite::CipherSuite2,
         );
         assert_eq!(message_4, MESSAGE_4_TV);
     }
 
     #[test]
     fn test_decrypt_message_4() {
-        let plaintext_4 =
-            decrypt_message_4(&mut default_crypto(), &PRK_4E3M_TV, &TH_4_TV, &MESSAGE_4_TV);
+        let plaintext_4 = decrypt_message_4(
+            &mut default_crypto(),
+            &PRK_4E3M_TV,
+            &TH_4_TV,
+            &MESSAGE_4_TV,
+            EDHOCSuite::CipherSuite2,
+        );
+        assert!(plaintext_4.is_ok());
+        assert_eq!(plaintext_4.unwrap(), PLAINTEXT_4_TV);
+    }
+
+    #[test]
+    fn test_encrypt_message_4_suite_3() {
+        let message_4 = encrypt_message_4(
+            &mut default_crypto(),
+            &PRK_4E3M_TV,
+            &TH_4_TV,
+            &PLAINTEXT_4_TV,
+            EDHOCSuite::CipherSuite3,
+        );
+        assert_eq!(message_4, MESSAGE_4_CIPHER_3);
+    }
+
+    #[test]
+    fn test_decrypt_message_4_suite_3() {
+        let plaintext_4 = decrypt_message_4(
+            &mut default_crypto(),
+            &PRK_4E3M_TV,
+            &TH_4_TV,
+            &MESSAGE_4_CIPHER_3,
+            EDHOCSuite::CipherSuite3,
+        );
         assert!(plaintext_4.is_ok());
         assert_eq!(plaintext_4.unwrap(), PLAINTEXT_4_TV);
     }
