@@ -58,12 +58,23 @@ pub const P256_ELEM_LEN: usize = 32;
 pub const SHA256_DIGEST_LEN: usize = 32;
 pub const AES_CCM_KEY_LEN: usize = 16;
 pub const AES_CCM_IV_LEN: usize = 13;
-pub const AES_CCM_TAG_LEN: usize = 8;
 pub const MAC_LENGTH: usize = 8; // used for EAD Zeroconf
 pub const MAC_LENGTH_2: usize = MAC_LENGTH;
 pub const MAC_LENGTH_3: usize = MAC_LENGTH_2;
 pub const VOUCHER_LEN: usize = MAC_LENGTH;
 pub const MAX_EAD_ITEMS: usize = 4;
+
+pub trait AesCcmTagLen {
+    const LEN: usize;
+}
+pub struct AesCcmTag8;
+impl AesCcmTagLen for AesCcmTag8 {
+    const LEN: usize = 8;
+}
+pub struct AesCcmTag16;
+impl AesCcmTagLen for AesCcmTag16 {
+    const LEN: usize = 16;
+}
 
 // maximum supported length of connection identifier for R
 //
@@ -378,8 +389,9 @@ impl From<EDHOCMethod> for u8 {
 #[derive(PartialEq, Debug)]
 pub enum EDHOCSuite {
     CipherSuite2 = 2,
+    CipherSuite3 = 3,
     // add others, such as:
-    // CiherSuite3 = 3,
+    // CipherSuite4 = 4,
 }
 
 impl From<EDHOCSuite> for u8 {

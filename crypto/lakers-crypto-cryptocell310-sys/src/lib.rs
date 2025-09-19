@@ -80,13 +80,14 @@ impl CryptoTrait for Crypto {
         output
     }
 
-    fn aes_ccm_encrypt_tag_8<const N: usize>(
+    fn aes_ccm_encrypt<const N: usize, T: AesCcmTagLen>(
         &mut self,
         key: &BytesCcmKeyLen,
         iv: &BytesCcmIvLen,
         ad: &[u8],
         plaintext: &[u8],
     ) -> EdhocBuffer<N> {
+        let tag_len = T::LEN;
         let mut output = EdhocBuffer::new();
         let mut tag: CRYS_AESCCM_Mac_Res_t = Default::default();
         let mut aesccm_key: CRYS_AESCCM_Key_t = Default::default();
@@ -114,33 +115,32 @@ impl CryptoTrait for Crypto {
                     reason = "hax won't allow creating a .as_mut_slice() method"
                 )]
                 output.content.as_mut_ptr(),
-                AES_CCM_TAG_LEN as u8, // authentication tag length
+                tag_len as u8,
                 tag.as_mut_ptr(),
                 0 as u32, // CCM
             )
         };
 
-        output.extend_from_slice(&tag[..AES_CCM_TAG_LEN]).unwrap();
+        output.extend_from_slice(&tag[..tag_len]).unwrap();
 
         output
     }
 
-    fn aes_ccm_decrypt_tag_8<const N: usize>(
+    fn aes_ccm_decrypt<const N: usize, T: AesCcmTagLen>(
         &mut self,
         key: &BytesCcmKeyLen,
         iv: &BytesCcmIvLen,
         ad: &[u8],
         ciphertext: &[u8],
     ) -> Result<EdhocBuffer<N>, EDHOCError> {
+        let tag_len = T::LEN;
         let mut output = EdhocBuffer::new();
-        output
-            .extend_reserve(ciphertext.len() - AES_CCM_TAG_LEN)
-            .unwrap();
+        output.extend_reserve(ciphertext.len() - tag_len).unwrap();
         let mut aesccm_key: CRYS_AESCCM_Key_t = Default::default();
 
         aesccm_key[0..AES_CCM_KEY_LEN].copy_from_slice(&key[..]);
 
-        assert!(ciphertext.len() - AES_CCM_TAG_LEN <= N);
+        assert!(ciphertext.len() - tag_len <= N);
 
         #[allow(deprecated, reason = "using extend_reserve")]
         unsafe {
@@ -154,11 +154,11 @@ impl CryptoTrait for Crypto {
                 ad.len() as u32,
                 // CC_AESCCM does not really write there, it's just missing a `const`
                 ciphertext.as_ptr() as *mut _,
-                (ciphertext.len() - AES_CCM_TAG_LEN) as u32,
+                (ciphertext.len() - tag_len) as u32,
                 output.content.as_mut_ptr(),
-                AES_CCM_TAG_LEN as u8, // authentication tag length
+                tag_len as u8,
                 // as before
-                ciphertext[ciphertext.len() - AES_CCM_TAG_LEN..].as_ptr() as *mut _,
+                ciphertext[ciphertext.len() - tag_len..].as_ptr() as *mut _,
                 0 as u32, // CCM
             ) {
                 CRYS_OK => Ok(output),

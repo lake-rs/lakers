@@ -88,18 +88,19 @@ impl CryptoTrait for Crypto {
         output
     }
 
-    fn aes_ccm_encrypt_tag_8<const N: usize>(
+    fn aes_ccm_encrypt<const N: usize, T: AesCcmTagLen>(
         &mut self,
         key: &BytesCcmKeyLen,
         iv: &BytesCcmIvLen,
         ad: &[u8],
         plaintext: &[u8],
     ) -> EdhocBuffer<N> {
+        let tag_len = T::LEN;
         psa_crypto::init().unwrap();
 
         let alg = Aead::AeadWithShortenedTag {
             aead_alg: AeadWithDefaultLengthTag::Ccm,
-            tag_length: 8,
+            tag_length: tag_len,
         };
         let mut usage_flags: UsageFlags = Default::default();
         usage_flags.set_encrypt();
@@ -116,7 +117,7 @@ impl CryptoTrait for Crypto {
         let my_key = key_management::import(attributes, None, &key[..]).unwrap();
         let mut output_buffer = EdhocBuffer::new();
         let full_range = output_buffer
-            .extend_reserve(plaintext.len() + AES_CCM_TAG_LEN)
+            .extend_reserve(plaintext.len() + tag_len)
             .unwrap();
 
         #[allow(deprecated, reason = "using extend_reserve")]
@@ -133,18 +134,19 @@ impl CryptoTrait for Crypto {
         output_buffer
     }
 
-    fn aes_ccm_decrypt_tag_8<const N: usize>(
+    fn aes_ccm_decrypt<const N: usize, T: AesCcmTagLen>(
         &mut self,
         key: &BytesCcmKeyLen,
         iv: &BytesCcmIvLen,
         ad: &[u8],
         ciphertext: &[u8],
     ) -> Result<EdhocBuffer<N>, EDHOCError> {
+        let tag_len = T::LEN;
         psa_crypto::init().unwrap();
 
         let alg = Aead::AeadWithShortenedTag {
             aead_alg: AeadWithDefaultLengthTag::Ccm,
-            tag_length: 8,
+            tag_length: tag_len,
         };
         let mut usage_flags: UsageFlags = Default::default();
         usage_flags.set_decrypt();
@@ -161,7 +163,7 @@ impl CryptoTrait for Crypto {
         let my_key = key_management::import(attributes, None, &key[..]).unwrap();
         let mut output_buffer = EdhocBuffer::new();
         let out_slice = output_buffer
-            .extend_reserve(ciphertext.len() - AES_CCM_TAG_LEN)
+            .extend_reserve(ciphertext.len() - tag_len)
             .unwrap();
 
         #[allow(deprecated, reason = "using extend_reserve")]
