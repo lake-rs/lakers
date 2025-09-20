@@ -104,10 +104,10 @@ impl Credential {
 
     fn __repr__(&self) -> String {
         format!(
-            "Credential(bytes.fromhex('{}'), public_key=bytes.fromhex('{}'), kid={:?})",
+            "Credential(bytes.fromhex('{}'), public_key=bytes.fromhex('{}'), kid=bytes.fromhex('{}'))",
             hex::encode(self.bytes.as_slice()),
             hex::encode(self.public_key().unwrap().as_slice()),
-            self.kid.as_ref().unwrap(),
+            hex::encode(self.kid.as_ref().unwrap().as_slice()),
         )
     }
 
