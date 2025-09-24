@@ -74,20 +74,19 @@ impl<Rng: rand_core::RngCore + rand_core::CryptoRng> CryptoTrait for Crypto<Rng>
         extracted.finalize().0.into()
     }
 
-    fn aes_ccm_encrypt<const N: usize, T: AesCcmTagLen>(
+    fn aes_ccm_encrypt<const N: usize, Tag: AesCcmTagLen>(
         &mut self,
         key: &BytesCcmKeyLen,
         iv: &BytesCcmIvLen,
         ad: &[u8],
         plaintext: &[u8],
     ) -> EdhocBuffer<N> {
-        let tag_len = T::LEN;
         let mut outbuffer = EdhocBuffer::new_from_slice(plaintext).unwrap();
         #[allow(
             deprecated,
             reason = "hax won't allow creating a .as_mut_slice() method"
         )]
-        match tag_len {
+        match Tag::LEN {
             8 => match AesCcm16_64_128::new(key.into()).encrypt_in_place_detached(
                 iv.into(),
                 ad,
@@ -112,26 +111,25 @@ impl<Rng: rand_core::RngCore + rand_core::CryptoRng> CryptoTrait for Crypto<Rng>
                 Err(_) => panic!("Preconfigured sizes should not allow encryption to fail"),
             },
 
-            _ => panic!("unexpected tag_len: {tag_len}"),
+            _ => panic!("unexpected tag_len: {}", Tag::LEN),
         }
     }
 
-    fn aes_ccm_decrypt<const N: usize, T: AesCcmTagLen>(
+    fn aes_ccm_decrypt<const N: usize, Tag: AesCcmTagLen>(
         &mut self,
         key: &BytesCcmKeyLen,
         iv: &BytesCcmIvLen,
         ad: &[u8],
         ciphertext: &[u8],
     ) -> Result<EdhocBuffer<N>, EDHOCError> {
-        let tag_len = T::LEN;
-        let plaintext_len = ciphertext.len() - tag_len;
+        let plaintext_len = ciphertext.len() - Tag::LEN;
         let mut buffer = EdhocBuffer::new_from_slice(&ciphertext[..plaintext_len]).unwrap();
         let tag = &ciphertext[plaintext_len..];
         #[allow(
             deprecated,
             reason = "hax won't allow creating a .as_mut_slice() method"
         )]
-        match tag_len {
+        match Tag::LEN {
             8 => AesCcm16_64_128::new(key.into())
                 .decrypt_in_place_detached(
                     iv.into(),
@@ -148,7 +146,7 @@ impl<Rng: rand_core::RngCore + rand_core::CryptoRng> CryptoTrait for Crypto<Rng>
                     tag.into(),
                 )
                 .map_err(|_| EDHOCError::MacVerificationFailed),
-            _ => panic!("unexpected tag_len: {tag_len}"),
+            _ => panic!("unexpected tag_len: {}", Tag::LEN),
         }?;
 
         Ok(buffer)

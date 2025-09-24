@@ -61,14 +61,14 @@ pub trait Crypto: core::fmt::Debug {
     fn sha256_start<'a>(&'a mut self) -> Self::HashInProcess<'a>;
     fn hkdf_expand(&mut self, prk: &BytesHashLen, info: &[u8], result: &mut [u8]);
     fn hkdf_extract(&mut self, salt: &BytesHashLen, ikm: &BytesP256ElemLen) -> BytesHashLen;
-    fn aes_ccm_encrypt<const N: usize, T: AesCcmTagLen>(
+    fn aes_ccm_encrypt<const N: usize, Tag: AesCcmTagLen>(
         &mut self,
         key: &BytesCcmKeyLen,
         iv: &BytesCcmIvLen,
         ad: &[u8],
         plaintext: &[u8],
     ) -> EdhocBuffer<N>;
-    fn aes_ccm_decrypt<const N: usize, T: AesCcmTagLen>(
+    fn aes_ccm_decrypt<const N: usize, Tag: AesCcmTagLen>(
         &mut self,
         key: &BytesCcmKeyLen,
         iv: &BytesCcmIvLen,
