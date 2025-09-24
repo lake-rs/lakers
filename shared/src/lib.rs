@@ -65,14 +65,20 @@ pub const VOUCHER_LEN: usize = MAC_LENGTH;
 pub const MAX_EAD_ITEMS: usize = 4;
 
 pub trait AesCcmTagLen {
+    type TagSize: ccm::aead::generic_array::ArrayLength<u8> + ccm::TagSize;
+
     const LEN: usize;
 }
 pub struct AesCcmTag8;
 impl AesCcmTagLen for AesCcmTag8 {
+    type TagSize = ccm::consts::U8;
+
     const LEN: usize = 8;
 }
 pub struct AesCcmTag16;
 impl AesCcmTagLen for AesCcmTag16 {
+    type TagSize = ccm::consts::U16;
+
     const LEN: usize = 16;
 }
 

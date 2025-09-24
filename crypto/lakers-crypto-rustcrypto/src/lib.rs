@@ -12,9 +12,6 @@ use p256::elliptic_curve::point::AffineCoordinates;
 use p256::elliptic_curve::point::DecompressPoint;
 use sha2::Digest;
 
-type AesCcm16_64_128 = ccm::Ccm<aes::Aes128, ccm::consts::U8, ccm::consts::U13>;
-type AesCcm16_128_128 = ccm::Ccm<aes::Aes128, ccm::consts::U16, ccm::consts::U13>;
-
 /// A type representing cryptographic operations through various RustCrypto crates (eg. [aes],
 /// [ccm], [p256]).
 ///
@@ -82,37 +79,21 @@ impl<Rng: rand_core::RngCore + rand_core::CryptoRng> CryptoTrait for Crypto<Rng>
         plaintext: &[u8],
     ) -> EdhocBuffer<N> {
         let mut outbuffer = EdhocBuffer::new_from_slice(plaintext).unwrap();
+        type AesCcm<Tag> = ccm::Ccm<aes::Aes128, <Tag as AesCcmTagLen>::TagSize, ccm::consts::U13>;
         #[allow(
             deprecated,
             reason = "hax won't allow creating a .as_mut_slice() method"
         )]
-        match Tag::LEN {
-            8 => match AesCcm16_64_128::new(key.into()).encrypt_in_place_detached(
-                iv.into(),
-                ad,
-                &mut outbuffer.content[..plaintext.len()],
-            ) {
-                Ok(tag) => {
-                    outbuffer.extend_from_slice(&tag).unwrap();
-                    outbuffer
-                }
-                Err(_) => panic!("Preconfigured sizes should not allow encryption to fail"),
-            },
-
-            16 => match AesCcm16_128_128::new(key.into()).encrypt_in_place_detached(
-                iv.into(),
-                ad,
-                &mut outbuffer.content[..plaintext.len()],
-            ) {
-                Ok(tag) => {
-                    outbuffer.extend_from_slice(&tag).unwrap();
-                    outbuffer
-                }
-                Err(_) => panic!("Preconfigured sizes should not allow encryption to fail"),
-            },
-
-            _ => panic!("unexpected tag_len: {}", Tag::LEN),
+        if let Ok(tag) = AesCcm::<Tag>::new(key.into()).encrypt_in_place_detached(
+            iv.into(),
+            ad,
+            &mut outbuffer.content[..plaintext.len()],
+        ) {
+            outbuffer.extend_from_slice(&tag).unwrap();
+        } else {
+            panic!("Preconfigured sizes should not allow encryption to fail")
         }
+        outbuffer
     }
 
     fn aes_ccm_decrypt<const N: usize, Tag: AesCcmTagLen>(
@@ -125,29 +106,19 @@ impl<Rng: rand_core::RngCore + rand_core::CryptoRng> CryptoTrait for Crypto<Rng>
         let plaintext_len = ciphertext.len() - Tag::LEN;
         let mut buffer = EdhocBuffer::new_from_slice(&ciphertext[..plaintext_len]).unwrap();
         let tag = &ciphertext[plaintext_len..];
+        type AesCcm<Tag> = ccm::Ccm<aes::Aes128, <Tag as AesCcmTagLen>::TagSize, ccm::consts::U13>;
         #[allow(
             deprecated,
             reason = "hax won't allow creating a .as_mut_slice() method"
         )]
-        match Tag::LEN {
-            8 => AesCcm16_64_128::new(key.into())
-                .decrypt_in_place_detached(
-                    iv.into(),
-                    ad,
-                    &mut buffer.content[..plaintext_len],
-                    tag.into(),
-                )
-                .map_err(|_| EDHOCError::MacVerificationFailed),
-            16 => AesCcm16_128_128::new(key.into())
-                .decrypt_in_place_detached(
-                    iv.into(),
-                    ad,
-                    &mut buffer.content[..plaintext_len],
-                    tag.into(),
-                )
-                .map_err(|_| EDHOCError::MacVerificationFailed),
-            _ => panic!("unexpected tag_len: {}", Tag::LEN),
-        }?;
+        AesCcm::<Tag>::new(key.into())
+            .decrypt_in_place_detached(
+                iv.into(),
+                ad,
+                &mut buffer.content[..plaintext_len],
+                tag.into(),
+            )
+            .map_err(|_| EDHOCError::MacVerificationFailed)?;
 
         Ok(buffer)
     }
