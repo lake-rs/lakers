@@ -297,16 +297,15 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM3<Crypto> {
             Err(error) => Err(error),
         }
     }
-
     pub fn completed_without_message_4(self) -> Result<(EdhocResponderDone<Crypto>,[u8; SHA256_DIGEST_LEN]), EDHOCError> {
         trace!("Enter completed");
         match r_complete_without_message_4(&self.state) {
-            Ok((state, prk_out)) => Ok((EdhocResponderDone {
+            Ok((state,prk_out)) => Ok((EdhocResponderDone {
                 state,
                 crypto: self.crypto,
             },
             prk_out,
-        ))
+            )),
             Err(error) => Err(error),
         }
     }

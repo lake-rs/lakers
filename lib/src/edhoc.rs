@@ -456,11 +456,12 @@ pub fn r_prepare_message_4(
 }
 
 
-pub fn r_complete_without_message_4(state: &ProcessedM3) -> Result<Completed, EDHOCError> {
-    Ok(Completed {
+pub fn r_complete_without_message_4(state: &ProcessedM3) -> Result<(Completed,[u8; SHA256_DIGEST_LEN]), EDHOCError> {
+    Ok((Completed {
         prk_out: state.prk_out,
         prk_exporter: state.prk_exporter,
-    })
+    }, 
+    state.prk_out))
 }
 
 pub fn i_prepare_message_1(
@@ -862,11 +863,12 @@ pub fn i_verify_message_4(
     Ok((state, prk_out))
 }
 
-pub fn i_complete_without_message_4(state: &WaitM4) -> Result<Completed, EDHOCError> {
-    Ok(Completed {
+pub fn i_complete_without_message_4(state: &WaitM4) -> Result<(Completed,[u8; SHA256_DIGEST_LEN]), EDHOCError> {
+    Ok((Completed {
         prk_out: state.prk_out,
         prk_exporter: state.prk_exporter,
-    })
+    },
+    state.prk_out))
 }
 
 
