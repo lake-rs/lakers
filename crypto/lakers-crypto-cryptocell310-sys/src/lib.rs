@@ -18,6 +18,44 @@ fn convert_array(input: &[u32]) -> [u8; SHA256_DIGEST_LEN] {
     output
 }
 
+// shared mutable global state for crypto backend (not thread-safe)
+static mut rnd_context: CRYS_RND_State_t = CRYS_RND_State_t {
+    Seed: [0; 12usize],
+    PreviousRandValue: [0; 4usize],
+    PreviousAdditionalInput: [0; 17usize],
+    AdditionalInput: [0; 16usize],
+    AddInputSizeWords: 0,
+    EntropySourceSizeWords: 0,
+    ReseedCounter: 0,
+    KeySizeWords: 0,
+    StateFlag: 0,
+    TrngProcesState: 0,
+    ValidTag: 0,
+    EntropySizeBits: 0,
+};
+static mut rnd_work_buffer: CRYS_RND_WorkBuff_t = CRYS_RND_WorkBuff_t {
+    crysRndWorkBuff: [0; 1528usize],
+};
+static mut cc310_initialized: bool = false;
+
+#[no_mangle]
+pub unsafe extern "C" fn lakers_initialize_cc310() {
+    if cc310_initialized {
+        return;
+    }
+    unsafe {
+        SaSi_LibInit();
+        let ret = CRYS_RndInit(
+            &mut rnd_context as *mut _ as *mut c_void,
+            &mut rnd_work_buffer as *mut _,
+        );
+    }
+    if ret != CRYS_OK {
+        panic!("Failed to initialize cc310 crypto backend");
+    }
+    cc310_initialized = true;
+}
+
 #[derive(Debug)]
 pub struct Crypto;
 
@@ -222,15 +260,6 @@ impl CryptoTrait for Crypto {
     }
 
     fn get_random_byte(&mut self) -> u8 {
-        let mut rnd_context = CRYS_RND_State_t::default();
-        let mut rnd_work_buffer = CRYS_RND_WorkBuff_t::default();
-        unsafe {
-            SaSi_LibInit();
-            CRYS_RndInit(
-                &mut rnd_context as *mut _ as *mut c_void,
-                &mut rnd_work_buffer as *mut _,
-            );
-        }
         let mut buffer = [0u8; 1];
         unsafe {
             CRYS_RND_GenerateVector(
@@ -243,15 +272,6 @@ impl CryptoTrait for Crypto {
     }
 
     fn p256_generate_key_pair(&mut self) -> (BytesP256ElemLen, BytesP256ElemLen) {
-        let mut rnd_context = CRYS_RND_State_t::default();
-        let mut rnd_work_buffer = CRYS_RND_WorkBuff_t::default();
-        unsafe {
-            SaSi_LibInit();
-            CRYS_RndInit(
-                &mut rnd_context as *mut _ as *mut c_void,
-                &mut rnd_work_buffer as *mut _,
-            );
-        }
         let rnd_generate_vect_func: SaSiRndGenerateVectWorkFunc_t = Some(CRYS_RND_GenerateVector);
         let curve_256 =
             unsafe { CRYS_ECPKI_GetEcDomain(CRYS_ECPKI_DomainID_t_CRYS_ECPKI_DomainID_secp256r1) };
