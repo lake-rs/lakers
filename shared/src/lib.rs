@@ -9,7 +9,7 @@
 //! [lakers-ead]: https://docs.rs/lakers-ead/latest/lakers_ead/
 // NOTE: if there is no python-bindings feature, which will be the case for embedded builds,
 //       then the crate will be no_std
-// #![cfg_attr(not(feature = "python-bindings"), no_std)]
+#![cfg_attr(not(feature = "python-bindings"), no_std)]
 
 pub use cbor_decoder::*;
 pub use edhoc_parser::*;
