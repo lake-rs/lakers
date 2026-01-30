@@ -42,7 +42,6 @@ pub fn r_process_message_1(
         // FIXME: add an error if it does not match
         // verify that the method is supported
         if method == EDHOC_METHOD {
-            println!("R: method supported: {}", method);
             // Step 2: verify that the selected cipher suite is supported
             if suites_i[suites_i.len() - 1] == EDHOC_SUPPORTED_SUITES[0] {
                 // hash message_1 and save the hash to the state to avoid saving the whole message
@@ -203,7 +202,7 @@ pub fn r_parse_message_3(
                 salt_3e2m: state.salt_3e2m,
                 th_3: state.th_3,
                 id_cred_i: id_cred_i.clone(), // needed for compute_mac_3
-                plaintext_3: plaintext_3a, // NOTE: this is needed for th_4, which needs valid_cred_i, which is only available at the 'verify' step
+                plaintext_3: plaintext_3b, // NOTE: this is needed for th_4, which needs valid_cred_i, which is only available at the 'verify' step
                 ead_3: ead_3.clone(), // NOTE: this clone could be avoided by using a reference or an index to the ead_3 item in plaintext_3
             },
             id_cred_i,
@@ -419,6 +418,7 @@ pub fn r_prepare_message_4(
 
     let mut th_4_buf: BytesMaxContextBuffer = [0x00; MAX_KDF_CONTEXT_LEN];
     th_4_buf[..state.th_4.len()].copy_from_slice(&state.th_4[..]);
+    // println!("th_4: 0x{}", encode(state.th_4.as_slice()));
 
     // compute prk_out
     // PRK_out = EDHOC-KDF( PRK_4e3m, 7, TH_4, hash_length )
@@ -587,6 +587,7 @@ pub fn i_verify_message_2(
             &state.plaintext_2,
             valid_cred_r.bytes.as_slice(),
         );
+        println!("th_3: {:?}", th_3);
         // message 3 processing
 
         let salt_4e3m = compute_salt_4e3m(crypto, &prk_3e2m, &th_3);
@@ -724,7 +725,7 @@ pub fn i_parse_message_4(
     state: &mut WaitM4,
     crypto: &mut impl CryptoTrait,
     message_4: &BufferMessage4,
-) -> Result<(ProcessingM4, Option<EadItems>), EDHOCError> {
+) -> Result<(ProcessingM4, EadItems), EDHOCError> {
 
     let plaintext_4 = decrypt_message_4(crypto, &state.prk_4e3m, &state.th_4, &message_4)?;
     // println!("plaintext_4: 0x{}", encode(plaintext_4.content.as_slice()));
@@ -780,82 +781,6 @@ pub fn i_verify_message_4(
     let mut prk_exporter: BytesHashLen = Default::default();
     prk_exporter[..SHA256_DIGEST_LEN].copy_from_slice(&prk_exporter_buf[..SHA256_DIGEST_LEN]);
 
-    Ok((
-        WaitM4 {
-            // prk_3e2m: state.prk_3e2m,
-            prk_4e3m: state.prk_4e3m,
-            cred_r : cred_i,
-            th_3: state.th_3,
-            th_4: th_4,
-            ead_3: ead_3.clone(),
-            id_cred: Some(id_cred_i),
-            prk_out: prk_out,
-            prk_exporter: prk_exporter,
-        },
-        message_3
-    ))
-}
-
-pub fn i_parse_message_4(
-    state: &mut WaitM4,
-    crypto: &mut impl CryptoTrait,
-    message_4: &BufferMessage4,
-) -> Result<(ProcessingM4, Option<EADItem>), EDHOCError> {
-
-    let plaintext_4 = decrypt_message_4(crypto, &state.prk_4e3m, &state.th_4, &message_4)?;
-    // println!("plaintext_4: 0x{}", encode(plaintext_4.content.as_slice()));
-
-    let decoded_p4_res = decode_plaintext_4(&plaintext_4);
-    let cred_i = state.cred_r.clone();
-
-    if let Ok(ead_4) = decoded_p4_res {
-        Ok((
-            ProcessingM4 {
-                prk_4e3m: state.prk_4e3m,
-                th_4: state.th_4,
-                cred_i: cred_i,
-            },
-            ead_4,
-        ))
-    } else {
-        Err(decoded_p4_res.unwrap_err())
-    }
-}
-
-// FIXME
-pub fn i_verify_message_4(
-    state: &ProcessingM4,
-    crypto: &mut impl CryptoTrait,
-) -> Result<(Completed, [u8; SHA256_DIGEST_LEN]), EDHOCError> {
-// compute prk_out
-    // PRK_out = EDHOC-KDF( PRK_4e3m, 7, TH_4, hash_length )
-    let mut th_4_buf: BytesMaxContextBuffer = [0x00; MAX_KDF_CONTEXT_LEN];
-    th_4_buf[..state.th_4.len()].copy_from_slice(&state.th_4[..]);
-
-    let prk_out_buf = edhoc_kdf(
-        crypto,
-        &state.prk_4e3m,
-        7u8,
-        &th_4_buf,
-        state.th_4.len(),
-        SHA256_DIGEST_LEN,
-    );
-    let mut prk_out: BytesHashLen = Default::default();
-    prk_out[..SHA256_DIGEST_LEN].copy_from_slice(&prk_out_buf[..SHA256_DIGEST_LEN]);
-
-    // compute prk_exporter from prk_out
-    // PRK_exporter  = EDHOC-KDF( PRK_out, 10, h'', hash_length )
-    let prk_exporter_buf = edhoc_kdf(
-        crypto,
-        &prk_out,
-        10u8,
-        &[0x00; MAX_KDF_CONTEXT_LEN],
-        0,
-        SHA256_DIGEST_LEN,
-    );
-    let mut prk_exporter: BytesHashLen = Default::default();
-    prk_exporter[..SHA256_DIGEST_LEN].copy_from_slice(&prk_exporter_buf[..SHA256_DIGEST_LEN]);
-    
     let state = Completed {
         prk_exporter,
         prk_out
@@ -871,15 +796,6 @@ pub fn i_complete_without_message_4(state: &WaitM4) -> Result<(Completed,[u8; SH
     },
     state.prk_out))
 }
-
-
-pub fn i_complete_without_message_4(state: &WaitM4) -> Result<Completed, EDHOCError> {
-    Ok(Completed {
-        prk_out: state.prk_out,
-        prk_exporter: state.prk_exporter,
-    })
-}
-
 
 
 fn encode_message_1(
