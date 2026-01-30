@@ -42,6 +42,7 @@ pub fn r_process_message_1(
         // FIXME: add an error if it does not match
         // verify that the method is supported
         if method == EDHOC_METHOD {
+            println!("R: method supported: {}", method);
             // Step 2: verify that the selected cipher suite is supported
             if suites_i[suites_i.len() - 1] == EDHOC_SUPPORTED_SUITES[0] {
                 // hash message_1 and save the hash to the state to avoid saving the whole message
@@ -1431,7 +1432,7 @@ fn compute_prk_4e3m_psk(
     //     temp[..cred.len()].copy_from_slice(cred); // Copy the existing data
     //     temp // Return the expanded array
     // };
-    crypto.hkdf_extract(salt_4e3m, &cred)
+    crypto.hkdf_extract_psk(salt_4e3m, &cred)
 }
 
 fn compute_prk_4e3m(

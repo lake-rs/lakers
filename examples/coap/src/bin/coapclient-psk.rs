@@ -58,7 +58,7 @@ fn client_handshake() -> Result<(), EDHOCError> {
 
     let message_2 = EdhocMessageBuffer::new_from_slice(&response.message.payload[..]).unwrap();
     let (mut initiator, c_r, id_cred_r, _ead_2) = initiator.parse_message_2(&message_2)?;
-    //println!("I after parsing m2:{:?}", initiator);
+    println!("I after parsing m2:{:?}", initiator);
     let valid_cred_r = credential_check_or_fetch(Some(cred), id_cred_r.unwrap()).unwrap();
     println!("valid_cred_r: 0x{}", encode(valid_cred_r.bytes.as_slice()));
     println!("id_cred_r: 0x{}", encode(id_cred_r.unwrap().as_full_value()));

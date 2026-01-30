@@ -175,7 +175,7 @@ impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
         message_1: &BufferMessage1,
     ) -> Result<(EdhocResponderProcessedM1<Crypto>, ConnId, EadItems), EDHOCError> {
         trace!("Enter process_message_1");
-        //println!("Responder processes message_1");
+        println!("Responder processes message_1");
         let (state, c_i, ead_1) = r_process_message_1(&self.state, &mut self.crypto, message_1)?;
 
         Ok((
