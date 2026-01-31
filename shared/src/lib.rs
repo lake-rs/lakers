@@ -53,7 +53,7 @@ pub const MAX_MESSAGE_SIZE_LEN: usize = if cfg!(feature = "max_message_size_len_
 pub const ID_CRED_LEN: usize = 4;
 pub const SUITES_LEN: usize = 9;
 pub const SUPPORTED_SUITES_LEN: usize = 1;
-pub const EDHOC_METHOD: u8 = 3u8; // stat-stat: 3u8, psk:4u8
+pub const EDHOC_METHOD: u8 = 4u8; // stat-stat: 3u8, psk:4u8
 pub const P256_ELEM_LEN: usize = 32;
 pub const P256_ELEM_LEN_PSK: usize = 16;
 pub const SHA256_DIGEST_LEN: usize = 32;
@@ -166,16 +166,13 @@ pub type BytesCcmIvLen = [u8; AES_CCM_IV_LEN];
 pub type BufferPlaintext2 = EdhocMessageBuffer;
 pub type BufferPlaintext3 = EdhocMessageBuffer;
 pub type BufferPlaintext4 = EdhocMessageBuffer;
-pub type BufferPlaintext4 = EdhocMessageBuffer;
 pub type BytesMac2 = [u8; MAC_LENGTH_2];
 pub type BytesMac3 = [u8; MAC_LENGTH_3];
 pub type BufferMessage1 = EdhocMessageBuffer;
 pub type BufferMessage3 = EdhocMessageBuffer;
 pub type BufferMessage4 = EdhocMessageBuffer;
-pub type BufferMessage4 = EdhocMessageBuffer;
 pub type BufferCiphertext2 = EdhocMessageBuffer;
 pub type BufferCiphertext3 = EdhocMessageBuffer;
-pub type BufferCiphertext4 = EdhocMessageBuffer;
 pub type BufferCiphertext4 = EdhocMessageBuffer;
 pub type BytesHashLen = [u8; SHA256_DIGEST_LEN];
 pub type BytesP256ElemLen = [u8; P256_ELEM_LEN];
@@ -496,7 +493,6 @@ pub struct ProcessingM1 {
 }
 
 #[derive(Clone, Debug)]
-#[derive(Clone, Debug)]
 #[repr(C)]
 pub struct WaitM2 {
     pub method: u8,
@@ -580,7 +576,7 @@ pub struct WaitM4 {
     pub th_3: BytesHashLen,
     pub th_4: BytesHashLen,
     pub id_cred: Option<IdCred>,
-    pub ead_3: Option<EADItem>,
+    pub ead_3: EadItems,
     pub prk_out: BytesHashLen,
     pub prk_exporter: BytesHashLen,
 }
@@ -592,6 +588,8 @@ pub struct ProcessingM4 {
     pub cred_i: Credential,
     // pub th_3: BytesHashLen,
     pub th_4: BytesHashLen,
+    pub prk_out: BytesHashLen,
+    pub prk_exporter: BytesHashLen,
 }
 
 #[derive(Debug)]
@@ -1091,10 +1089,8 @@ mod edhoc_parser {
         let mut ciphertext_2: BufferCiphertext2 = BufferCiphertext2::new();
 
         let mut decoder = CBORDecoder::new(rcvd_message_2.as_slice());
-        //println!("decoder:{:?}", decoder);
         // message_2 consists of 1 bstr element; this element in turn contains the concatenation of g_y and ciphertext_2
         let decoded = decoder.bytes()?;
-        //println!("decoded:{:?}", decoded);
         if decoder.finished() {
             if let Some(key) = decoded.get(0..P256_ELEM_LEN) {
                 let mut g_y: BytesP256ElemLen = [0x00; P256_ELEM_LEN];
@@ -1132,7 +1128,7 @@ mod edhoc_parser {
             return Err(EDHOCError::ParsingError);
         }
         ciphertext_3a.fill_with_slice(&message_slice[header_len..header_len + ciphertext_3a_len]);
-        println!("ciphertext_3a: {:?}", ciphertext_3a);
+        // println!("ciphertext_3a: {:?}", ciphertext_3a);
 
         // let mut ciphertext_3b = BufferCiphertext3::new();
         // ciphertext_3b
@@ -1147,12 +1143,12 @@ mod edhoc_parser {
     pub fn decode_plaintext_2(
         method: u8,
         plaintext_2: &BufferCiphertext2,
-    ) -> Result<(ConnId, Option<IdCred>, Option<BytesMac2>, EadITems), EDHOCError> {
+    ) -> Result<(ConnId, Option<IdCred>, Option<BytesMac2>, EadItems), EDHOCError> {
         trace!("Enter decode_plaintext_2");
         let mut mac_2: Option<[u8; MAC_LENGTH_2]> = None;
 
         let mut decoder = CBORDecoder::new(plaintext_2.as_slice());
-        //println!("decoder:{:?}", decoder);
+        trace!("decoder:{:?}", decoder);
 
         let c_r = ConnId::from_decoder(&mut decoder)?;
 
@@ -1171,7 +1167,8 @@ mod edhoc_parser {
             }
             _ => return Err(EDHOCError::UnsupportedMethod),
         };
-        //println!("id_cred_r from plaintext_2:{:?}", id_cred_r);
+        trace!("id_cred_r from plaintext_2:{:?}", id_cred_r);
+        trace!("mac_2 from plaintext_2:{:?}", mac_2);
         //mac_2[..].copy_from_slice(decoder.bytes_sized(MAC_LENGTH_2)?);
 
         // if there is still more to parse, the rest will be the EADs
@@ -1264,24 +1261,6 @@ pub fn decode_plaintext_3a(plaintext_3: &BufferPlaintext3) -> Result<&[u8], EDHO
     Ok(id_cred)
 }
 
-fn decode_cbor_prefix(data: &[u8]) -> Result<(BytesKeyKid, &[u8]), EDHOCError> {
-    let mut decoder = CBORDecoder::new(data);
-    //println!("decoder:{:?}", data);
-    // Assuming ciphertext_3a is encoded as a byte string
-    //println!("decoder_bytes:{:?}", decoder.bytes()?);
-    let bytes = decoder.bytes()?;
-    //println!("bytes:{:?}", bytes);
-
-    if bytes.len() != 4 {
-        return Err(EDHOCError::ParsingError);
-    }
-
-    let mut ciphertext_3a = [0u8; 4];
-    ciphertext_3a.copy_from_slice(&bytes);
-    //println!("ciphertext_3a:{:?}", ciphertext_3a);
-
-    Ok((ciphertext_3a, &data[decoder.position()..]))
-}
 
 fn decode_cbor_length(first_byte: u8) -> Result<(usize, usize), EDHOCError> {
     match first_byte & 0x1F {
@@ -1290,16 +1269,6 @@ fn decode_cbor_length(first_byte: u8) -> Result<(usize, usize), EDHOCError> {
         25 => Ok((25, 3)),                  // Next 2 bytes are the length
         _ => Err(EDHOCError::ParsingError), // Unsupported length encoding
     }
-}
-
-pub fn decode_plaintext_3a(plaintext_3: &BufferPlaintext3) -> Result<&[u8], EDHOCError> {
-    trace!("Enter decode_plaintext_3");
-
-    let mut decoder = CBORDecoder::new(plaintext_3.as_slice());
-    //println!("decoder plaintext_3a:{:?}", decoder);
-    // the id_cred may have been encoded as a single int, a byte string, or a map
-    let id_cred = decoder.bytes()?;
-    Ok(id_cred)
 }
 
 fn decode_cbor_prefix(data: &[u8]) -> Result<(BytesKeyKid, &[u8]), EDHOCError> {
@@ -1319,15 +1288,6 @@ fn decode_cbor_prefix(data: &[u8]) -> Result<(BytesKeyKid, &[u8]), EDHOCError> {
     //println!("ciphertext_3a:{:?}", ciphertext_3a);
 
     Ok((ciphertext_3a, &data[decoder.position()..]))
-}
-
-fn decode_cbor_length(first_byte: u8) -> Result<(usize, usize), EDHOCError> {
-    match first_byte & 0x1F {
-        n @ 0..=23 => Ok((n as usize, 1)),
-        24 => Ok((24, 2)),                  // Next byte is the length
-        25 => Ok((25, 3)),                  // Next 2 bytes are the length
-        _ => Err(EDHOCError::ParsingError), // Unsupported length encoding
-    }
 }
 
 mod cbor_decoder {

@@ -62,13 +62,6 @@ pub trait Crypto: core::fmt::Debug {
     fn hkdf_expand(&mut self, prk: &BytesHashLen, info: &[u8], result: &mut [u8]);
     fn hkdf_extract(&mut self, salt: &BytesHashLen, ikm: &BytesP256ElemLen) -> BytesHashLen;
     fn hkdf_extract_psk(&mut self, salt: &BytesHashLen, ikm: &BytesP256ElemLenPSK) -> BytesHashLen;
-    fn aes_ccm_encrypt_tag_8(
-        &mut self,
-        key: &BytesCcmKeyLen,
-        iv: &BytesCcmIvLen,
-        ad: &[u8],
-        plaintext: &[u8],
-    ) -> EdhocBuffer<N>;
     fn aes_ccm_decrypt_tag_8<const N: usize>(
         &mut self,
         key: &BytesCcmKeyLen,
@@ -76,6 +69,13 @@ pub trait Crypto: core::fmt::Debug {
         ad: &[u8],
         ciphertext: &[u8],
     ) -> Result<EdhocBuffer<N>, EDHOCError>;
+    fn aes_ccm_encrypt_tag_8<const N: usize>(
+        &mut self,
+        key: &BytesCcmKeyLen,
+        iv: &BytesCcmIvLen,
+        ad: &[u8],
+        plaintext: &[u8],
+    ) -> EdhocBuffer<N>;
     fn p256_ecdh(
         &mut self,
         private_key: &BytesP256ElemLen,

@@ -162,7 +162,7 @@ impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
                 y,
                 g_y,
                 method: method.into(),
-                cred_r: cred_r,
+                cred_r: cred_r.clone(),
             },
             r,
             cred_r,
@@ -195,7 +195,7 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM1<Crypto> {
         mut self,
         cred_transfer: CredentialTransfer,
         c_r: Option<ConnId>,
-        ead_2: &Option<EadItems>,
+        ead_2: &EadItems,
     ) -> Result<(EdhocResponderWaitM3<Crypto>, BufferMessage2), EDHOCError> {
         trace!("Enter prepare_message_2");
         let c_r = match c_r {
@@ -231,7 +231,7 @@ impl<'a, Crypto: CryptoTrait> EdhocResponderWaitM3<Crypto> {
         (
             EdhocResponderProcessingM3<Crypto>,
             Option<IdCred>,
-            Option<EadItems>,
+            EadItems,
         ),
         EDHOCError,
     > {
@@ -254,14 +254,15 @@ impl<'a, Crypto: CryptoTrait> EdhocResponderProcessingM3<Crypto> {
     pub fn verify_message_3(
         mut self,
         cred_i: Credential,
-    ) -> Result<EdhocResponderProcessedM3 <Crypto>, EDHOCError> {
+    ) -> Result<(EdhocResponderProcessedM3<Crypto>, [u8; SHA256_DIGEST_LEN]), EDHOCError> {
         trace!("Enter verify_message_3");
         match r_verify_message_3(&mut self.state, &mut self.crypto, cred_i) {
-            Ok((state)) => Ok((
+            Ok((state, prk_out)) => Ok((
                 EdhocResponderProcessedM3  {
                     state,
                     crypto: self.crypto,
-                }
+                },
+                prk_out
             )),
             Err(error) => Err(error),
         }
@@ -271,27 +272,26 @@ impl<'a, Crypto: CryptoTrait> EdhocResponderProcessingM3<Crypto> {
 impl<Crypto: CryptoTrait> EdhocResponderProcessedM3<Crypto> {
     pub fn prepare_message_4(
         mut self,
-        cred_transfer: CredentialTransfer,
-        ead_4: &Option<EadItems>,
+        // cred_transfer: CredentialTransfer,
+        ead_4: &EadItems,
     ) -> Result<(
         EdhocResponderDone<Crypto>, 
         BufferMessage4, 
-        [u8; SHA256_DIGEST_LEN]
+        // [u8; SHA256_DIGEST_LEN]
     ), EDHOCError> {
         trace!("Enter prepare_message_4");
         match r_prepare_message_4(
             &self.state,
             &mut self.crypto,
-            cred_transfer,
+            // cred_transfer,
             ead_4,
         ) {
-            Ok((state, message_4, prk_out)) => Ok((
+            Ok((state, message_4)) => Ok((
                 EdhocResponderDone {
                     state,
                     crypto: self.crypto,
                 },
                 message_4,
-                prk_out,
             )),
             Err(error) => Err(error),
         }
@@ -342,14 +342,14 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiator<Crypto> {
 
     pub fn set_identity(&mut self, i: Option<BytesP256ElemLen>, cred_i: Credential) {
         self.i = i;
-        self.cred_i = Some(cred_i);
+        self.cred_i = Some(cred_i.clone());
         self.state.cred_i = Some(cred_i);
     }
 
     pub fn prepare_message_1(
         mut self,
         c_i: Option<ConnId>,
-        ead_1: &Option<EadItems>,
+        ead_1: &EadItems,
     ) -> Result<(EdhocInitiatorWaitM2<Crypto>, BufferMessage1), EDHOCError> {
         trace!("Enter prepare_message_1");
         let c_i = match c_i {
@@ -388,7 +388,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorWaitM2<Crypto> {
             EdhocInitiatorProcessingM2<Crypto>,
             ConnId,
             Option<IdCred>,
-            Option<EadItems>,
+            EadItems,
         ),
         EDHOCError,
     > {
@@ -453,17 +453,17 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessedM2<Crypto> {
     pub fn prepare_message_3(
         mut self,
         cred_transfer: CredentialTransfer,
-        ead_3: &Option<EadItems>,
+        ead_3: &EadItems,
     ) -> Result<
         (
             EdhocInitiatorWaitM4<Crypto>,
             BufferMessage3,
-            // [u8; SHA256_DIGEST_LEN],
+            [u8; SHA256_DIGEST_LEN],
         ),
         EDHOCError,
     > {
         trace!("Enter prepare_message_3");
-        let Some(cred_i) = self.cred_i else {
+        let Some(cred_i) = self.cred_i.clone() else {
             return Err(EDHOCError::MissingIdentity);
         };
         match i_prepare_message_3(
@@ -473,13 +473,14 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessedM2<Crypto> {
             cred_transfer,
             ead_3,
         ) {
-            Ok((state, message_3)) => Ok((
+            Ok((state, message_3, prk_out)) => Ok((
                 EdhocInitiatorWaitM4 {
                     state,
                     crypto: self.crypto,
                     cred_i: self.cred_i,
                 },
                 message_3,
+                prk_out
             )),
             Err(error) => Err(error),
         }
@@ -493,7 +494,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorWaitM4<Crypto> {
     ) -> Result<
         (
             EdhocInitiatorProcessingM4<Crypto>,
-            Option<EadItems>,
+            EadItems,
         ),
         EDHOCError,
     > {
@@ -510,15 +511,13 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorWaitM4<Crypto> {
             Err(error) => Err(error),
         }
     }
-    pub fn completed_without_message_4(self) -> Result<(EdhocInitiatorDone<Crypto>,[u8; SHA256_DIGEST_LEN]), EDHOCError> {
+    pub fn completed_without_message_4(self) -> Result<EdhocInitiatorDone<Crypto>, EDHOCError> {
         trace!("Enter completed");
         match i_complete_without_message_4(&self.state) {
-            Ok((state, prk_out)) => Ok((EdhocInitiatorDone {
+            Ok(state) => Ok(EdhocInitiatorDone {
                 state,
                 crypto: self.crypto,
-            },
-            prk_out
-            )),
+            }),
             Err(error) => Err(error),
         }
     }
@@ -528,15 +527,13 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessingM4<Crypto> {
     pub fn verify_message_4(
         mut self,
         // valid_cred_r: Credential,
-    ) -> Result<(EdhocInitiatorDone<Crypto>, [u8; SHA256_DIGEST_LEN]), EDHOCError> {
+    ) -> Result<EdhocInitiatorDone<Crypto>, EDHOCError> {
         trace!("Enter verify_message_4");
         match i_verify_message_4(&self.state, &mut self.crypto) {
-            Ok((state, prk_out)) => Ok((EdhocInitiatorDone {
+            Ok(state) => Ok(EdhocInitiatorDone {
                 state,
                 crypto: self.crypto,
-            },
-            prk_out,
-            )),
+            }),
             Err(error) => Err(error),
         }
     }

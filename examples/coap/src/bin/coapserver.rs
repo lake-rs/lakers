@@ -90,6 +90,10 @@ fn main() {
                     response.message.payload = Vec::from(message_2.as_slice());
                     // save edhoc connection
                     edhoc_connections.push((c_r, responder));
+                    println!("message_2 : {:?}", message_2.as_slice());
+                    println!("message_2 len = {}", message_2.len());
+
+
                 } else {
                     println!("msg1 err");
                     response.set_status(ResponseType::BadRequest);
@@ -113,7 +117,7 @@ fn main() {
                 };
                 ead_3.processed_critical_items().unwrap();
                 let cred_i = Credential::parse_ccs(CRED_I.try_into().unwrap()).unwrap();
-                let valid_cred_i = credential_check_or_fetch(Some(cred_i), id_cred_i).unwrap();
+                let valid_cred_i = credential_check_or_fetch(Some(cred_i), id_cred_i.unwrap()).unwrap();
                 // FIXME: instead of cloning, take by reference
                 let Ok((responder, prk_out)) = responder.verify_message_3(valid_cred_i.clone())
                 else {

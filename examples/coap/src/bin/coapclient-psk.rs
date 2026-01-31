@@ -28,7 +28,7 @@ fn client_handshake() -> Result<(), EDHOCError> {
 
     let cred: Credential = Credential::parse_ccs_symmetric(CRED_PSK.try_into().unwrap()).unwrap();
     // println!("cred_psk: {:?}", cred);
-    println!("cred_psk bytes: 0x{}", encode(cred.bytes.as_slice()));
+    // println!("cred_psk bytes: 0x{}", encode(cred.bytes.as_slice()));
 
     let mut initiator = EdhocInitiator::new(
         lakers_crypto::default_crypto(),
@@ -41,9 +41,9 @@ fn client_handshake() -> Result<(), EDHOCError> {
     // let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
     let c_i = ConnId::from_int_raw(10);
     println!("c_i: {:?}", c_i);
-    initiator.set_identity(None, cred);
-    let (initiator, message_1) = initiator.prepare_message_1(Some(c_i), &None)?;
-    println!("message_1 len = {}", message_1.len);
+    initiator.set_identity(None, cred.clone());
+    let (initiator, message_1) = initiator.prepare_message_1(Some(c_i), &EadItems::new())?;
+    println!("message_1 len = {}", message_1.len());
     println!("message_1 = 0x{}", encode(message_1.as_slice()));
     msg_1_buf.extend_from_slice(message_1.as_slice());    
 
@@ -60,8 +60,8 @@ fn client_handshake() -> Result<(), EDHOCError> {
     let (mut initiator, c_r, id_cred_r, _ead_2) = initiator.parse_message_2(&message_2)?;
     println!("I after parsing m2:{:?}", initiator);
     let valid_cred_r = credential_check_or_fetch(Some(cred), id_cred_r.unwrap()).unwrap();
-    println!("valid_cred_r: 0x{}", encode(valid_cred_r.bytes.as_slice()));
-    println!("id_cred_r: 0x{}", encode(id_cred_r.unwrap().as_full_value()));
+    // println!("valid_cred_r: 0x{}", encode(valid_cred_r.bytes.as_slice()));
+    // println!("id_cred_r: 0x{}", encode(id_cred_r.unwrap().as_full_value()));
     // println!("valid_cred_r_key: 0x{}", encode(valid_cred_r.key));
 
     let initiator = initiator.verify_message_2(valid_cred_r)?;
@@ -69,12 +69,12 @@ fn client_handshake() -> Result<(), EDHOCError> {
     println!("\n---------MESSAGE_3-----------\n");
     let mut msg_3 = Vec::from(c_r.as_cbor());
     //println!("initiator prepares message_3");
-    let (mut initiator, message_3) =
-        initiator.prepare_message_3(CredentialTransfer::ByReference, &None)?;
-        println!("message_3 len = {}", message_3.len);
-    println!("message_3 = 0x{}", encode(message_3.as_slice()));
+    let (mut initiator, message_3, prk_out) =
+        initiator.prepare_message_3(CredentialTransfer::ByReference, &EadItems::new())?;
+        
     msg_3.extend_from_slice(message_3.as_slice());
-    
+    println!("message_3 len = {}", msg_3.len());
+    println!("message_3 = 0x{}", encode(message_3.as_slice()));   
 
     let response = CoAPClient::post_with_timeout(url, msg_3, timeout).unwrap();
     if response.get_status() != &ResponseType::Changed {
@@ -89,14 +89,16 @@ fn client_handshake() -> Result<(), EDHOCError> {
     println!("Entering parse message 4");
     let (mut initiator, ead_4) = initiator.parse_message_4(&message_4)?;
     println!("Entering verify message 4");
-    let (mut initiator, prk_out) = initiator.verify_message_4()?;
+    let (mut initiator) = initiator.verify_message_4()?;
 
     println!("\n---------END-----------\n");
     println!("EDHOC exchange successfully completed");
     println!("PRK_out: {:02x?}", prk_out);
 
-    let mut oscore_secret = initiator.edhoc_exporter(0u8, &[], 16); // label is 0
-    let mut oscore_salt = initiator.edhoc_exporter(1u8, &[], 8); // label is 1
+    let mut oscore_secret = [0; 16];
+    initiator.edhoc_exporter(0u8, &[], &mut oscore_secret); // label is 0
+    let mut oscore_salt = [0; 8];
+    initiator.edhoc_exporter(1u8, &[], &mut oscore_salt); // label is 1
 
     // println!("OSCORE secret: {:02x?}", oscore_secret);
     // println!("OSCORE salt: {:02x?}", oscore_salt);
@@ -110,8 +112,8 @@ fn client_handshake() -> Result<(), EDHOCError> {
     println!("PRK_out after key update: {:02x?}?", prk_out_new);
 
     // compute OSCORE secret and salt after key update
-    oscore_secret = initiator.edhoc_exporter(0u8, &[], 16); // label is 0
-    oscore_salt = initiator.edhoc_exporter(1u8, &[], 8); // label is 1
+    initiator.edhoc_exporter(0u8, &[], &mut oscore_secret); // label is 0
+    initiator.edhoc_exporter(1u8, &[], &mut oscore_salt); // label is 1
 
     // println!("OSCORE secret after key update: {:02x?}", oscore_secret);
     // println!("OSCORE salt after key update: {:02x?}", oscore_salt);

@@ -80,7 +80,7 @@ impl ZeroTouchServerUserAcl {
     ) -> Result<EdhocMessageBuffer, EDHOCError> {
         trace!("Enter decode_voucher_request");
         let (message_1, _opaque_state) = parse_voucher_request(vreq)?;
-        let (_method, _suites_i, g_x, _c_i, _id_cred, ead_1) = parse_message_1(&message_1)?;
+        let (_method, _suites_i, g_x, _c_i, ead_1) = parse_message_1(&message_1)?;
         let prk = compute_prk(crypto, &self.w, &g_x);
 
         let ead_item = ead_1.iter().next().ok_or(EDHOCError::EADUnprocessable)?;
@@ -97,7 +97,7 @@ impl ZeroTouchServerUserAcl {
     ) -> Result<EdhocMessageBuffer, EDHOCError> {
         trace!("Enter prepare_voucher");
         let (message_1, opaque_state) = parse_voucher_request(vreq)?;
-        let (_method, _suites_i, g_x, _c_i, _id_cred, _ead_1) = parse_message_1(&message_1)?;
+        let (_method, _suites_i, g_x, _c_i, _ead_1) = parse_message_1(&message_1)?;
         let prk = compute_prk(crypto, &self.w, &g_x);
 
         let h_message_1 = crypto.sha256_digest(message_1.as_slice());
