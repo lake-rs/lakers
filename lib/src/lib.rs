@@ -20,6 +20,14 @@ pub use {lakers_shared::Crypto as CryptoTrait, lakers_shared::*};
 
 mod edhoc;
 pub use edhoc::*;
+// use hexlit::hex;
+use hex_literal::hex;
+use hex::encode;
+
+pub const X: [u8; 32] = hex!("09972DFEF1EAAB926EC96E8005FED29F70FFBF4E361C3A061A7ACDB5170C10E5");
+pub const G_X: [u8; 32] = hex!("7EC68102940602AAB548539BF42A35992D957249EB7F1888406D178A04C912DB");
+pub const Y: [u8; 32] = hex!("1E1C8F2DF1AA7110B39F33BA5EA8DCCF31411EB33D4F9A094CF65192D335A7A3");
+pub const G_Y: [u8; 32] = hex!("ED156A6243E0AFEC9EFBAABCE8429D5AD5E4E1C432F76A6EDE8F79247BB97D83");
 
 /// Starting point for performing EDHOC in the role of the Initiator.
 #[derive(Debug)]
@@ -150,7 +158,12 @@ impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
         cred_r: Credential,
     ) -> Self {
         trace!("Initializing EdhocResponder");
-        let (y, g_y) = crypto.p256_generate_key_pair();
+        //let (y, g_y) = crypto.p256_generate_key_pair();
+        let (y, g_y) = (Y, G_Y);
+        // info!("y: 0x{}", encode(y));
+        // info!("g_y: 0x{}", encode(g_y));
+        // println!("y: 0x{}", encode(y));
+        // println!("g_y: 0x{}", encode(g_y));
 
         // let r = match method {
         //     EDHOCMethod::StatStat => r.unwrap(),
@@ -181,7 +194,7 @@ impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
             EdhocResponderProcessedM1 {
                 state: state.clone(),
                 r: self.r,
-                cred_r: state.cred_r,
+                cred_r: self.cred_r,
                 crypto: self.crypto,
             },
             c_i,
@@ -227,6 +240,8 @@ impl<'a, Crypto: CryptoTrait> EdhocResponderWaitM3<Crypto> {
     pub fn parse_message_3(
         mut self,
         message_3: &'a BufferMessage3,
+        cred_i: Option<Credential>,
+        cred_r: Option<Credential>,
     ) -> Result<
         (
             EdhocResponderProcessingM3<Crypto>,
@@ -236,7 +251,7 @@ impl<'a, Crypto: CryptoTrait> EdhocResponderWaitM3<Crypto> {
         EDHOCError,
     > {
         trace!("Enter parse_message_3");
-        match r_parse_message_3(&mut self.state, &mut self.crypto, message_3) {
+        match r_parse_message_3(&mut self.state, &mut self.crypto, message_3, cred_i, cred_r) {
             Ok((state, id_cred_i, ead_3)) => Ok((
                 EdhocResponderProcessingM3 {
                     state,
@@ -254,9 +269,10 @@ impl<'a, Crypto: CryptoTrait> EdhocResponderProcessingM3<Crypto> {
     pub fn verify_message_3(
         mut self,
         cred_i: Credential,
+        cred_r: Option<Credential>,
     ) -> Result<(EdhocResponderProcessedM3<Crypto>, [u8; SHA256_DIGEST_LEN]), EDHOCError> {
         trace!("Enter verify_message_3");
-        match r_verify_message_3(&mut self.state, &mut self.crypto, cred_i) {
+        match r_verify_message_3(&mut self.state, &mut self.crypto, cred_i, cred_r) {
             Ok((state, prk_out)) => Ok((
                 EdhocResponderProcessedM3  {
                     state,
@@ -324,8 +340,8 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiator<Crypto> {
     pub fn new(mut crypto: Crypto, method: EDHOCMethod, selected_suite: EDHOCSuite) -> Self {
         trace!("Initializing EdhocInitiator");
         let suites_i = prepare_suites_i(&crypto.supported_suites(), selected_suite.into()).unwrap();
-        let (x, g_x) = crypto.p256_generate_key_pair();
-
+        // let (x, g_x) = crypto.p256_generate_key_pair();
+        let (x, g_x) = (X, G_X);
         EdhocInitiator {
             state: InitiatorStart {
                 x,
@@ -628,6 +644,11 @@ pub fn credential_check_or_fetch(
 mod test_vectors_common {
     use hexlit::hex;
     use lakers_shared::*;
+    pub const ID_CRED_PSK: &[u8] = &hex!("a1044120");
+    pub const CRED_I_PSK: &[u8] =
+        &hex!("A20269696E69746961746F7208A101A30104024110205050930FF462A77A3540CF546325DEA214");
+    pub const CRED_R_PSK: &[u8] =
+        &hex!("A20269726573706F6E64657208A101A30104024110205050930FF462A77A3540CF546325DEA214");
 
     pub const CRED_I: &[u8] = &hex!("A2027734322D35302D33312D46462D45462D33372D33322D333908A101A5010202412B2001215820AC75E9ECE3E50BFC8ED60399889522405C47BF16DF96660A41298CB4307F7EB62258206E5DE611388A4B8A8211334AC7D37ECB52A387D257E6DB3C2A93DF21FF3AFFC8");
     pub const I: &[u8] = &hex!("fb13adeb6518cee5f88417660841142e830a81fe334380a953406a1305e8706b");
@@ -661,10 +682,13 @@ mod test {
 
     #[test]
     fn test_new_responder() {
+        let r_arr: [u8; 32] = R.try_into().expect("Wrong length of responder private key");
+        let r_opt: Option<[u8; 32]> = Some(r_arr);
         let _responder = EdhocResponder::new(
             default_crypto(),
             EDHOCMethod::StatStat,
-            R.try_into().expect("Wrong length of responder private key"),
+            r_opt,
+            //R.try_into().expect("Wrong length of responder private key"),
             Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap(),
         );
     }
@@ -684,10 +708,13 @@ mod test {
 
     #[test]
     fn test_process_message_1() {
+        let r_arr: [u8; 32] = R.try_into().expect("Wrong length of responder private key");
+        let r_opt: Option<[u8; 32]> = Some(r_arr);
         let responder = EdhocResponder::new(
             default_crypto(),
             EDHOCMethod::StatStat,
-            R.try_into().expect("Wrong length of responder private key"),
+            r_opt,
+            //R.try_into().expect("Wrong length of responder private key"),
             Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap(),
         );
 
@@ -698,10 +725,13 @@ mod test {
 
         // We need to create a new responder -- no message is supposed to be processed twice by a
         // responder or initiator
+        let r_arr: [u8; 32] = R.try_into().expect("Wrong length of responder private key");
+        let r_opt: Option<[u8; 32]> = Some(r_arr);
         let responder = EdhocResponder::new(
             default_crypto(),
             EDHOCMethod::StatStat,
-            R.try_into().expect("Wrong length of responder private key"),
+            r_opt,
+            //R.try_into().expect("Wrong length of responder private key"),
             Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap(),
         );
 
@@ -727,11 +757,13 @@ mod test {
             EDHOCMethod::StatStat,
             EDHOCSuite::CipherSuite2,
         );
+        let r_arr: [u8; 32] = R.try_into().expect("Wrong length of responder private key");
+        let r_opt: Option<[u8; 32]> = Some(r_arr);
 
         let responder = EdhocResponder::new(
             default_crypto(),
             EDHOCMethod::StatStat,
-            R.try_into().expect("Wrong length of responder private key"),
+            r_opt,
             cred_r.clone(),
         ); // has to select an identity before learning who is I
 
@@ -752,10 +784,13 @@ mod test {
         // ---- being initiator handling
         let (mut initiator, _c_r, id_cred_r, _ead_2) =
             initiator.parse_message_2(&message_2).unwrap();
-        let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r).unwrap();
+        let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r.unwrap()).unwrap();
+        let i_arr: [u8; 32] = I.try_into().expect("Wrong length of responder private key");
+        let i_opt: Option<[u8; 32]> = Some(i_arr);
         initiator
             .set_identity(
-                I.try_into().expect("Wrong length of initiator private key"),
+                i_opt,
+                //I.try_into().expect("Wrong length of initiator private key"),
                 cred_i.clone(),
             )
             .unwrap(); // exposing own identity only after validating cred_r
@@ -768,15 +803,16 @@ mod test {
         // ---- end initiator handling
 
         // ---- begin responder handling
-        let (responder, id_cred_i, _ead_3) = responder.parse_message_3(&message_3).unwrap();
-        let valid_cred_i = credential_check_or_fetch(Some(cred_i), id_cred_i).unwrap();
-        let (responder, r_prk_out) = responder.verify_message_3(valid_cred_i).unwrap();
+        let (responder, id_cred_i, _ead_3) = responder.parse_message_3(&message_3, None, None).unwrap();
+        let valid_cred_i = credential_check_or_fetch(Some(cred_i), id_cred_i.unwrap()).unwrap();
+        let (responder, r_prk_out) = responder.verify_message_3(valid_cred_i, None).unwrap();
 
         // Send message_4
         let (mut responder, message_4) = responder.prepare_message_4(&EadItems::new()).unwrap();
         // ---- end responder handling
 
-        let (mut initiator, _ead_4) = initiator.process_message_4(&message_4).unwrap();
+        let (initiator, _ead_4) = initiator.parse_message_4(&message_4).unwrap();
+        let mut initiator = initiator.verify_message_4().unwrap();
         // ---- end initiator handling
 
         // check that prk_out is equal at initiator and responder side

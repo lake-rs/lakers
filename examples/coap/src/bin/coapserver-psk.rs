@@ -6,11 +6,15 @@ use std::net::UdpSocket;
 use defmt_or_log::info;
 use hex::encode;
 
-// const ID_CRED: &[u8] = &hex!("a1044120");
-const CRED_PSK: &[u8] =
-    &hex!("A202686D79646F74626F7408A101A30104024110205050930FF462A77A3540CF546325DEA214");
+const ID_CRED_PSK: &[u8] = &hex!("a1044120");
+const CRED_I: &[u8] =
+    &hex!("A20269696E69746961746F7208A101A30104024110205050930FF462A77A3540CF546325DEA214");
+const CRED_R: &[u8] =
+    &hex!("A20269726573706F6E64657208A101A30104024110205050930FF462A77A3540CF546325DEA214");
+// const CRED_PSK: &[u8] =
+// &hex!("A202686D79646F74626F7408A101A30104024110205050930FF462A77A3540CF546325DEA214");
 
-// Run with RUST_LOG=info cargo run --bin coapserver-psk2
+// Run with RUST_LOG=info cargo run --bin coapserver-psk
 
 fn main() {
     env_logger::init();
@@ -30,18 +34,17 @@ fn main() {
 
         let path = request.get_path();
         let mut response = request.response.unwrap();
-
+        let cred_r: Credential =
+            Credential::parse_ccs_symmetric(CRED_R.try_into().unwrap()).unwrap();
         if path == ".well-known/edhoc" {
             println!("Received message from {}", src);
             // This is an EDHOC message
             if request.message.payload[0] == 0xf5 {
-                let cred_psk: Credential =
-                    Credential::parse_ccs_symmetric(CRED_PSK.try_into().unwrap()).unwrap();
                 let responder = EdhocResponder::new(
                     lakers_crypto::default_crypto(),
                     EDHOCMethod::PSK,
                     None,
-                    cred_psk,
+                    cred_r,
                 );
                 // println!("cred:{:?}", cred_psk);
 
@@ -80,7 +83,8 @@ fn main() {
                 let message_3 =
                     EdhocMessageBuffer::new_from_slice(&request.message.payload[1..]).unwrap();
                 println!("message_3: 0x{}", encode(message_3.as_slice()));
-                let Ok((responder, id_cred_i, _ead_3)) = responder.parse_message_3(&message_3)
+                let cred_i: Credential = Credential::parse_ccs_symmetric(CRED_I.try_into().unwrap()).unwrap();
+                let Ok((responder, id_cred_i, _ead_3)) = responder.parse_message_3(&message_3, Some(cred_i.clone()), Some(cred_r.clone()))
                 else {
                     println!("EDHOC error at parse_message_3: {:?}", message_3);
                     // We don't get another chance, it's popped and can't be used any further
@@ -88,10 +92,11 @@ fn main() {
                     continue;
                 };
                 println!("message_3 parsed");
-                let cred = Credential::parse_ccs_symmetric(CRED_PSK.try_into().unwrap()).unwrap();
                 let valid_cred_i =
-                    credential_check_or_fetch(Some(cred), id_cred_i.unwrap()).unwrap();
-                let Ok((mut responder, prk_out)) = responder.verify_message_3(valid_cred_i.clone()) else {
+                    credential_check_or_fetch(Some(cred_i), id_cred_i.unwrap()).unwrap();
+                println!("valid_cred_i: 0x{}", encode(valid_cred_i.bytes.as_slice()));
+
+                let Ok((mut responder, prk_out)) = responder.verify_message_3(valid_cred_i.clone(), Some(cred_r.clone())) else {
                     println!("EDHOC error at verify_message_3: {:?}", valid_cred_i);
                     continue;
                 };

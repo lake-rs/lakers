@@ -124,7 +124,8 @@ pub const KCSS_LABEL: u8 = KCCS_LABEL;
 pub const KID_LABEL: u8 = 4;
 
 pub const ENC_STRUCTURE_LEN: usize = 8 + 5 + SHA256_DIGEST_LEN; // 8 for ENCRYPT0
-
+pub const ENC_STRUCTURE_PSK_LEN: usize = 1 + 1 + 8 + 1 + EXTERNAL_AAD_PSK_LEN; //
+pub const EXTERNAL_AAD_PSK_LEN: usize = 1 + 1 + 2 +32 + 2+ 38 + 2 + 38 + 1;
 pub const MAX_EAD_LEN: usize = if cfg!(feature = "max_ead_len_1024") {
     1024
 } else if cfg!(feature = "max_ead_len_768") {
@@ -198,7 +199,7 @@ pub type BufferInfo = EdhocBuffer<MAX_INFO_LEN>;
 ///
 /// This is an array and not an [`EdhocBuffer`] because it always has a fixed length.
 pub type BytesEncStructureLen = [u8; ENC_STRUCTURE_LEN];
-
+pub type BytesEncStructurePSKLen = [u8; ENC_STRUCTURE_PSK_LEN];
 pub type BytesMac = [u8; MAC_LENGTH];
 pub type BytesVoucher = [u8; VOUCHER_LEN];
 pub type EADBuffer = EdhocBuffer<MAX_EAD_LEN>;
@@ -489,7 +490,7 @@ pub struct ProcessingM1 {
     pub c_i: ConnId,
     pub g_x: BytesP256ElemLen, // ephemeral public key of the initiator
     pub h_message_1: BytesHashLen,
-    pub cred_r: Credential, // Added for PSK variant
+    // pub cred_r: Credential, // Added for PSK variant
 }
 
 #[derive(Clone, Debug)]
@@ -506,9 +507,9 @@ pub struct WaitM3 {
     pub method: u8,
     pub y: BytesP256ElemLen, // ephemeral private key of the responder
     pub prk_3e2m: BytesHashLen,
-    pub salt_3e2m: BytesHashLen,
+    // pub salt_3e2m: BytesHashLen,
     pub th_3: BytesHashLen,
-    pub cred_r: Option<Credential>,
+    // pub cred_r: Option<Credential>,
 }
 
 #[derive(Debug)]
@@ -522,6 +523,7 @@ pub struct ProcessingM2 {
     pub g_y: BytesP256ElemLen,
     pub plaintext_2: BufferPlaintext2,
     pub c_r: ConnId,
+    // pub cred_i: Option<Credential>,
     pub id_cred_r: Option<IdCred>,
     pub ead_2: EadItems,
 }
@@ -533,6 +535,9 @@ pub struct ProcessedM2 {
     pub prk_3e2m: BytesHashLen,
     pub prk_4e3m: BytesHashLen,
     pub th_3: BytesHashLen,
+    // pub cred_i: Option<Credential>,
+    pub cred_r: Option<Credential>,
+    // pub id_cred_r: Option<IdCred>,
 }
 
 #[derive(Debug)]
@@ -541,11 +546,12 @@ pub struct ProcessingM3 {
     pub mac_3: Option<BytesMac3>,
     pub y: BytesP256ElemLen, // ephemeral private key of the responder
     pub prk_3e2m: BytesHashLen,
-    pub salt_3e2m: BytesHashLen,
+    // pub salt_3e2m: BytesHashLen,
     pub th_3: BytesHashLen,
     pub id_cred_i: Option<IdCred>,
     pub plaintext_3: BufferPlaintext3,
     pub ead_3: EadItems,
+    // pub cred_r: Option<Credential>,
 }
 
 #[derive(Debug)]
@@ -558,12 +564,12 @@ pub struct PreparingM3 {
 
 #[derive(Debug)]
 pub struct ProcessedM3 {
-    pub prk_3e2m: BytesHashLen,
+    // pub prk_3e2m: BytesHashLen,
     pub prk_4e3m: BytesHashLen,
-    pub cred_r: Credential,
-    pub th_3: BytesHashLen,
+    // pub cred_r: Credential,
+    // pub th_3: BytesHashLen,
     pub th_4: BytesHashLen,
-    pub id_cred: Option<IdCred>,
+    // pub id_cred: Option<IdCred>,
     pub prk_out: BytesHashLen,
     pub prk_exporter: BytesHashLen,
 }
@@ -572,10 +578,10 @@ pub struct ProcessedM3 {
 pub struct WaitM4 {
     // pub prk_3e2m: BytesHashLen,
     pub prk_4e3m: BytesHashLen,
-    pub cred_r: Credential,
-    pub th_3: BytesHashLen,
+    // pub cred_r: Credential,
+    // pub th_3: BytesHashLen,
     pub th_4: BytesHashLen,
-    pub id_cred: Option<IdCred>,
+    // pub id_cred: Option<IdCred>,
     pub ead_3: EadItems,
     pub prk_out: BytesHashLen,
     pub prk_exporter: BytesHashLen,
@@ -583,10 +589,7 @@ pub struct WaitM4 {
 
 #[derive(Debug)]
 pub struct ProcessingM4 {
-    // pub prk_3e2m: BytesHashLen,
     pub prk_4e3m: BytesHashLen,
-    pub cred_i: Credential,
-    // pub th_3: BytesHashLen,
     pub th_4: BytesHashLen,
     pub prk_out: BytesHashLen,
     pub prk_exporter: BytesHashLen,
