@@ -1,12 +1,11 @@
 use coap_lite::{CoapRequest, Packet, ResponseType};
-use hexlit::hex;
-use lakers::*;
-use log::*;
-use std::net::UdpSocket;
 use defmt_or_log::info;
 use hex::encode;
+use hexlit::hex;
+use lakers::*;
+use std::net::UdpSocket;
 
-const ID_CRED_PSK: &[u8] = &hex!("a1044120");
+const _ID_CRED_PSK: &[u8] = &hex!("a1044120");
 const CRED_I: &[u8] =
     &hex!("A20269696E69746961746F7208A101A30104024110205050930FF462A77A3540CF546325DEA214");
 const CRED_R: &[u8] =
@@ -56,12 +55,16 @@ fn main() {
                 println!("message_1 len:{:?}", message_1.len());
                 let result = responder.process_message_1(&message_1);
                 println!("\n---------MESSAGE_2-----------\n");
-                if let Ok((responder, _c_i, ead_1)) = result {
-                    let c_r = ConnId::from_int_raw(5);
-                    // let c_r =
-                    // generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
+                if let Ok((responder, _c_i, _ead_1)) = result {
+                    //let c_r = ConnId::from_int_raw(5);
+                    let c_r =
+                        generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
                     let (responder, message_2) = responder
-                        .prepare_message_2(CredentialTransfer::ByReference, Some(c_r), &EadItems::new())
+                        .prepare_message_2(
+                            CredentialTransfer::ByReference,
+                            Some(c_r),
+                            &EadItems::new(),
+                        )
                         .unwrap();
                     response.message.payload = Vec::from(message_2.as_slice());
                     // save edhoc connection
@@ -75,6 +78,7 @@ fn main() {
                 println!("\n---------MESSAGE_3-----------\n");
                 // potentially message 3
                 println!("Received message 3");
+                #[allow(deprecated)]
                 let c_r_rcvd = ConnId::from_int_raw(request.message.payload[0]);
                 // FIXME let's better not *panic here
                 let responder = take_state(c_r_rcvd, &mut edhoc_connections).unwrap();
@@ -83,9 +87,13 @@ fn main() {
                 let message_3 =
                     EdhocMessageBuffer::new_from_slice(&request.message.payload[1..]).unwrap();
                 println!("message_3: 0x{}", encode(message_3.as_slice()));
-                let cred_i: Credential = Credential::parse_ccs_symmetric(CRED_I.try_into().unwrap()).unwrap();
-                let Ok((responder, id_cred_i, _ead_3)) = responder.parse_message_3(&message_3, Some(cred_i.clone()), Some(cred_r.clone()))
-                else {
+                let cred_i: Credential =
+                    Credential::parse_ccs_symmetric(CRED_I.try_into().unwrap()).unwrap();
+                let Ok((responder, id_cred_i, _ead_3)) = responder.parse_message_3(
+                    &message_3,
+                    Some(cred_i.clone()),
+                    Some(cred_r.clone()),
+                ) else {
                     println!("EDHOC error at parse_message_3: {:?}", message_3);
                     // We don't get another chance, it's popped and can't be used any further
                     // anyway legally
@@ -96,7 +104,9 @@ fn main() {
                     credential_check_or_fetch(Some(cred_i), id_cred_i.unwrap()).unwrap();
                 println!("valid_cred_i: 0x{}", encode(valid_cred_i.bytes.as_slice()));
 
-                let Ok((mut responder, prk_out)) = responder.verify_message_3(valid_cred_i.clone(), Some(cred_r.clone())) else {
+                let Ok((responder, prk_out)) =
+                    responder.verify_message_3(valid_cred_i.clone(), Some(cred_r.clone()))
+                else {
                     println!("EDHOC error at verify_message_3: {:?}", valid_cred_i);
                     continue;
                 };
@@ -125,8 +135,8 @@ fn main() {
 
                         // context of key update is a test vector from draft-ietf-lake-traces
                         let prk_out_new = responder.edhoc_key_update(&[
-                            0xa0, 0x11, 0x58, 0xfd, 0xb8, 0x20, 0x89, 0x0c, 0xd6, 0xbe, 0x16, 0x96, 0x02,
-                            0xb8, 0xbc, 0xea,
+                            0xa0, 0x11, 0x58, 0xfd, 0xb8, 0x20, 0x89, 0x0c, 0xd6, 0xbe, 0x16, 0x96,
+                            0x02, 0xb8, 0xbc, 0xea,
                         ]);
                         println!("PRK_out after key update: {:02x?}?", prk_out_new);
 
@@ -134,7 +144,7 @@ fn main() {
                         println!("OSCORE secret after key update: {:02x?}", oscore_secret);
                         responder.edhoc_exporter(1u8, &[], &mut oscore_salt); // label is 1
                         println!("OSCORE salt after key update: {:02x?}", oscore_salt);
-                    },
+                    }
                     Err(e) => {
                         // Handle the error case
                         println!("Error preparing message 4: {:?}", e);

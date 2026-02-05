@@ -92,8 +92,6 @@ fn main() {
                     edhoc_connections.push((c_r, responder));
                     println!("message_2 : {:?}", message_2.as_slice());
                     println!("message_2 len = {}", message_2.len());
-
-
                 } else {
                     println!("msg1 err");
                     response.set_status(ResponseType::BadRequest);
@@ -108,7 +106,8 @@ fn main() {
 
                 println!("Found state with connection identifier {:?}", c_r_rcvd);
                 let message_3 = EdhocBuffer::new_from_slice(&request.message.payload[1..]).unwrap();
-                let Ok((responder, id_cred_i, ead_3)) = responder.parse_message_3(&message_3, None, None)
+                let Ok((responder, id_cred_i, ead_3)) =
+                    responder.parse_message_3(&message_3, None, None)
                 else {
                     println!("EDHOC error at parse_message_3: {:?}", message_3);
                     // We don't get another chance, it's popped and can't be used any further
@@ -117,9 +116,11 @@ fn main() {
                 };
                 ead_3.processed_critical_items().unwrap();
                 let cred_i = Credential::parse_ccs(CRED_I.try_into().unwrap()).unwrap();
-                let valid_cred_i = credential_check_or_fetch(Some(cred_i), id_cred_i.unwrap()).unwrap();
+                let valid_cred_i =
+                    credential_check_or_fetch(Some(cred_i), id_cred_i.unwrap()).unwrap();
                 // FIXME: instead of cloning, take by reference
-                let Ok((responder, prk_out)) = responder.verify_message_3(valid_cred_i.clone(), None)
+                let Ok((responder, prk_out)) =
+                    responder.verify_message_3(valid_cred_i.clone(), None)
                 else {
                     println!("EDHOC error at verify_message_3: {:?}", valid_cred_i);
                     continue;

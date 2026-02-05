@@ -11,10 +11,10 @@ use embassy_nrf::radio::ble::Radio;
 use embassy_nrf::radio::TxPower;
 use embassy_nrf::{bind_interrupts, peripherals, radio};
 // use embassy_time::{Duration, Timer};
-use {defmt_rtt as _, panic_probe as _};
+use nrf52840_hal::gpio::{Level, Output, Pin};
 use nrf52840_hal::pac;
 use nrf52840_hal::prelude::*;
-use nrf52840_hal::gpio::{Level, Output, Pin};
+use {defmt_rtt as _, panic_probe as _};
 
 use lakers::*;
 
@@ -43,14 +43,28 @@ async fn main(spawner: Spawner) {
     let p0 = nrf52840_hal::gpio::p0::Parts::new(peripherals.P0);
     let p1 = nrf52840_hal::gpio::p1::Parts::new(peripherals.P1);
 
-    let mut led_pin_p0_26 = p0.p0_26.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    let mut led_pin_p0_8 = p0.p0_08.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    let mut led_pin_p0_7 = p0.p0_07.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    let mut led_pin_p0_6 = p0.p0_06.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    let mut led_pin_p0_5 = p0.p0_05.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led_pin_p0_26 = p0
+        .p0_26
+        .into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led_pin_p0_8 = p0
+        .p0_08
+        .into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led_pin_p0_7 = p0
+        .p0_07
+        .into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led_pin_p0_6 = p0
+        .p0_06
+        .into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led_pin_p0_5 = p0
+        .p0_05
+        .into_push_pull_output(nrf52840_hal::gpio::Level::Low);
 
-    let mut led_pin_p1_07 = p1.p1_07.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    let mut led_pin_p1_08 = p1.p1_08.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led_pin_p1_07 = p1
+        .p1_07
+        .into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led_pin_p1_08 = p1
+        .p1_08
+        .into_push_pull_output(nrf52840_hal::gpio::Level::Low);
 
     let mut config = embassy_nrf::config::Config::default();
     config.hfclk_source = embassy_nrf::config::HfclkSource::ExternalXtal;

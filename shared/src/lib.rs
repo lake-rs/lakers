@@ -53,7 +53,7 @@ pub const MAX_MESSAGE_SIZE_LEN: usize = if cfg!(feature = "max_message_size_len_
 pub const ID_CRED_LEN: usize = 4;
 pub const SUITES_LEN: usize = 9;
 pub const SUPPORTED_SUITES_LEN: usize = 1;
-pub const EDHOC_METHOD: u8 = 4u8; // stat-stat: 3u8, psk:4u8
+pub const EDHOC_METHOD: u8 = 3u8; // stat-stat: 3u8, psk:4u8
 pub const P256_ELEM_LEN: usize = 32;
 pub const P256_ELEM_LEN_PSK: usize = 16;
 pub const SHA256_DIGEST_LEN: usize = 32;
@@ -125,7 +125,7 @@ pub const KID_LABEL: u8 = 4;
 
 pub const ENC_STRUCTURE_LEN: usize = 8 + 5 + SHA256_DIGEST_LEN; // 8 for ENCRYPT0
 pub const ENC_STRUCTURE_PSK_LEN: usize = 1 + 1 + 8 + 1 + EXTERNAL_AAD_PSK_LEN; //
-pub const EXTERNAL_AAD_PSK_LEN: usize = 1 + 1 + 2 +32 + 2+ 38 + 2 + 38 + 1;
+pub const EXTERNAL_AAD_PSK_LEN: usize = 1 + 1 + 2 + 32 + 2 + 38 + 2 + 38 + 1;
 pub const MAX_EAD_LEN: usize = if cfg!(feature = "max_ead_len_1024") {
     1024
 } else if cfg!(feature = "max_ead_len_768") {
@@ -1064,6 +1064,7 @@ mod edhoc_parser {
             //println!("g_x: {:?}", g_x);
 
             // consume c_i encoded as single-byte int (we still do not support bstr encoding)
+            #[allow(deprecated)]
             let c_i = ConnId::from_int_raw(decoder.int_raw()?);
             // let c_i = ConnId::from_decoder(&mut decoder)?;
             // if there is still more to parse, the rest will be the EADs
@@ -1130,7 +1131,8 @@ mod edhoc_parser {
         if message_slice.len() < header_len + ciphertext_3a_len {
             return Err(EDHOCError::ParsingError);
         }
-        ciphertext_3a.fill_with_slice(&message_slice[header_len..header_len + ciphertext_3a_len]);
+        let _ = ciphertext_3a
+            .fill_with_slice(&message_slice[header_len..header_len + ciphertext_3a_len]);
         // println!("ciphertext_3a: {:?}", ciphertext_3a);
 
         // let mut ciphertext_3b = BufferCiphertext3::new();
@@ -1148,7 +1150,6 @@ mod edhoc_parser {
         plaintext_2: &BufferCiphertext2,
     ) -> Result<(ConnId, Option<IdCred>, Option<BytesMac2>, EadItems), EDHOCError> {
         trace!("Enter decode_plaintext_2");
-        let mut mac_2: Option<[u8; MAC_LENGTH_2]> = None;
 
         let mut decoder = CBORDecoder::new(plaintext_2.as_slice());
         trace!("decoder:{:?}", decoder);
@@ -1194,7 +1195,6 @@ mod edhoc_parser {
         plaintext_3: &BufferPlaintext3,
     ) -> Result<(Option<IdCred>, Option<BytesMac3>, EadItems), EDHOCError> {
         trace!("Enter decode_plaintext_3");
-        let mut mac_3: BytesMac3 = [0x00; MAC_LENGTH_3];
 
         let mut decoder = CBORDecoder::new(plaintext_3.as_slice());
         //println!("decoder plaintext_3:{:?}", decoder);
@@ -1253,7 +1253,7 @@ mod edhoc_parser {
         }
     }
 }
- 
+
 pub fn decode_plaintext_3a(plaintext_3: &BufferPlaintext3) -> Result<&[u8], EDHOCError> {
     trace!("Enter decode_plaintext_3");
 
@@ -1264,7 +1264,6 @@ pub fn decode_plaintext_3a(plaintext_3: &BufferPlaintext3) -> Result<&[u8], EDHO
     Ok(id_cred)
 }
 
-
 fn decode_cbor_length(first_byte: u8) -> Result<(usize, usize), EDHOCError> {
     match first_byte & 0x1F {
         n @ 0..=23 => Ok((n as usize, 1)),
@@ -1273,7 +1272,7 @@ fn decode_cbor_length(first_byte: u8) -> Result<(usize, usize), EDHOCError> {
         _ => Err(EDHOCError::ParsingError), // Unsupported length encoding
     }
 }
-
+/*
 fn decode_cbor_prefix(data: &[u8]) -> Result<(BytesKeyKid, &[u8]), EDHOCError> {
     let mut decoder = CBORDecoder::new(data);
     //println!("decoder:{:?}", data);
@@ -1292,6 +1291,7 @@ fn decode_cbor_prefix(data: &[u8]) -> Result<(BytesKeyKid, &[u8]), EDHOCError> {
 
     Ok((ciphertext_3a, &data[decoder.position()..]))
 }
+ */
 
 mod cbor_decoder {
     /// Decoder inspired by the [minicbor](https://crates.io/crates/minicbor) crate.

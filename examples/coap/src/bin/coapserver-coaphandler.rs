@@ -188,12 +188,15 @@ impl coap_handler::Handler for EdhocHandler {
             let cred_i =
                 Credential::parse_ccs(CRED_I.try_into().expect("Static credential is too large"))
                     .expect("Static credential is not processable");
-            let valid_cred_i =
-                credential_check_or_fetch(Some(cred_i), id_cred_i.unwrap()).map_err(render_error)?;
-            let (responder, prk_out) = responder.verify_message_3(valid_cred_i, None).map_err(|e| {
-                println!("EDHOC processing error: {:?}", e);
-                render_error(e)
-            })?;
+            let valid_cred_i = credential_check_or_fetch(Some(cred_i), id_cred_i.unwrap())
+                .map_err(render_error)?;
+            let (responder, prk_out) =
+                responder
+                    .verify_message_3(valid_cred_i, None)
+                    .map_err(|e| {
+                        println!("EDHOC processing error: {:?}", e);
+                        render_error(e)
+                    })?;
 
             let (mut responder, _message_4) =
                 responder.prepare_message_4(&EadItems::new()).unwrap();

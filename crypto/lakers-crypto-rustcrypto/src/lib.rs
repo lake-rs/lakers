@@ -1,10 +1,8 @@
 #![no_std]
 
 use lakers_shared::{
-    BufferCiphertext3, BufferPlaintext3, BytesCcmIvLen, BytesCcmKeyLen, BytesHashLen,
-    BytesMaxBuffer, BytesP256ElemLen, BytesP256ElemLenPSK,
-    Crypto as CryptoTrait, EDHOCError, AES_CCM_TAG_LEN, MAX_BUFFER_LEN, EdhocBuffer,
-    EDHOCSuite, MAX_SUITES_LEN,
+    BytesCcmIvLen, BytesCcmKeyLen, BytesHashLen, BytesP256ElemLen, BytesP256ElemLenPSK,
+    Crypto as CryptoTrait, EDHOCError, EDHOCSuite, EdhocBuffer, AES_CCM_TAG_LEN, MAX_SUITES_LEN,
 };
 
 use ccm::AeadInPlace;

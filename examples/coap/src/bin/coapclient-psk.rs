@@ -1,18 +1,16 @@
 use coap::CoAPClient;
 use coap_lite::ResponseType;
-use hexlit::hex;
-use lakers::*;
-use log::*;
-use std::time::Duration;
 use defmt_or_log::info;
 use hex::encode;
+use hexlit::hex;
+use lakers::*;
+use std::time::Duration;
 
-const ID_CRED_PSK: &[u8] = &hex!("a1044120");
+const _ID_CRED_PSK: &[u8] = &hex!("a1044120");
 const CRED_I: &[u8] =
     &hex!("A20269696E69746961746F7208A101A30104024110205050930FF462A77A3540CF546325DEA214");
 const CRED_R: &[u8] =
     &hex!("A20269726573706F6E64657208A101A30104024110205050930FF462A77A3540CF546325DEA214");
-
 
 fn main() {
     env_logger::init();
@@ -40,14 +38,14 @@ fn client_handshake() -> Result<(), EDHOCError> {
     println!("\n---------MESSAGE_1-----------\n");
     // Send Message 1 over CoAP and convert the response to byte
     let mut msg_1_buf = Vec::from([0xf5u8]); // EDHOC message_1 when transported over CoAP is prepended with CBOR true
-    // let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
-    let c_i = ConnId::from_int_raw(10);
+    let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
+    // let c_i = ConnId::from_int_raw(10);
     println!("c_i: {:?}", c_i);
     initiator.set_identity(None, cred_i.clone());
     let (initiator, message_1) = initiator.prepare_message_1(Some(c_i), &EadItems::new())?;
     println!("message_1 len = {}", message_1.len());
     println!("message_1 = 0x{}", encode(message_1.as_slice()));
-    msg_1_buf.extend_from_slice(message_1.as_slice());    
+    msg_1_buf.extend_from_slice(message_1.as_slice());
 
     let response = CoAPClient::post_with_timeout(url, msg_1_buf, timeout).unwrap();
     if response.get_status() != &ResponseType::Changed {
@@ -55,22 +53,25 @@ fn client_handshake() -> Result<(), EDHOCError> {
     }
     println!("\n---------MESSAGE_2-----------\n");
     // println!("response_vec = {:02x?}", response.message.payload);
-    println!("message_2 : 0x{}", encode(response.message.payload.as_slice()));
+    println!(
+        "message_2 : 0x{}",
+        encode(response.message.payload.as_slice())
+    );
     println!("message_2 len = {}", response.message.payload.len());
 
     let message_2 = EdhocMessageBuffer::new_from_slice(&response.message.payload[..]).unwrap();
-    let (mut initiator, c_r, id_cred_r, _ead_2) = initiator.parse_message_2(&message_2)?;
+    let (initiator, c_r, _id_cred_r, _ead_2) = initiator.parse_message_2(&message_2)?;
 
     let initiator = initiator.verify_message_2(cred_r)?;
 
     println!("\n---------MESSAGE_3-----------\n");
     let mut msg_3 = Vec::from(c_r.as_cbor());
-    let (mut initiator, message_3, prk_out) =
+    let (initiator, message_3, prk_out) =
         initiator.prepare_message_3(CredentialTransfer::ByReference, &EadItems::new())?;
-        
+
     msg_3.extend_from_slice(message_3.as_slice());
     println!("message_3 len = {}", msg_3.len());
-    println!("message_3 = 0x{}", encode(message_3.as_slice()));   
+    println!("message_3 = 0x{}", encode(message_3.as_slice()));
 
     let response = CoAPClient::post_with_timeout(url, msg_3, timeout).unwrap();
     if response.get_status() != &ResponseType::Changed {
@@ -83,9 +84,9 @@ fn client_handshake() -> Result<(), EDHOCError> {
     println!("message_4 len = {}", response.message.payload.len());
 
     println!("Entering parse message 4");
-    let (mut initiator, ead_4) = initiator.parse_message_4(&message_4)?;
+    let (initiator, _ead_4) = initiator.parse_message_4(&message_4)?;
     println!("Entering verify message 4");
-    let (mut initiator) = initiator.verify_message_4()?;
+    let mut initiator = initiator.verify_message_4()?;
 
     println!("\n---------END-----------\n");
     println!("EDHOC exchange successfully completed");

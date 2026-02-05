@@ -11,10 +11,10 @@ use embassy_nrf::radio::ble::Radio;
 use embassy_nrf::radio::TxPower;
 use embassy_nrf::{bind_interrupts, peripherals, radio};
 // use embassy_time::{Duration, Timer};
-use {defmt_rtt as _, panic_probe as _};
+use nrf52840_hal::gpio::{Level, Output, Pin};
 use nrf52840_hal::pac;
 use nrf52840_hal::prelude::*;
-use nrf52840_hal::gpio::{Level, Output, Pin};
+use {defmt_rtt as _, panic_probe as _};
 
 use lakers::*;
 
@@ -43,14 +43,28 @@ async fn main(spawner: Spawner) {
     let p0 = nrf52840_hal::gpio::p0::Parts::new(peripherals.P0);
     let p1 = nrf52840_hal::gpio::p1::Parts::new(peripherals.P1);
 
-    let mut led_pin_p0_26 = p0.p0_26.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    let mut led_pin_p0_8 = p0.p0_08.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    let mut led_pin_p0_7 = p0.p0_07.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    let mut led_pin_p0_6 = p0.p0_06.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    let mut led_pin_p0_5 = p0.p0_05.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led_pin_p0_26 = p0
+        .p0_26
+        .into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led_pin_p0_8 = p0
+        .p0_08
+        .into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led_pin_p0_7 = p0
+        .p0_07
+        .into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led_pin_p0_6 = p0
+        .p0_06
+        .into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led_pin_p0_5 = p0
+        .p0_05
+        .into_push_pull_output(nrf52840_hal::gpio::Level::Low);
 
-    let mut led_pin_p1_07 = p1.p1_07.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    let mut led_pin_p1_08 = p1.p1_08.into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led_pin_p1_07 = p1
+        .p1_07
+        .into_push_pull_output(nrf52840_hal::gpio::Level::Low);
+    let mut led_pin_p1_08 = p1
+        .p1_08
+        .into_push_pull_output(nrf52840_hal::gpio::Level::Low);
 
     let mut config = embassy_nrf::config::Config::default();
     config.hfclk_source = embassy_nrf::config::HfclkSource::ExternalXtal;
@@ -97,33 +111,33 @@ async fn main(spawner: Spawner) {
         let buffer: [u8; MAX_PDU] = [0x00u8; MAX_PDU];
         let mut c_r: Option<ConnId> = None;
 
-        // info!("Receiving..."); 
+        // info!("Receiving...");
         // filter all incoming packets waiting for CBOR TRUE (0xf5)
-        let pckt = common::receive_and_filter(
-            &mut radio, 
-            Some(0xf5), 
-            Some(&mut led_pin_p1_07)
-            ).await.unwrap();
+        let pckt = common::receive_and_filter(&mut radio, Some(0xf5), Some(&mut led_pin_p1_07))
+            .await
+            .unwrap();
         // info!("Received message_1");
         // led_pin_p0_26.set_high();
 
         // PSK
-        let cred_i: Credential = Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
-        let cred_r: Credential = Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
+        let cred_i: Credential =
+            Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
+        let cred_r: Credential =
+            Credential::parse_ccs_symmetric(common::CRED_PSK.try_into().unwrap()).unwrap();
         let responder = EdhocResponder::new(
-            lakers_crypto::default_crypto(), 
-            EDHOCMethod::PSK2, 
-            None, 
-            cred_r
+            lakers_crypto::default_crypto(),
+            EDHOCMethod::PSK2,
+            None,
+            cred_r,
         );
 
         // STATSTAT
         // let cred_i = Credential::parse_ccs(common::CRED_I.try_into().unwrap()).unwrap();
         // let cred_r = Credential::parse_ccs(common::CRED_R.try_into().unwrap()).unwrap();
         // let responder = EdhocResponder::new(
-        //     lakers_crypto::default_crypto(), 
-        //     EDHOCMethod::StatStat, 
-        //     Some(common::R.try_into().unwrap()), 
+        //     lakers_crypto::default_crypto(),
+        //     EDHOCMethod::StatStat,
+        //     Some(common::R.try_into().unwrap()),
         //     cred_r
         // );
 
@@ -142,9 +156,9 @@ async fn main(spawner: Spawner) {
 
         led_pin_p0_6.set_high();
         let result = responder.process_message_1(&message_1);
-        led_pin_p0_6.set_low();   
+        led_pin_p0_6.set_low();
         led_pin_p0_26.set_low();
-        
+
         if let Ok((responder, _c_i, ead_1)) = result {
             c_r = Some(generate_connection_identifier_cbor(
                 &mut lakers_crypto::default_crypto(),
@@ -157,7 +171,7 @@ async fn main(spawner: Spawner) {
                 .prepare_message_2(CredentialTransfer::ByReference, c_r, &ead_2)
                 .unwrap();
             led_pin_p0_5.set_low();
-            
+
             // prepend 0xf5 also to message_2 in order to allow the Initiator filter out from other BLE packets
             // info!("Send message_2 and wait message_3");
             led_pin_p0_26.set_low();
@@ -168,7 +182,7 @@ async fn main(spawner: Spawner) {
                 &mut led_pin_p1_08,
             )
             .await;
-            
+
             match message_3 {
                 Ok(message_3) => {
                     info!("Received message_3");

@@ -58,7 +58,7 @@ fn client_handshake() -> Result<(), EDHOCError> {
     println!("I before verifying m2");
     ead_2.processed_critical_items().unwrap();
     let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r.unwrap()).unwrap();
-    
+
     let identity: [u8; 32] = I.try_into().expect("Wrong length for identity");
     initiator.set_identity(Some(identity), cred_i)?;
     let initiator = initiator.verify_message_2(valid_cred_r)?;
@@ -76,10 +76,9 @@ fn client_handshake() -> Result<(), EDHOCError> {
     println!("response_vec = {:02x?}", response.message.payload);
     println!("message_3 len = {}", response.message.payload.len());
     let message_4 = EdhocBuffer::new_from_slice(&response.message.payload[..]).unwrap();
-    let (mut initiator, ead_4) = initiator.parse_message_4(&message_4).unwrap();
+    let (initiator, ead_4) = initiator.parse_message_4(&message_4).unwrap();
     ead_4.processed_critical_items().unwrap();
-    let (mut initiator) = initiator.verify_message_4()?;
-
+    let mut initiator = initiator.verify_message_4()?;
 
     println!("EDHOC exchange successfully completed");
     println!("PRK_out: {:02x?}", prk_out);

@@ -1,9 +1,8 @@
-use crate::credential_check_or_fetch;
+use core::clone::Clone;
 use digest::Digest;
 use lakers_shared::{Crypto as CryptoTrait, *};
-use core::clone::Clone;
-use defmt_or_log::trace;
-use hex::encode;
+// use hex::encode;
+// use defmt_or_log::trace;
 
 pub fn edhoc_exporter(
     state: &Completed,
@@ -87,15 +86,11 @@ pub fn r_prepare_message_2(
     let salt_3e2m = compute_salt_3e2m(crypto, &prk_2e, &th_2);
 
     let prk_3e2m = match cred_r.key {
-        CredentialKey::EC2Compact(public_key) => {
+        CredentialKey::EC2Compact(_public_key) => {
             compute_prk_3e2m(crypto, &salt_3e2m, r.unwrap(), &state.g_x)
         }
-        CredentialKey::Symmetric(psk) if state.method == EDHOCMethod::PSK.into() => {
-            prk_2e
-        }
-        _ => {
-            Err(EDHOCError::UnsupportedMethod)?
-        }
+        CredentialKey::Symmetric(_psk) if state.method == EDHOCMethod::PSK.into() => prk_2e,
+        _ => Err(EDHOCError::UnsupportedMethod)?,
     };
 
     let id_cred_r = match cred_transfer {
@@ -124,9 +119,7 @@ pub fn r_prepare_message_2(
             mac_2.as_ref(),
             &ead_2,
         ),
-        m if m == EDHOCMethod::PSK.into() => {
-            encode_plaintext_2(c_r, None, None, &ead_2)
-        }
+        m if m == EDHOCMethod::PSK.into() => encode_plaintext_2(c_r, None, None, &ead_2),
         _ => Err(EDHOCError::UnsupportedMethod),
     }?;
 
@@ -158,7 +151,6 @@ pub fn r_prepare_message_2(
             y: state.y,
             prk_3e2m: prk_3e2m,
             th_3: th_3,
-            // cred_r: Some(cred_r), // Added for PSK to decrypt message 3
         },
         message_2,
     ))
@@ -174,17 +166,13 @@ pub fn r_parse_message_3(
 ) -> Result<(ProcessingM3, Option<IdCred>, EadItems), EDHOCError> {
     if state.method == EDHOCMethod::PSK.into() {
         let res = parse_message_3(message_3)?;
-        let plaintext_3a = encrypt_decrypt_ciphertext_3a(
-            crypto,
-            &state.prk_3e2m,
-            &state.th_3,
-            &res,
-        );
+        let plaintext_3a =
+            encrypt_decrypt_ciphertext_3a(crypto, &state.prk_3e2m, &state.th_3, &res);
         let id_cred_psk = IdCred::from_encoded_value(&[plaintext_3a.as_slice()[0]])?;
 
         let mut ciphertext_3b = BufferCiphertext3::new();
-        ciphertext_3b.fill_with_slice(&plaintext_3a.as_slice()[1..]); // changed 1 to 4
-        
+        let _ = ciphertext_3b.fill_with_slice(&plaintext_3a.as_slice()[1..]); // changed 1 to 4
+
         // compute salt_4e3m
         let salt_4e3m = compute_salt_4e3m(crypto, &state.prk_3e2m, &state.th_3);
 
@@ -192,18 +180,25 @@ pub fn r_parse_message_3(
             CredentialKey::Symmetric(psk) => compute_prk_4e3m_psk(crypto, &salt_4e3m, &psk),
             _ => panic!("Unusported key method"),
         };
-        
-        let plaintext_3b = decrypt_message_3(crypto, &prk_4e3m, &state.th_3, &ciphertext_3b, Some(id_cred_psk.as_encoded_value()),
-                                             Some(cred_i.unwrap().bytes.as_slice()), Some(cred_r.unwrap().bytes.as_slice()))?;
 
-        let mut decoded_p3_res = decode_plaintext_3(state.method,&plaintext_3b);
+        let plaintext_3b = decrypt_message_3(
+            crypto,
+            &prk_4e3m,
+            &state.th_3,
+            &ciphertext_3b,
+            Some(id_cred_psk.as_encoded_value()),
+            Some(cred_i.unwrap().bytes.as_slice()),
+            Some(cred_r.unwrap().bytes.as_slice()),
+        )?;
+
+        let mut decoded_p3_res = decode_plaintext_3(state.method, &plaintext_3b);
         // FIXME: if PSK, we copy the id_cred_psk in the id_cred_i field, needed for verification
         let id_cred_i = Some(id_cred_psk);
 
         decoded_p3_res = decoded_p3_res.map(|(_, mac_3, ead_3)| (id_cred_i, mac_3, ead_3));
 
         let (id_cred_i, mac_3, ead_3) = decoded_p3_res?;
-        
+
         Ok((
             ProcessingM3 {
                 method: state.method,
@@ -218,13 +213,19 @@ pub fn r_parse_message_3(
             id_cred_i,
             ead_3,
         ))
-
     } else if state.method == EDHOCMethod::StatStat.into() {
-        let plaintext_3 = decrypt_message_3(crypto, &state.prk_3e2m, &state.th_3, message_3, None, None, None);
-        // trace!("plaintext_3b: {:?}", plaintext_3);
+        let plaintext_3 = decrypt_message_3(
+            crypto,
+            &state.prk_3e2m,
+            &state.th_3,
+            message_3,
+            None,
+            None,
+            None,
+        );
 
         if let Ok(plaintext_3) = plaintext_3 {
-            let decoded_p3_res = decode_plaintext_3(state.method,&plaintext_3);
+            let decoded_p3_res = decode_plaintext_3(state.method, &plaintext_3);
 
             if let Ok((id_cred_i, mac_3, ead_3)) = decoded_p3_res {
                 Ok((
@@ -257,7 +258,7 @@ pub fn r_verify_message_3(
     state: &mut ProcessingM3,
     crypto: &mut impl CryptoTrait,
     valid_cred_i: Credential,
-    cred_r: Option<Credential>
+    cred_r: Option<Credential>,
 ) -> Result<(ProcessedM3, BytesHashLen), EDHOCError> {
     // compute salt_4e3m
     let salt_4e3m = compute_salt_4e3m(crypto, &state.prk_3e2m, &state.th_3);
@@ -267,12 +268,9 @@ pub fn r_verify_message_3(
             compute_prk_4e3m(crypto, &salt_4e3m, &state.y, &public_key)
         }
         CredentialKey::Symmetric(psk) if state.method == EDHOCMethod::PSK.into() => {
-                compute_prk_4e3m_psk(crypto, &salt_4e3m, &psk)
+            compute_prk_4e3m_psk(crypto, &salt_4e3m, &psk)
         }
-        _ => {
-            Err(EDHOCError::UnsupportedMethod)?
-        }        
-
+        _ => Err(EDHOCError::UnsupportedMethod)?,
     };
 
     // compute mac_3
@@ -290,9 +288,7 @@ pub fn r_verify_message_3(
     };
 
     // verify mac_3
-    let cred_r_bytes = cred_r
-        .as_ref()
-        .map(|c| c.bytes.as_slice());
+    let cred_r_bytes = cred_r.as_ref().map(|c| c.bytes.as_slice());
     if state.mac_3 == expected_mac_3 {
         let th_4 = compute_th_4(
             crypto,
@@ -304,27 +300,6 @@ pub fn r_verify_message_3(
             &valid_cred_i.bytes.as_slice(),
             cred_r_bytes,
         );
-        /*
-        let th_4 = if state.method == EDHOCMethod::PSK.into() {
-            compute_th_4_psk(
-                crypto,
-                &state.th_3,
-                &state.id_cred_i.clone().unwrap().as_encoded_value(),
-                &state.ead_3,
-                &valid_cred_i.bytes.as_slice(),
-                &cred_r.clone().unwrap().bytes.as_slice(),
-            )
-        } else {
-            compute_th_4(
-                crypto,
-                &state.th_3,
-                &state.plaintext_3,
-                valid_cred_i.bytes.as_slice(),
-            )
-        };
-
-         */
-        trace!("th_4: {:?}", th_4);
 
         // compute prk_out
         // PRK_out = EDHOC-KDF( PRK_4e3m, 7, TH_4, hash_length )
@@ -343,7 +318,7 @@ pub fn r_verify_message_3(
                 prk_out: prk_out,
                 prk_exporter: prk_exporter,
             },
-            prk_out
+            prk_out,
         ))
     } else {
         Err(EDHOCError::MacVerificationFailed)
@@ -355,7 +330,6 @@ pub fn r_prepare_message_4(
     crypto: &mut impl CryptoTrait,
     ead_4: &EadItems, // FIXME: make it a list of EADItem
 ) -> Result<(Completed, BufferMessage4), EDHOCError> {
-
     // compute ciphertext_4
     let plaintext_4 = encode_plaintext_4(&ead_4)?;
     let message_4 = encrypt_message_4(crypto, &state.prk_4e3m, &state.th_4, &plaintext_4);
@@ -369,13 +343,16 @@ pub fn r_prepare_message_4(
     ))
 }
 
-
-pub fn r_complete_without_message_4(state: &ProcessedM3) -> Result<(Completed,[u8; SHA256_DIGEST_LEN]), EDHOCError> {
-    Ok((Completed {
-        prk_out: state.prk_out,
-        prk_exporter: state.prk_exporter,
-    }, 
-    state.prk_out))
+pub fn r_complete_without_message_4(
+    state: &ProcessedM3,
+) -> Result<(Completed, [u8; SHA256_DIGEST_LEN]), EDHOCError> {
+    Ok((
+        Completed {
+            prk_out: state.prk_out,
+            prk_exporter: state.prk_exporter,
+        },
+        state.prk_out,
+    ))
 }
 
 pub fn i_prepare_message_1(
@@ -411,20 +388,14 @@ pub fn i_parse_message_2<'a>(
     let res = parse_message_2(message_2);
     //println!("message_2 parsed by I: {:?}", res);
     if let Ok((g_y, ciphertext_2)) = res {
-        // let id_cred_i = match cred_transfer {
-        //   CredentialTransfer::ByValue => state.cred_i.unwrap().by_value()?,
-        //    CredentialTransfer::ByReference => state.cred_i.unwrap().by_kid()?,
-        //};
-
         let th_2 = compute_th_2(crypto, &g_y, &state.h_message_1);
         // compute prk_2e
         let prk_2e = compute_prk_2e(crypto, &state.x, &g_y, &th_2);
 
         let plaintext_2 = encrypt_decrypt_ciphertext_2(crypto, &prk_2e, &th_2, &ciphertext_2);
-        trace!("plaintext_2: {:?}", plaintext_2);
         // decode plaintext_2
-        let mut plaintext_2_decoded = decode_plaintext_2(state.method, &plaintext_2);
-        trace!("plaintext_2_decoded: {:?}", plaintext_2_decoded);
+        let plaintext_2_decoded = decode_plaintext_2(state.method, &plaintext_2);
+        // trace!("plaintext_2_decoded: {:?}", plaintext_2_decoded);
 
         if let Ok((c_r_2, id_cred_r, mac_2, ead_2)) = plaintext_2_decoded {
             let state = ProcessingM2 {
@@ -461,12 +432,8 @@ pub fn i_verify_message_2(
         CredentialKey::EC2Compact(public_key) => {
             compute_prk_3e2m(crypto, &salt_3e2m, &state.x, &public_key)
         }
-        CredentialKey::Symmetric(psk) if state.method == EDHOCMethod::PSK.into() => {
-            state.prk_2e
-        } 
-        _ =>{
-            Err(EDHOCError::UnsupportedMethod)?
-        }
+        CredentialKey::Symmetric(_psk) if state.method == EDHOCMethod::PSK.into() => state.prk_2e,
+        _ => Err(EDHOCError::UnsupportedMethod)?,
     };
 
     let expected_mac_2 = match state.method {
@@ -484,8 +451,8 @@ pub fn i_verify_message_2(
     };
 
     if state.mac_2 == expected_mac_2 {
-            // step is actually from processing of message_3
-            // but we do it here to avoid storing plaintext_2 in State
+        // step is actually from processing of message_3
+        // but we do it here to avoid storing plaintext_2 in State
         let th_3 = compute_th_3(
             crypto,
             &state.th_2,
@@ -498,18 +465,16 @@ pub fn i_verify_message_2(
         );
         // message 3 processing
 
-            let salt_4e3m = compute_salt_4e3m(crypto, &prk_3e2m, &th_3);
-            let prk_4e3m = match valid_cred_r.key {
-                CredentialKey::EC2Compact(public_key) => {
-                    compute_prk_4e3m(crypto, &salt_4e3m, i.unwrap(), &state.g_y)
-                }
-                CredentialKey::Symmetric(psk) if state.method == EDHOCMethod::PSK.into() => {
-                    compute_prk_4e3m_psk(crypto, &salt_4e3m, &psk)
-                }
-                _ => {
-                    Err(EDHOCError::UnsupportedMethod)?
-                }
-            };
+        let salt_4e3m = compute_salt_4e3m(crypto, &prk_3e2m, &th_3);
+        let prk_4e3m = match valid_cred_r.key {
+            CredentialKey::EC2Compact(_public_key) => {
+                compute_prk_4e3m(crypto, &salt_4e3m, i.unwrap(), &state.g_y)
+            }
+            CredentialKey::Symmetric(psk) if state.method == EDHOCMethod::PSK.into() => {
+                compute_prk_4e3m_psk(crypto, &salt_4e3m, &psk)
+            }
+            _ => Err(EDHOCError::UnsupportedMethod)?,
+        };
 
         let state = ProcessedM2 {
             method: state.method,
@@ -559,16 +524,18 @@ pub fn i_prepare_message_3(
         m if m == EDHOCMethod::PSK.into() => encode_plaintext_3(None, None, &ead_3),
         _ => Err(EDHOCError::UnsupportedMethod),
     }?;
-    trace!("plaintext_3b: {:?}", plaintext_3);
 
     let mut message_3: BufferMessage3 = BufferMessage3::new();
     if state.method == EDHOCMethod::PSK.into() {
-        let ciphertext_3b =
-            encrypt_message_3(
-                crypto, &state.prk_4e3m, &state.th_3, &plaintext_3, Some(id_cred_i.as_encoded_value()),
-                Some(cred_i.bytes.as_slice()), Some(state.cred_r.clone().unwrap().bytes.as_slice()));
-        trace!("ciphertext_3b :{:?}", ciphertext_3b);
-        trace!("ciphertext_3b :{}", encode(ciphertext_3b.as_slice()));
+        let ciphertext_3b = encrypt_message_3(
+            crypto,
+            &state.prk_4e3m,
+            &state.th_3,
+            &plaintext_3,
+            Some(id_cred_i.as_encoded_value()),
+            Some(cred_i.bytes.as_slice()),
+            Some(state.cred_r.clone().unwrap().bytes.as_slice()),
+        );
 
         // compute ciphertext_3a
         // id_cred_i is the id_cred_psk
@@ -582,22 +549,26 @@ pub fn i_prepare_message_3(
 
         // CBOR encoding of ct_3a
         let encoded_ciphertext_3a = encode_ciphertext_3a(ciphertext_3a)?;
-        // trace!("encoded_ct_3a:{:?}", encoded_ciphertext_3a);
 
         //compute message_3
         message_3
             .extend_from_slice(encoded_ciphertext_3a.as_slice())
             .unwrap();
     } else {
-        let regular_message_3 =
-            encrypt_message_3(crypto, &state.prk_3e2m, &state.th_3, &plaintext_3, None, None, None);
+        let regular_message_3 = encrypt_message_3(
+            crypto,
+            &state.prk_3e2m,
+            &state.th_3,
+            &plaintext_3,
+            None,
+            None,
+            None,
+        );
         message_3
             .fill_with_slice(regular_message_3.as_slice())
             .unwrap();
     };
-    let cred_r_bytes = state.cred_r
-        .as_ref()
-        .map(|c| c.bytes.as_slice());
+    let cred_r_bytes = state.cred_r.as_ref().map(|c| c.bytes.as_slice());
     let th_4 = compute_th_4(
         crypto,
         &state.th_3,
@@ -609,10 +580,6 @@ pub fn i_prepare_message_3(
         //Some(&state.cred_r.clone().unwrap().bytes.as_slice()),
         cred_r_bytes,
     );
-    trace!("th_4: {:?}", th_4);
-    //let th_4 = compute_th_4(crypto, &state.th_3, &plaintext_3, cred_i.bytes.as_slice());
-    // let mut th_4_buf: BytesMaxContextBuffer = [0x00; MAX_KDF_CONTEXT_LEN];
-    // th_4_buf[..th_4.len()].copy_from_slice(&th_4[..]);
 
     // compute prk_out
     // PRK_out = EDHOC-KDF( PRK_4e3m, 7, TH_4, hash_length )
@@ -627,17 +594,13 @@ pub fn i_prepare_message_3(
     Ok((
         WaitM4 {
             prk_4e3m: state.prk_4e3m,
-            // cred_i : cred_i,
-            // th_3: state.th_3,
             th_4: th_4,
             ead_3: ead_3.clone(),
-            // id_cred: Some(id_cred_i),
             prk_out: prk_out,
             prk_exporter: prk_exporter,
         },
         message_3,
         prk_out,
-
     ))
 }
 
@@ -646,9 +609,7 @@ pub fn i_parse_message_4(
     crypto: &mut impl CryptoTrait,
     message_4: &BufferMessage4,
 ) -> Result<(ProcessingM4, EadItems), EDHOCError> {
-
     let plaintext_4 = decrypt_message_4(crypto, &state.prk_4e3m, &state.th_4, &message_4)?;
-    // println!("plaintext_4: 0x{}", encode(plaintext_4.content.as_slice()));
 
     let decoded_p4_res = decode_plaintext_4(&plaintext_4);
 
@@ -670,7 +631,7 @@ pub fn i_parse_message_4(
 // FIXME
 pub fn i_verify_message_4(
     state: &ProcessingM4,
-    crypto: &mut impl CryptoTrait,
+    // crypto: &mut impl CryptoTrait,
 ) -> Result<Completed, EDHOCError> {
     // // compute prk_out
     // // PRK_out = EDHOC-KDF( PRK_4e3m, 7, TH_4, hash_length )
@@ -687,7 +648,7 @@ pub fn i_verify_message_4(
 
     let state = Completed {
         prk_exporter: state.prk_exporter,
-        prk_out: state.prk_out
+        prk_out: state.prk_out,
     };
 
     Ok(state)
@@ -708,7 +669,6 @@ pub fn i_complete_without_message_4(state: &WaitM4) -> Result<Completed, EDHOCEr
 //     state.prk_out))
 // }
 
-
 fn encode_message_1(
     method: EDHOCMethod,
     suites: &EdhocBuffer<MAX_SUITES_LEN>,
@@ -717,11 +677,8 @@ fn encode_message_1(
     ead_1: &EadItems,
 ) -> Result<BufferMessage1, EDHOCError> {
     let mut output = BufferMessage1::new();
-    let mut raw_suites_len: usize = 0;
 
-    output.content[0] = method as u8; // CBOR unsigned int less than 24 is encoded verbatim
-
-    output.push(method as u8).unwrap(); // CBOR unsigned int less than 24 is encoded verbatim
+    output.push(method.into()).unwrap(); // CBOR unsigned int less than 24 is encoded verbatim
 
     if suites.len() == 1 {
         // only one suite, will be encoded as a single integer
@@ -890,11 +847,7 @@ fn encode_plaintext_3(
         plaintext_3
             .push(CBOR_MAJOR_BYTE_STRING | MAC_LENGTH_3 as u8)
             .or(Err(EDHOCError::EncodingError))?;
-        plaintext_3
-            .extend_from_slice(mac_3);
-        // plaintext_3.content[plaintext_3.len() - 1] = CBOR_MAJOR_BYTE_STRING | MAC_LENGTH_3 as u8;
-        // plaintext_3.content[plaintext_3.len()..][..mac_3.len()].copy_from_slice(&mac_3[..]);
-        // plaintext_3.len += mac_3.len();
+        let _ = plaintext_3.extend_from_slice(mac_3);
     }
 
     ead_3.encode(&mut plaintext_3)?;
@@ -914,44 +867,16 @@ fn encode_ciphertext_3a(ciphertext: EdhocMessageBuffer) -> Result<BufferCipherte
     let mut ciphertext_3a: BufferCiphertext3 = BufferCiphertext3::new();
     // plaintext_3a: P = ( ID_CRED_PSK / bstr / int )
     ciphertext_3a
-            .push(CBOR_MAJOR_BYTE_STRING | ciphertext.len() as u8)
-            .or(Err(EDHOCError::EncodingError))?;
-    ciphertext_3a
-            .extend_from_slice(ciphertext.as_slice());
-    // ciphertext_3a.content[0] = CBOR_MAJOR_BYTE_STRING | (ciphertext.len() as u8);
-    // ciphertext_3a.content[1..][..ciphertext.len()].copy_from_slice(ciphertext.as_slice());
-    // ciphertext_3a.len = 1 + ciphertext.len();
+        .push(CBOR_MAJOR_BYTE_STRING | ciphertext.len() as u8)
+        .or(Err(EDHOCError::EncodingError))?;
+    let _ = ciphertext_3a.extend_from_slice(ciphertext.as_slice());
 
     Ok(ciphertext_3a)
 }
 
-/*
-fn encode_enc_structure(th_3: &BytesHashLen) -> BytesEncStructureLen {
-    let encrypt0 = b"Encrypt0";
-
-    let mut enc_structure = EdhocBuffer::<ENC_STRUCTURE_LEN>::new();
-
-    // encode Enc_structure from draft-ietf-cose-rfc8152bis Section 5.3
-    enc_structure.push(CBOR_MAJOR_ARRAY | 3_u8).unwrap(); // 3 is the fixed number of elements in the array
-    enc_structure
-        .push(CBOR_MAJOR_TEXT_STRING | encrypt0.len() as u8)
-        .unwrap();
-    enc_structure.extend_from_slice(&encrypt0[..]).unwrap();
-    enc_structure
-        .push(CBOR_MAJOR_BYTE_STRING | 0x00 as u8)
-        .unwrap(); // 0 for zero-length byte string
-    enc_structure.push(CBOR_BYTE_STRING).unwrap(); // byte string greater than 24
-    enc_structure.push(SHA256_DIGEST_LEN as u8).unwrap();
-    enc_structure.extend_from_slice(th_3).unwrap();
-
-    enc_structure
-        .as_slice()
-        .try_into()
-        .expect("All components are fixed length")
-}
-*/
-
-pub fn encode_enc_structure(external_aad: &EdhocBuffer<MAX_BUFFER_LEN>) -> (EdhocBuffer<MAX_BUFFER_LEN>, usize) {
+pub fn encode_enc_structure(
+    external_aad: &EdhocBuffer<MAX_BUFFER_LEN>,
+) -> (EdhocBuffer<MAX_BUFFER_LEN>, usize) {
     let encrypt0 = b"Encrypt0";
 
     let mut enc_structure = EdhocBuffer::<MAX_BUFFER_LEN>::new();
@@ -960,7 +885,9 @@ pub fn encode_enc_structure(external_aad: &EdhocBuffer<MAX_BUFFER_LEN>) -> (Edho
     enc_structure.push(CBOR_MAJOR_ARRAY | 3).unwrap();
 
     // "Encrypt0" text string
-    enc_structure.push(CBOR_MAJOR_TEXT_STRING | encrypt0.len() as u8).unwrap();
+    enc_structure
+        .push(CBOR_MAJOR_TEXT_STRING | encrypt0.len() as u8)
+        .unwrap();
     enc_structure.extend_from_slice(encrypt0).unwrap();
 
     // protected field: zero-length byte string
@@ -969,7 +896,9 @@ pub fn encode_enc_structure(external_aad: &EdhocBuffer<MAX_BUFFER_LEN>) -> (Edho
     // external_aad field
     enc_structure.push(CBOR_BYTE_STRING).unwrap();
     enc_structure.push(external_aad.len() as u8).unwrap();
-    enc_structure.extend_from_slice(external_aad.as_slice()).unwrap();
+    enc_structure
+        .extend_from_slice(external_aad.as_slice())
+        .unwrap();
 
     let len = enc_structure.len();
     (enc_structure, len)
@@ -985,9 +914,10 @@ pub fn build_external_aad(
 
     if let (Some(id), Some(ci), Some(cr)) = (id_cred, cred_i, cred_r) {
         // PSK case: array of 4 items
-        buf.push(CBOR_MAJOR_ARRAY | 4).unwrap();
+        // buf.push(CBOR_MAJOR_ARRAY | 4).unwrap();
         for item in [id, th_3, ci, cr] {
-            buf.push(CBOR_MAJOR_BYTE_STRING | (item.len() as u8)).unwrap();
+            // buf.push(CBOR_MAJOR_BYTE_STRING | (item.len() as u8))
+            //     .unwrap();
             buf.extend_from_slice(item).unwrap();
         }
     } else {
@@ -1060,15 +990,17 @@ fn encrypt_message_3(
     );
 
     // let enc_structure = encode_enc_structure(th_3);
-    let (external_aad, aad_len) = build_external_aad(th_3, id_cred, cred_i, cred_r);
+    let (external_aad, _aad_len) = build_external_aad(th_3, id_cred, cred_i, cred_r);
     let (enc_structure, enc_len) = encode_enc_structure(&external_aad);
 
     let (k_3, iv_3) = compute_k_3_iv_3(crypto, prk_3e2m, th_3);
-    // println!("k_3: 0x{}", encode(k_3));
-    // println!("iv_3: 0x{}", encode(iv_3));
 
-    let ciphertext_3: BufferCiphertext3 =
-        crypto.aes_ccm_encrypt_tag_8(&k_3, &iv_3, &enc_structure.as_slice()[..enc_len], plaintext_3.as_slice());
+    let ciphertext_3: BufferCiphertext3 = crypto.aes_ccm_encrypt_tag_8(
+        &k_3,
+        &iv_3,
+        &enc_structure.as_slice()[..enc_len],
+        plaintext_3.as_slice(),
+    );
 
     output.extend_from_slice(ciphertext_3.as_slice()).unwrap();
 
@@ -1110,14 +1042,17 @@ fn decrypt_message_3(
     .unwrap();
 
     let (k_3, iv_3) = compute_k_3_iv_3(crypto, prk_3e2m, th_3);
-    // println!("k_3: 0x{}", encode(k_3));
-    // println!("iv_3: 0x{}", encode(iv_3));
 
     // let enc_structure = encode_enc_structure(th_3);
-    let (external_aad, aad_len) = build_external_aad(th_3, id_cred, cred_i, cred_r);
+    let (external_aad, _aad_len) = build_external_aad(th_3, id_cred, cred_i, cred_r);
     let (enc_structure, enc_len) = encode_enc_structure(&external_aad);
 
-    crypto.aes_ccm_decrypt_tag_8(&k_3, &iv_3, &enc_structure.as_slice()[..enc_len], ciphertext_3.as_slice())
+    crypto.aes_ccm_decrypt_tag_8(
+        &k_3,
+        &iv_3,
+        &enc_structure.as_slice()[..enc_len],
+        ciphertext_3.as_slice(),
+    )
 }
 
 fn encrypt_message_4(
@@ -1141,13 +1076,17 @@ fn encrypt_message_4(
     // FIXME: Make the function fallible, especially with the prospect of algorithm agility
 
     // let enc_structure = encode_enc_structure(th_4);
-    let (external_aad, aad_len) = build_external_aad(th_4, None, None, None);
+    let (external_aad, _aad_len) = build_external_aad(th_4, None, None, None);
     let (enc_structure, enc_len) = encode_enc_structure(&external_aad);
 
     let (k_4, iv_4) = compute_k_4_iv_4(crypto, prk_4e3m, th_4);
 
-    let ciphertext_4: BufferCiphertext4 =
-        crypto.aes_ccm_encrypt_tag_8(&k_4, &iv_4, &enc_structure.as_slice()[..enc_len], plaintext_4.as_slice());
+    let ciphertext_4: BufferCiphertext4 = crypto.aes_ccm_encrypt_tag_8(
+        &k_4,
+        &iv_4,
+        &enc_structure.as_slice()[..enc_len],
+        plaintext_4.as_slice(),
+    );
 
     output.extend_from_slice(ciphertext_4.as_slice()).unwrap();
 
@@ -1187,11 +1126,16 @@ fn decrypt_message_4(
 
     let (k_4, iv_4) = compute_k_4_iv_4(crypto, prk_4e3m, th_4);
 
-    let (external_aad, aad_len) = build_external_aad(th_4, None, None, None);
+    let (external_aad, _aad_len) = build_external_aad(th_4, None, None, None);
     let (enc_structure, enc_len) = encode_enc_structure(&external_aad);
     // let enc_structure = encode_enc_structure(th_4);
 
-    crypto.aes_ccm_decrypt_tag_8(&k_4, &iv_4, &enc_structure.as_slice()[..enc_len], ciphertext_4.as_slice())
+    crypto.aes_ccm_decrypt_tag_8(
+        &k_4,
+        &iv_4,
+        &enc_structure.as_slice()[..enc_len],
+        ciphertext_4.as_slice(),
+    )
 }
 // output must hold id_cred.len() + cred.len()
 fn encode_kdf_context(
@@ -1325,11 +1269,17 @@ fn encrypt_decrypt_ciphertext_3a(
     let mut keystream_3 = BufferCiphertext3::new();
     let range = keystream_3.extend_reserve(ciphertext_3a.len()).unwrap();
     #[allow(deprecated, reason = "using extend_reserve")]
-    edhoc_kdf(crypto, prk_3e2m, 12u8, th_3, &mut keystream_3.content[range]);
+    edhoc_kdf(
+        crypto,
+        prk_3e2m,
+        12u8,
+        th_3,
+        &mut keystream_3.content[range],
+    );
 
     let mut result = BufferCiphertext2::default();
     for i in 0..ciphertext_3a.len() {
-        result.push(ciphertext_3a.content[i] ^ keystream_3[i]).unwrap();
+        result.push(ciphertext_3a[i] ^ keystream_3[i]).unwrap();
     }
 
     result
@@ -1404,7 +1354,7 @@ mod tests {
     // test vectors (TV)
 
     // EDHOC-PSK
-    const METHOD_PSK_TV: EDHOCMethod = EDHOCMethod::PSK;  //0x04;
+    const METHOD_PSK_TV: EDHOCMethod = EDHOCMethod::PSK; //0x04;
     const SUITES_I_PSK_TV: EdhocBuffer<MAX_SUITES_LEN> = EdhocBuffer::new_from_array(&hex!("02"));
     // === Initiator ephemeral private key X ===
     const X_PSK_TV: BytesP256ElemLen =
@@ -1432,16 +1382,16 @@ mod tests {
     const H_MESSAGE_1_PSK_TV: BytesHashLen =
         hex!("19cc2d2a957edd80109042fde6cc20c24b6a34bc21c6d49fea895d4c7592340e");
     // === H(message_1) CBOR (for completeness) ===
-    const H_MESSAGE_1_CBOR_PSK_TV: EdhocBuffer<34> = EdhocBuffer::new_from_array(
-        &hex!("582019cc2d2a957edd80109042fde6cc20c24b6a34bc21c6d49fea895d4c7592340e")
-    );
+    const H_MESSAGE_1_CBOR_PSK_TV: EdhocBuffer<34> = EdhocBuffer::new_from_array(&hex!(
+        "582019cc2d2a957edd80109042fde6cc20c24b6a34bc21c6d49fea895d4c7592340e"
+    ));
     // === TH_2 raw ===
     const TH_2_PSK_TV: BytesHashLen =
         hex!("5b4834ae630a8a0ed0b0c6f36642604d016478c4bc8187bb764dd40f2bee3dde");
     // === TH_2 CBOR ===
-    const TH_2_CBOR_PSK_TV: EdhocBuffer<34> = EdhocBuffer::new_from_array(
-        &hex!("58205b4834ae630a8a0ed0b0c6f36642604d016478c4bc8187bb764dd40f2bee3dde")
-    );
+    const TH_2_CBOR_PSK_TV: EdhocBuffer<34> = EdhocBuffer::new_from_array(&hex!(
+        "58205b4834ae630a8a0ed0b0c6f36642604d016478c4bc8187bb764dd40f2bee3dde"
+    ));
     // === G_XY (ECDH shared secret) ===
     const G_XY_PSK_TV: BytesP256ElemLen =
         hex!("2f4a799a5ab0c567220cb67208e6cf8f4ca5fe385d1b11fd9a573d4160f3b0b2");
@@ -1456,21 +1406,18 @@ mod tests {
     // === KEYSTREAM_2A ===
     const KEYSTREAM_2_PSK_TV: [u8; PLAINTEXT_2_LEN_PSK_TV] = hex!("ec");
     // === PLAINTEXT_2A ===
-    const PLAINTEXT_2_PSK_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(
-        &hex!("05")
-    );
+    const PLAINTEXT_2_PSK_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!("05"));
     // === CIPHERTEXT_2B ===
     const CIPHERTEXT_2_PSK_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!("e9"));
     // === message_2 ===
-    const MESSAGE_2_PSK_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(
-        &hex!("5821ed156a6243e0afec9efbaabce8429d5ad5e4e1c432f76a6ede8f79247bb97d83e9")
-    );
+    const MESSAGE_2_PSK_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!(
+        "5821ed156a6243e0afec9efbaabce8429d5ad5e4e1c432f76a6ede8f79247bb97d83e9"
+    ));
     // === SALT_4e3m ===
     const SALT_4E3M_PSK_TV: BytesHashLen =
         hex!("ede07612148319eb725952712a542c2097610a139c4a141c8ec57a5f62e5e9dd");
     // === PSK (16 bytes) ===
-    const PSK_TV: [u8;16] =
-        hex!("50930ff462a77a3540cf546325dea214");
+    const PSK_TV: [u8; 16] = hex!("50930ff462a77a3540cf546325dea214");
     // === PRK_4e3m ===
     const PRK_4E3M_PSK_TV: BytesP256ElemLen =
         hex!("c62cc04f55d008cfeb8a681e8463fddd a2ff6c a84b9ed6116c865cd81e062460");
@@ -1478,12 +1425,12 @@ mod tests {
     const TH_3_PSK_TV: BytesHashLen =
         hex!("386a9d052b255992eee5ffb594347d327418a2ea5183486c0c9e20426e0bca2f");
     // === ID_CRED_PSK ===
-    const ID_CRED_PSK_TV: [u8;1] = hex!("10");
+    const ID_CRED_PSK_TV: [u8; 1] = hex!("10");
     // === CRED_I ===
-    const CRED_I_PSK_TV: [u8;39] =
+    const CRED_I_PSK_TV: [u8; 39] =
         hex!("a20269696e69746961746f7208a101A30104024110205050930ff462a77a3540cf546325dea214");
     // === CRED_R ===
-    const CRED_R_PSK_TV: [u8;39] =
+    const CRED_R_PSK_TV: [u8; 39] =
         hex!("a20269726573706f6e64657208a101a30104024110205050930ff462a77a3540cf546325dea214");
     // === K_3 (16 bytes) ===
     const K_3_PSK_TV: BytesCcmKeyLen = hex!("966a579cea26ca3ceb442ac727eab232");
@@ -1497,23 +1444,19 @@ mod tests {
     //const CIPHERTEXT_3B_PSK_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(
     //    &hex!("480488b7f2a666b629")
     //);
-    const CIPHERTEXT_3B_PSK_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(
-        &hex!("482996d76b91ac456a")
-    );
+    const CIPHERTEXT_3B_PSK_TV: EdhocMessageBuffer =
+        EdhocBuffer::new_from_array(&hex!("48af865535abd96142"));
     // === KEYSTREAM_3A (10 bytes) ===
     const KEYSTREAM_3A_PSK_TV: [u8; PLAINTEXT_3A_LEN_PSK_TV] = hex!("03e5d1571bbc9332471b");
     // === PLAINTEXT_3A (10 bytes) ===
-    const PLAINTEXT_3A_PSK_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(
-        & hex!("10480488b7f2a666b629")
-    );
+    const PLAINTEXT_3A_PSK_TV: EdhocMessageBuffer =
+        EdhocBuffer::new_from_array(&hex!("1048af865535abd96142"));
     // === CIPHERTEXT_3A (10 bytes) ===
-    const CIPHERTEXT_3A_PSK_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(
-        &hex!("13add5dfac4e3554f132")
-    );
+    const CIPHERTEXT_3A_PSK_TV: EdhocMessageBuffer =
+        EdhocBuffer::new_from_array(&hex!("13ad7ed14e8938eb2659"));
     // === message_3 (11 bytes) ===
-    const MESSAGE_3_PSK_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(
-        &hex!("4a13add5dfac4e3554f132")
-    );
+    const MESSAGE_3_PSK_TV: EdhocMessageBuffer =
+        EdhocBuffer::new_from_array(&hex!("4a13ad7ed14e8938eb2659"));
     // === TH_4 ===
     const TH_4_PSK_TV: BytesHashLen =
         hex!("11481b9afef95c679a52038217eedd0e0ce08faa865bdc825511ca6dc3919413");
@@ -1523,9 +1466,8 @@ mod tests {
     const IV_4_PSK_TV: BytesCcmIvLen = hex!("411134d0e0c508d95da7c3acdc");
     const PLAINTEXT_4_PSK_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!(""));
     // === message_4 (9 bytes) ===
-    const MESSAGE_4_PSK_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(
-        &hex!("488add93db404859f9")
-    );
+    const MESSAGE_4_PSK_TV: EdhocMessageBuffer =
+        EdhocBuffer::new_from_array(&hex!("488add93db404859f9"));
     // === PRK_out ===
     const PRK_OUT_PSK_TV: BytesHashLen =
         hex!("bba6ded3b038d2323774d89214a513a24916f042296c7c729cd1a67b436fb414");
@@ -1689,8 +1631,14 @@ mod tests {
 
     #[test]
     fn test_encode_message_1_psk() {
-        let message_1 =
-            encode_message_1(METHOD_PSK_TV, &SUITES_I_PSK_TV, &G_X_PSK_TV, C_I_PSK_TV, &EadItems::new()).unwrap();
+        let message_1 = encode_message_1(
+            METHOD_PSK_TV,
+            &SUITES_I_PSK_TV,
+            &G_X_PSK_TV,
+            C_I_PSK_TV,
+            &EadItems::new(),
+        )
+        .unwrap();
 
         assert_eq!(message_1.len(), 37);
         assert_eq!(message_1, MESSAGE_1_PSK_TV);
@@ -1854,25 +1802,53 @@ mod tests {
 
     #[test]
     fn test_compute_th_3() {
-        let th_3 = compute_th_3(&mut default_crypto(), &TH_2_TV, &PLAINTEXT_2_TV, Some(&CRED_R_TV));
+        let th_3 = compute_th_3(
+            &mut default_crypto(),
+            &TH_2_TV,
+            &PLAINTEXT_2_TV,
+            Some(&CRED_R_TV),
+        );
         assert_eq!(th_3, TH_3_TV);
     }
 
     #[test]
     fn test_compute_th_3_psk() {
-        let th_3 = compute_th_3(&mut default_crypto(), &TH_2_PSK_TV, &PLAINTEXT_2_PSK_TV, None);
+        let th_3 = compute_th_3(
+            &mut default_crypto(),
+            &TH_2_PSK_TV,
+            &PLAINTEXT_2_PSK_TV,
+            None,
+        );
         assert_eq!(th_3, TH_3_PSK_TV);
     }
 
     #[test]
     fn test_compute_th_4() {
-        let th_4 = compute_th_4(&mut default_crypto(), &TH_3_TV, &PLAINTEXT_3_TV, METHOD_TV.into(), None, None, &CRED_I_TV, None);
+        let th_4 = compute_th_4(
+            &mut default_crypto(),
+            &TH_3_TV,
+            &PLAINTEXT_3_TV,
+            METHOD_TV.into(),
+            None,
+            None,
+            &CRED_I_TV,
+            None,
+        );
         assert_eq!(th_4, TH_4_TV);
     }
 
     #[test]
     fn test_compute_th_4_psk() {
-        let th_4 = compute_th_4(&mut default_crypto(), &TH_3_PSK_TV, &PLAINTEXT_3B_PSK_TV, METHOD_PSK_TV.into(), Some(&ID_CRED_PSK_TV), Some(&EadItems::new()), &CRED_I_PSK_TV, Some(&CRED_R_PSK_TV));
+        let th_4 = compute_th_4(
+            &mut default_crypto(),
+            &TH_3_PSK_TV,
+            &PLAINTEXT_3B_PSK_TV,
+            METHOD_PSK_TV.into(),
+            Some(&ID_CRED_PSK_TV),
+            Some(&EadItems::new()),
+            &CRED_I_PSK_TV,
+            Some(&CRED_R_PSK_TV),
+        );
         assert_eq!(th_4, TH_4_PSK_TV);
     }
 
@@ -1922,7 +1898,6 @@ mod tests {
             Some(&ID_CRED_PSK_TV),
             Some(&CRED_I_PSK_TV),
             Some(&CRED_R_PSK_TV),
-
         );
         assert_eq!(ciphertext_3b, CIPHERTEXT_3B_PSK_TV);
     }
@@ -1951,8 +1926,15 @@ mod tests {
 
     #[test]
     fn test_decrypt_message_3() {
-        let plaintext_3 =
-            decrypt_message_3(&mut default_crypto(), &PRK_3E2M_TV, &TH_3_TV, &MESSAGE_3_TV, None, None, None);
+        let plaintext_3 = decrypt_message_3(
+            &mut default_crypto(),
+            &PRK_3E2M_TV,
+            &TH_3_TV,
+            &MESSAGE_3_TV,
+            None,
+            None,
+            None,
+        );
         assert!(plaintext_3.is_ok());
         assert_eq!(plaintext_3.unwrap(), PLAINTEXT_3_TV);
     }
@@ -1967,11 +1949,9 @@ mod tests {
             Some(&ID_CRED_PSK_TV),
             Some(&CRED_I_PSK_TV),
             Some(&CRED_R_PSK_TV),
-
         );
         assert_eq!(plaintext_3b.unwrap(), PLAINTEXT_3B_PSK_TV);
     }
-
 
     #[test]
     fn test_compute_mac_3() {
@@ -2005,9 +1985,11 @@ mod tests {
     fn test_encode_plaintext_2() {
         let plaintext_2 = encode_plaintext_2(
             C_R_TV,
-            Some(IdCred::from_full_value(&ID_CRED_R_TV[..])
-                .unwrap()
-                .as_encoded_value()),
+            Some(
+                IdCred::from_full_value(&ID_CRED_R_TV[..])
+                    .unwrap()
+                    .as_encoded_value(),
+            ),
             Some(&MAC_2_TV),
             &EadItems::new(),
         )
@@ -2017,13 +1999,7 @@ mod tests {
     }
 
     fn test_encode_plaintext_2_psk() {
-        let plaintext_2 = encode_plaintext_2(
-            C_R_PSK_TV,
-            None,
-            None,
-            &EadItems::new(),
-        )
-            .unwrap();
+        let plaintext_2 = encode_plaintext_2(C_R_PSK_TV, None, None, &EadItems::new()).unwrap();
 
         assert_eq!(plaintext_2, PLAINTEXT_2_PSK_TV);
     }
@@ -2080,8 +2056,12 @@ mod tests {
         assert_eq!(plaintext_2, PLAINTEXT_2_PSK_TV);
 
         // test encryption
-        let ciphertext_2 =
-            encrypt_decrypt_ciphertext_2(&mut default_crypto(), &PRK_2E_PSK_TV, &TH_2_PSK_TV, &plaintext_2);
+        let ciphertext_2 = encrypt_decrypt_ciphertext_2(
+            &mut default_crypto(),
+            &PRK_2E_PSK_TV,
+            &TH_2_PSK_TV,
+            &plaintext_2,
+        );
 
         assert_eq!(ciphertext_2, CIPHERTEXT_2_PSK_TV);
     }
@@ -2126,8 +2106,12 @@ mod tests {
 
     #[test]
     fn test_decrypt_message_4_psk() {
-        let plaintext_4 =
-            decrypt_message_4(&mut default_crypto(), &PRK_4E3M_PSK_TV, &TH_4_PSK_TV, &MESSAGE_4_PSK_TV);
+        let plaintext_4 = decrypt_message_4(
+            &mut default_crypto(),
+            &PRK_4E3M_PSK_TV,
+            &TH_4_PSK_TV,
+            &MESSAGE_4_PSK_TV,
+        );
         assert!(plaintext_4.is_ok());
         assert_eq!(plaintext_4.unwrap(), PLAINTEXT_4_PSK_TV);
     }
@@ -2166,9 +2150,11 @@ mod tests {
     #[test]
     fn test_encode_plaintext_3() {
         let plaintext_3 = encode_plaintext_3(
-            Some(IdCred::from_full_value(&ID_CRED_I_TV[..])
-                .unwrap()
-                .as_encoded_value()),
+            Some(
+                IdCred::from_full_value(&ID_CRED_I_TV[..])
+                    .unwrap()
+                    .as_encoded_value(),
+            ),
             Some(&MAC_3_TV),
             &EadItems::new(),
         )
@@ -2178,7 +2164,8 @@ mod tests {
 
     #[test]
     fn test_decode_plaintext_3() {
-        let (id_cred_i, mac_3, ead_3) = decode_plaintext_3(METHOD_TV.into(), &PLAINTEXT_3_TV).unwrap();
+        let (id_cred_i, mac_3, ead_3) =
+            decode_plaintext_3(METHOD_TV.into(), &PLAINTEXT_3_TV).unwrap();
 
         assert_eq!(mac_3, Some(MAC_3_TV));
         assert_eq!(id_cred_i.unwrap().as_full_value(), ID_CRED_I_TV);
