@@ -39,29 +39,29 @@ pub fn r_process_message_1(
         // Define credential.
         // FIXME: add an error if it does not match
         // verify that the method is supported
-        if method == EDHOC_METHOD {
-            // Step 2: verify that the selected cipher suite is supported
-            if suites_i[suites_i.len() - 1] == EDHOC_SUPPORTED_SUITES[0] {
-                // hash message_1 and save the hash to the state to avoid saving the whole message
-                let h_message_1 = crypto.sha256_digest(message_1.as_slice());
+        match EDHOCMethod::try_from(method) {
+            Ok(_supported_method) => {
+                // Step 2: verify that the selected cipher suite is supported
+                if suites_i[suites_i.len() - 1] == EDHOC_SUPPORTED_SUITES[0] {
+                    let h_message_1 = crypto.sha256_digest(message_1.as_slice());
 
-                Ok((
-                    ProcessingM1 {
-                        method,
-                        y: state.y,
-                        g_y: state.g_y,
+                    Ok((
+                        ProcessingM1 {
+                            method, // still u8, unchanged
+                            y: state.y,
+                            g_y: state.g_y,
+                            c_i,
+                            g_x,
+                            h_message_1,
+                        },
                         c_i,
-                        g_x,
-                        h_message_1,
-                    },
-                    c_i,
-                    ead_1,
-                ))
-            } else {
-                Err(EDHOCError::UnsupportedCipherSuite)
+                        ead_1,
+                    ))
+                } else {
+                    Err(EDHOCError::UnsupportedCipherSuite)
+                }
             }
-        } else {
-            Err(EDHOCError::UnsupportedMethod)
+            Err(_) => Err(EDHOCError::UnsupportedMethod),
         }
     } else {
         Err(EDHOCError::ParsingError)

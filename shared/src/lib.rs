@@ -370,6 +370,18 @@ pub enum EDHOCMethod {
     PSK = 4,
 }
 
+impl TryFrom<u8> for EDHOCMethod {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            3 => Ok(EDHOCMethod::StatStat),
+            4 => Ok(EDHOCMethod::PSK),
+            _ => Err(()),
+        }
+    }
+}
+
 impl From<EDHOCMethod> for u8 {
     fn from(method: EDHOCMethod) -> u8 {
         method as u8
