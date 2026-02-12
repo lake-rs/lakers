@@ -53,7 +53,6 @@ pub const MAX_MESSAGE_SIZE_LEN: usize = if cfg!(feature = "max_message_size_len_
 pub const ID_CRED_LEN: usize = 4;
 pub const SUITES_LEN: usize = 9;
 pub const SUPPORTED_SUITES_LEN: usize = 1;
-pub const EDHOC_METHOD: u8 = 3u8; // stat-stat: 3u8, psk:4u8
 pub const P256_ELEM_LEN: usize = 32;
 pub const P256_ELEM_LEN_PSK: usize = 16;
 pub const SHA256_DIGEST_LEN: usize = 32;
@@ -1278,7 +1277,7 @@ pub fn decode_plaintext_3a(plaintext_3: &BufferPlaintext3) -> Result<&[u8], EDHO
 
 fn decode_cbor_length(first_byte: u8) -> Result<(usize, usize), EDHOCError> {
     match first_byte & 0x1F {
-        n @ 0..=23 => Ok((n as usize, 1)),
+        n if n < 24 => Ok((n as usize, 1)),
         24 => Ok((24, 2)),                  // Next byte is the length
         25 => Ok((25, 3)),                  // Next 2 bytes are the length
         _ => Err(EDHOCError::ParsingError), // Unsupported length encoding

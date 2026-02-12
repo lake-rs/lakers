@@ -1,8 +1,8 @@
 use core::clone::Clone;
 use digest::Digest;
 use lakers_shared::{Crypto as CryptoTrait, *};
-// use hex::encode;
-// use defmt_or_log::trace;
+use hex::encode;
+use defmt_or_log::trace;
 
 pub fn edhoc_exporter(
     state: &Completed,
@@ -536,7 +536,7 @@ pub fn i_prepare_message_3(
             Some(cred_i.bytes.as_slice()),
             Some(state.cred_r.clone().unwrap().bytes.as_slice()),
         );
-
+        trace!("encoded ciphertext_3b :0x{}", encode(ciphertext_3b.as_slice()));
         // compute ciphertext_3a
         // id_cred_i is the id_cred_psk
         let pt_3a = id_cred_i.as_encoded_value();
@@ -546,10 +546,10 @@ pub fn i_prepare_message_3(
         ct_3a.extend_from_slice(ciphertext_3b.as_slice()).unwrap();
         let ciphertext_3a =
             encrypt_decrypt_ciphertext_3a(crypto, &state.prk_3e2m, &state.th_3, &ct_3a);
-
+        trace!("ciphertext_3a: 0x{}", encode(ciphertext_3a.as_slice()));
         // CBOR encoding of ct_3a
         let encoded_ciphertext_3a = encode_ciphertext_3a(ciphertext_3a)?;
-
+        trace!("ciphertext_3a_encoded: 0x{}", encode(encoded_ciphertext_3a.as_slice()));
         //compute message_3
         message_3
             .extend_from_slice(encoded_ciphertext_3a.as_slice())
@@ -914,10 +914,10 @@ pub fn build_external_aad(
 
     if let (Some(id), Some(ci), Some(cr)) = (id_cred, cred_i, cred_r) {
         // PSK case: array of 4 items
-        // buf.push(CBOR_MAJOR_ARRAY | 4).unwrap();
+        buf.push(CBOR_MAJOR_ARRAY | 4).unwrap();
         for item in [id, th_3, ci, cr] {
-            // buf.push(CBOR_MAJOR_BYTE_STRING | (item.len() as u8))
-            //     .unwrap();
+            buf.push(CBOR_MAJOR_BYTE_STRING | (item.len() as u8))
+                .unwrap();
             buf.extend_from_slice(item).unwrap();
         }
     } else {
@@ -991,8 +991,9 @@ fn encrypt_message_3(
 
     // let enc_structure = encode_enc_structure(th_3);
     let (external_aad, _aad_len) = build_external_aad(th_3, id_cred, cred_i, cred_r);
+    trace!("external_aad :0x{}", encode(external_aad.as_slice()));
     let (enc_structure, enc_len) = encode_enc_structure(&external_aad);
-
+    trace!("enc_structure: 0x{}", encode(enc_structure.as_slice()));
     let (k_3, iv_3) = compute_k_3_iv_3(crypto, prk_3e2m, th_3);
 
     let ciphertext_3: BufferCiphertext3 = crypto.aes_ccm_encrypt_tag_8(
@@ -1001,6 +1002,7 @@ fn encrypt_message_3(
         &enc_structure.as_slice()[..enc_len],
         plaintext_3.as_slice(),
     );
+    trace!("ciphertext_3b :0x{}", encode(ciphertext_3.as_slice()));
 
     output.extend_from_slice(ciphertext_3.as_slice()).unwrap();
 
@@ -1474,6 +1476,11 @@ mod tests {
     // === PRK_exporter ===
     const PRK_EXPORTER_PSK_TV: BytesHashLen =
         hex!("2fcd08c0c01077c6d6486b9f9b677020e8d68f04bcdcce715dd277ed25931bef");
+    const ENC_STRUCURE_MESSAGE_3: EdhocBuffer<MAX_BUFFER_LEN> =
+        hex!("8368456e6372797074304058748441106088bc5c5f84d253d204e480a1b980cbd
+                7825fd15a6fe8fc926500144e3f53de9767a20269696e69746961746f7208a1
+                01a30104024110205050930ff462a77a3540cf546325dea21467a2026972657
+                3706f6e64657208a101a30104024110205050930ff462a77a3540cf546325dea214");
 
     // STAT-STAT METHOD
     // message_1 (first_time)

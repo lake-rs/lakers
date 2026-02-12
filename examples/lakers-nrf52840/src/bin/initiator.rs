@@ -1,22 +1,20 @@
 #![no_std]
 #![no_main]
 
-use common::{Packet, PacketError, ADV_ADDRESS, ADV_CRC_INIT, CRC_POLY, FREQ, MAX_PDU};
 use defmt::info;
 use defmt::unwrap;
 use embassy_executor::Spawner;
-// use embassy_nrf::gpio::{Level, Output, OutputDrive};
+use embassy_nrf::gpio::{Level, Output, OutputDrive};
 use embassy_nrf::radio::ble::Mode;
 use embassy_nrf::radio::ble::Radio;
 use embassy_nrf::radio::TxPower;
 use embassy_nrf::{bind_interrupts, peripherals, radio};
-// use embassy_time::{Duration, Timer};
-use nrf52840_hal::gpio::{Level, Output, Pin};
-use nrf52840_hal::pac;
-use nrf52840_hal::prelude::*;
+use embassy_time::WithTimeout;
+use embassy_time::{Duration, Timer};
 use {defmt_rtt as _, panic_probe as _};
 
 use lakers::*;
+use lakers_crypto::{default_crypto, CryptoTrait};
 
 extern crate alloc;
 
@@ -39,43 +37,16 @@ bind_interrupts!(struct Irqs {
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) {
-    let peripherals = pac::Peripherals::take().unwrap();
-    let p0 = nrf52840_hal::gpio::p0::Parts::new(peripherals.P0);
-    let p1 = nrf52840_hal::gpio::p1::Parts::new(peripherals.P1);
-
-    let mut led_pin_p0_26 = p0
-        .p0_26
-        .into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    let mut led_pin_p0_8 = p0
-        .p0_08
-        .into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    let mut led_pin_p0_7 = p0
-        .p0_07
-        .into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    let mut led_pin_p0_6 = p0
-        .p0_06
-        .into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    let mut led_pin_p0_5 = p0
-        .p0_05
-        .into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-
-    let mut led_pin_p1_07 = p1
-        .p1_07
-        .into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-    let mut led_pin_p1_08 = p1
-        .p1_08
-        .into_push_pull_output(nrf52840_hal::gpio::Level::Low);
-
     let mut config = embassy_nrf::config::Config::default();
     config.hfclk_source = embassy_nrf::config::HfclkSource::ExternalXtal;
-    let embassy_peripherals: embassy_nrf::Peripherals = embassy_nrf::init(config);
+    let peripherals = embassy_nrf::init(config);
 
     info!("Starting BLE radio");
-    let mut radio: Radio<'_, _> = Radio::new(embassy_peripherals.RADIO, Irqs).into();
+    let mut radio: Radio<'_, _> = Radio::new(peripherals.RADIO, Irqs).into();
 
-    //let mut led = Output::new(embassy_peripherals.P0_13, Level::Low, OutputDrive::Standard);
-    //led.set_high();
-
+    // let mut led = Output::new(peripherals.P0_13, Level::Low, OutputDrive::Standard);
+    // led.set_high();
+    
     radio.set_mode(Mode::BLE_1MBIT);
     radio.set_tx_power(TxPower::_0D_BM);
     radio.set_frequency(common::FREQ);
@@ -103,7 +74,7 @@ async fn main(spawner: Spawner) {
         EDHOCMethod::StatStat,
         EDHOCSuite::CipherSuite2,
     );
-    initiator.set_identity(common::I.try_into().unwrap(), cred_i);
+    initiator.set_identity(Some(common::I.try_into().unwrap()), cred_i)?;
 
     // Send Message 1 over raw BLE and convert the response to byte
     let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
@@ -122,11 +93,11 @@ async fn main(spawner: Spawner) {
                 pckt_2.pdu[1..pckt_2.len].try_into().expect("wrong length");
             info!("message_2 :{:?}", message_2.content);
             let (initiator, c_r, id_cred_r, ead_2) = initiator.parse_message_2(&message_2).unwrap();
-            let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r).unwrap();
+            let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r.unwrap()).unwrap();
             let initiator = initiator.verify_message_2(valid_cred_r).unwrap();
 
             let (mut initiator, message_3, i_prk_out) = initiator
-                .prepare_message_3(CredentialTransfer::ByReference, &None)
+                .prepare_message_3(CredentialTransfer::ByReference, &EadItmes::new)
                 .unwrap();
             let pckt_3 =
                 common::Packet::new_from_slice(message_3.as_slice(), Some(c_r.as_slice()[0]))
@@ -143,7 +114,9 @@ async fn main(spawner: Spawner) {
                     let message_4: EdhocMessageBuffer =
                         pckt_4.pdu[1..pckt_4.len].try_into().expect("wrong length");
 
-                    let (initiator, ead_4) = initiator.process_message_4(&message_4).unwrap();
+                    let (initiator, ead_4) = initiator.parse_message_4(&message_4).unwrap();
+                    ead_4.processed_critical_items().unwrap();
+                    let mut initiator = initiator.verify_message_4()?;
 
                     info!("Handshake completed. prk_out = {:X}", i_prk_out);
                 }

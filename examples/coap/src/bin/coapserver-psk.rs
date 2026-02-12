@@ -56,9 +56,10 @@ fn main() {
                 let result = responder.process_message_1(&message_1);
                 println!("\n---------MESSAGE_2-----------\n");
                 if let Ok((responder, _c_i, _ead_1)) = result {
-                    //let c_r = ConnId::from_int_raw(5);
-                    let c_r =
-                        generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
+                    #[allow(deprecated)]
+                    let c_r = ConnId::from_int_raw(5);
+                    // let c_r =
+                        // generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
                     let (responder, message_2) = responder
                         .prepare_message_2(
                             CredentialTransfer::ByReference,
