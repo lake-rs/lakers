@@ -17,6 +17,7 @@ pub struct PyEdhocInitiator {
     processing_m2: Option<ProcessingM2>,
     processed_m2: Option<ProcessedM2>,
     wait_m4: Option<WaitM4>,
+    processing_m4: Option<ProcessingM4>,
     completed: Option<Completed>,
 }
 
@@ -32,6 +33,7 @@ pub(crate) enum PyEdhocInitiatorSummary {
     ProcessingM2,
     ProcessedM2,
     WaitM4,
+    ProcessingM4,
     Completed,
     /// This is the last item because there is always something that happened before this and that
     /// broke things.
@@ -47,19 +49,22 @@ impl PyEdhocInitiator {
         let suites_i =
             prepare_suites_i(&crypto.supported_suites(), EDHOCSuite::CipherSuite2.into()).unwrap();
         let (x, g_x) = crypto.p256_generate_key_pair();
+        let cred_i = None; // Only needed for PSK, so cred_i is an Option<>
 
         Self {
             cred_i: None,
             start: InitiatorStart {
                 x,
                 g_x,
-                method: EDHOCMethod::StatStat.into(),
+                cred_i,
+                method: EDHOCMethod::StatStat,
                 suites_i,
             },
             wait_m2: None,
             processing_m2: None,
             processed_m2: None,
             wait_m4: None,
+            processing_m4: None,
             completed: None,
         }
     }
@@ -115,7 +120,7 @@ impl PyEdhocInitiator {
         self.processing_m2 = Some(state);
         Ok((
             PyBytes::new(py, c_r.as_slice()),
-            PyBytes::new(py, id_cred_r.bytes.as_slice()),
+            PyBytes::new(py, id_cred_r.unwrap().bytes.as_slice()),
             ead_2,
         ))
     }
@@ -138,14 +143,12 @@ impl PyEdhocInitiator {
         let valid_cred_r = valid_cred_r
             .to_credential()
             .with_cause(py, "Failed to ingest CRED_R")?;
-
+        let identity = i.as_slice().try_into().expect("Wrong length for identity");
         let state = i_verify_message_2(
             &self.take_processing_m2()?,
             &mut default_crypto(),
             valid_cred_r,
-            i.as_slice()
-                .try_into()
-                .expect("Wrong length of initiator private key"),
+            Some(identity),
         )?;
         self.processed_m2 = Some(state);
         self.cred_i = Some(cred_i);
@@ -193,7 +196,7 @@ impl PyEdhocInitiator {
     /// Processes and verifies message 4.
     ///
     /// This produces EAD data if the peer sent any.
-    pub fn process_message_4<'a>(
+    pub fn parse_message_4<'a>(
         &mut self,
         py: Python<'a>,
         message_4: Vec<u8>,
@@ -201,9 +204,18 @@ impl PyEdhocInitiator {
         let message_4 = EdhocMessageBuffer::new_from_slice(message_4.as_slice())
             .with_cause(py, "Message 4 too long")?;
         let (state, ead_4) =
-            i_process_message_4(&mut self.take_wait_m4()?, &mut default_crypto(), &message_4)?;
-        self.completed = Some(state);
+            i_parse_message_4(&mut self.take_wait_m4()?, &mut default_crypto(), &message_4)?;
+        self.processing_m4= Some(state);
         Ok(ead_4)
+    }
+
+    pub fn verify_message_4<'a>(
+        &mut self,
+    ) -> PyResult<()> {
+        let state =
+            i_verify_message_4(&mut self.take_processing_m4()?)?;
+        self.completed = Some(state);
+        Ok(())
     }
 
     /// Exports key material.
@@ -270,14 +282,16 @@ impl PyEdhocInitiator {
         let processing_m2 = self.processing_m2.is_some();
         let processed_m2 = self.processed_m2.is_some();
         let wait_m4 = self.wait_m4.is_some();
+        let processing_m4 = self.processing_m4.is_some();
         let completed = self.completed.is_some();
-        match (wait_m2, processing_m2, processed_m2, wait_m4, completed) {
-            (false, false, false, false, false) => PyEdhocInitiatorSummary::Start,
-            (true, false, false, false, false) => PyEdhocInitiatorSummary::WaitM2,
-            (false, true, false, false, false) => PyEdhocInitiatorSummary::ProcessingM2,
-            (false, false, true, false, false) => PyEdhocInitiatorSummary::ProcessedM2,
-            (false, false, false, true, false) => PyEdhocInitiatorSummary::WaitM4,
-            (false, false, false, false, true) => PyEdhocInitiatorSummary::Completed,
+        match (wait_m2, processing_m2, processed_m2, wait_m4, processing_m4, completed) {
+            (false, false, false, false, false, false) => PyEdhocInitiatorSummary::Start,
+            (true, false, false, false, false, false) => PyEdhocInitiatorSummary::WaitM2,
+            (false, true, false, false, false, false) => PyEdhocInitiatorSummary::ProcessingM2,
+            (false, false, true, false, false, false) => PyEdhocInitiatorSummary::ProcessedM2,
+            (false, false, false, true, false,  false) => PyEdhocInitiatorSummary::WaitM4,
+            (false, false, false, false, true, false) => PyEdhocInitiatorSummary::WaitM4,
+            (false, false, false, false, false, true) => PyEdhocInitiatorSummary::Completed,
             _ => PyEdhocInitiatorSummary::Invalid,
         }
     }
@@ -330,6 +344,14 @@ impl PyEdhocInitiator {
         match self.wait_m4.take() {
             Some(o) => Ok(o),
             None => Err(StateMismatch::new(PyEdhocInitiatorSummary::WaitM4, summary)),
+        }
+    }
+
+    fn take_processing_m4(&mut self) -> Result<ProcessingM4, StateMismatch<PyEdhocInitiatorSummary>> {
+        let summary = self.summarize();
+        match self.processing_m4.take() {
+            Some(o) => Ok(o),
+            None => Err(StateMismatch::new(PyEdhocInitiatorSummary::ProcessingM4, summary)),
         }
     }
 

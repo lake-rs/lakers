@@ -398,15 +398,13 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessingM2<Crypto> {
         valid_cred_r: Credential,
     ) -> Result<EdhocInitiatorProcessedM2<Crypto>, EDHOCError> {
         trace!("Enter verify_message_2");
-        if self.state.method == EDHOCMethod::StatStat.into() && self.i == None {
-            return Err(EDHOCError::MissingIdentity);
-        }
+        let i_opt = match (self.state.method, self.i.as_ref()) {
+            (EDHOCMethod::StatStat, Some(i)) => Some(i),
+            (EDHOCMethod::StatStat, None) => return Err(EDHOCError::MissingIdentity),
+            (EDHOCMethod::PSK, _) => None, // ignore i in PSK mode
+        };
 
-        // let Some(i) = self.i else {
-        //     return Err(EDHOCError::MissingIdentity);
-        // };
-
-        match i_verify_message_2(&self.state, &mut self.crypto, valid_cred_r, self.i.as_ref()) {
+        match i_verify_message_2(&self.state, &mut self.crypto, valid_cred_r, i_opt) {
             Ok(state) => Ok(EdhocInitiatorProcessedM2 {
                 state,
                 cred_i: self.cred_i,

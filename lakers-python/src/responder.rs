@@ -46,14 +46,16 @@ impl PyEdhocResponder {
         let cred_r = cred_r
             .to_credential()
             .with_cause(py, "Failed to ingest CRED_R")?;
+        let start_cred_r = cred_r.clone();
 
         Ok(Self {
             r,
             cred_r,
             start: Some(ResponderStart {
-                method: EDHOCMethod::StatStat.into(),
+                method: EDHOCMethod::StatStat,
                 y,
                 g_y,
+                cred_r: start_cred_r,
             }),
             processing_m1: None,
             wait_m3: None,
@@ -115,7 +117,7 @@ impl PyEdhocResponder {
             &mut default_crypto(),
             // FIXME: take as reference rather than cloning
             self.cred_r.clone(),
-            &r,
+            Some(&r),
             c_r,
             cred_transfer,
             &ead_2,
@@ -137,8 +139,14 @@ impl PyEdhocResponder {
     ) -> PyResult<(Bound<'a, PyBytes>, EadItems)> {
         let message_3 = EdhocMessageBuffer::new_from_slice(message_3.as_slice())
             .with_cause(py, "Message 3 too long")?;
-        let (state, id_cred_i, ead_3) =
-            r_parse_message_3(&mut self.take_wait_m3()?, &mut default_crypto(), &message_3)?;
+        let (state, id_cred_i, ead_3) = r_parse_message_3(
+            &mut self.take_wait_m3()?,
+            &mut default_crypto(),
+            &message_3,
+            None,
+            None,
+        )?;
+        let id_cred_i = id_cred_i.with_cause(py, "Message 3 did not include ID_CRED_I")?;
         self.processing_m3 = Some(state);
         Ok((PyBytes::new(py, id_cred_i.bytes.as_slice()), ead_3))
     }
@@ -159,6 +167,7 @@ impl PyEdhocResponder {
             &mut self.take_processing_m3()?,
             &mut default_crypto(),
             valid_cred_i,
+            Some(self.cred_r.clone()),
         )?;
         self.processed_m3 = Some(state);
         Ok(PyBytes::new(py, prk_out.as_slice()))
@@ -187,7 +196,7 @@ impl PyEdhocResponder {
     /// Key material may be exported from this point, and is used to confirm key agreement to the
     /// initiator by using it to protect any next protocol.
     pub fn completed_without_message_4<'a>(&mut self) -> PyResult<()> {
-        let state = r_complete_without_message_4(&self.take_processed_m3()?)?;
+        let (state, _prk_out) = r_complete_without_message_4(&self.take_processed_m3()?)?;
         self.completed = Some(state);
         Ok(())
     }
