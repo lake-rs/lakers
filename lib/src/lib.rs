@@ -586,6 +586,7 @@ pub fn credential_check_or_fetch(
 }
 
 #[cfg(test)]
+#[allow(dead_code)]
 mod test_vectors_common {
     use hexlit::hex;
     use lakers_shared::*;
@@ -833,7 +834,7 @@ mod test_authz {
         let responder = EdhocResponder::new(
             default_crypto(),
             EDHOCMethod::StatStat,
-            R.try_into().expect("Wrong length of responder private key"),
+            Some(R.try_into().expect("Wrong length of responder private key")),
             cred_r.clone(),
         );
 
@@ -892,13 +893,15 @@ mod test_authz {
 
         let (mut initiator, _c_r, id_cred_r, ead_2) =
             initiator.parse_message_2(&message_2).unwrap();
-        let valid_cred_r = credential_check_or_fetch(None, id_cred_r).unwrap();
+        let valid_cred_r =
+            credential_check_or_fetch(None, id_cred_r.expect("Missing ID_CRED_R in STAT-STAT"))
+                .unwrap();
         let result =
             device.process_ead_2(&mut default_crypto(), ead_2.iter().next().unwrap(), CRED_R);
         assert!(result.is_ok());
         initiator
             .set_identity(
-                I.try_into().expect("Wrong length of initiator private key"),
+                Some(I.try_into().expect("Wrong length of initiator private key")),
                 cred_i.clone(),
             )
             .unwrap();
@@ -908,13 +911,18 @@ mod test_authz {
             .prepare_message_3(CredentialTransfer::ByReference, &EadItems::new())
             .unwrap();
         let _initiator = initiator.completed_without_message_4();
-        let (responder, id_cred_i, _ead_3) = responder.parse_message_3(&message_3).unwrap();
+        let (responder, id_cred_i, _ead_3) = responder
+            .parse_message_3(&message_3, None, Some(cred_r.clone()))
+            .unwrap();
+        let id_cred_i = id_cred_i.expect("Missing ID_CRED_I in STAT-STAT");
         let valid_cred_i = if id_cred_i.reference_only() {
             mock_fetch_cred_i(id_cred_i).unwrap()
         } else {
             id_cred_i.get_ccs().unwrap()
         };
-        let (responder, r_prk_out) = responder.verify_message_3(valid_cred_i).unwrap();
+        let (responder, r_prk_out) = responder
+            .verify_message_3(valid_cred_i, Some(cred_r.clone()))
+            .unwrap();
 
         let mut _responder = responder.completed_without_message_4();
         // check that prk_out is equal at initiator and responder side

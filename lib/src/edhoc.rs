@@ -1341,6 +1341,7 @@ fn compute_prk_2e(
 }
 
 #[cfg(test)]
+#[allow(dead_code)]
 mod tests {
     use super::*;
     use hexlit::hex;
@@ -1439,7 +1440,7 @@ mod tests {
     //    &hex!("480488b7f2a666b629")
     //);
     const CIPHERTEXT_3B_PSK_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("48af865535abd96142"));
+        EdhocBuffer::new_from_array(&hex!("482996d76b91ac456a"));
     // === KEYSTREAM_3A (10 bytes) ===
     const KEYSTREAM_3A_PSK_TV: [u8; PLAINTEXT_3A_LEN_PSK_TV] = hex!("03e5d1571bbc9332471b");
     // === PLAINTEXT_3A (10 bytes) ===
@@ -1468,12 +1469,12 @@ mod tests {
     // === PRK_exporter ===
     const PRK_EXPORTER_PSK_TV: BytesHashLen =
         hex!("2fcd08c0c01077c6d6486b9f9b677020e8d68f04bcdcce715dd277ed25931bef");
-    const ENC_STRUCURE_MESSAGE_3: EdhocBuffer<MAX_BUFFER_LEN> = hex!(
+    const ENC_STRUCURE_MESSAGE_3: EdhocBuffer<MAX_BUFFER_LEN> = EdhocBuffer::new_from_array(&hex!(
         "8368456e6372797074304058748441106088bc5c5f84d253d204e480a1b980cbd
-                7825fd15a6fe8fc926500144e3f53de9767a20269696e69746961746f7208a1
-                01a30104024110205050930ff462a77a3540cf546325dea21467a2026972657
-                3706f6e64657208a101a30104024110205050930ff462a77a3540cf546325dea214"
-    );
+                    7825fd15a6fe8fc926500144e3f53de9767a20269696e69746961746f7208a1
+                    01a30104024110205050930ff462a77a3540cf546325dea21467a2026972657
+                    3706f6e64657208a101a30104024110205050930ff462a77a3540cf546325dea214"
+    ));
 
     // STAT-STAT METHOD
     // message_1 (first_time)
