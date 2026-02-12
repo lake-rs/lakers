@@ -205,15 +205,12 @@ impl PyEdhocInitiator {
             .with_cause(py, "Message 4 too long")?;
         let (state, ead_4) =
             i_parse_message_4(&mut self.take_wait_m4()?, &mut default_crypto(), &message_4)?;
-        self.processing_m4= Some(state);
+        self.processing_m4 = Some(state);
         Ok(ead_4)
     }
 
-    pub fn verify_message_4<'a>(
-        &mut self,
-    ) -> PyResult<()> {
-        let state =
-            i_verify_message_4(&mut self.take_processing_m4()?)?;
+    pub fn verify_message_4<'a>(&mut self) -> PyResult<()> {
+        let state = i_verify_message_4(&mut self.take_processing_m4()?)?;
         self.completed = Some(state);
         Ok(())
     }
@@ -284,12 +281,19 @@ impl PyEdhocInitiator {
         let wait_m4 = self.wait_m4.is_some();
         let processing_m4 = self.processing_m4.is_some();
         let completed = self.completed.is_some();
-        match (wait_m2, processing_m2, processed_m2, wait_m4, processing_m4, completed) {
+        match (
+            wait_m2,
+            processing_m2,
+            processed_m2,
+            wait_m4,
+            processing_m4,
+            completed,
+        ) {
             (false, false, false, false, false, false) => PyEdhocInitiatorSummary::Start,
             (true, false, false, false, false, false) => PyEdhocInitiatorSummary::WaitM2,
             (false, true, false, false, false, false) => PyEdhocInitiatorSummary::ProcessingM2,
             (false, false, true, false, false, false) => PyEdhocInitiatorSummary::ProcessedM2,
-            (false, false, false, true, false,  false) => PyEdhocInitiatorSummary::WaitM4,
+            (false, false, false, true, false, false) => PyEdhocInitiatorSummary::WaitM4,
             (false, false, false, false, true, false) => PyEdhocInitiatorSummary::WaitM4,
             (false, false, false, false, false, true) => PyEdhocInitiatorSummary::Completed,
             _ => PyEdhocInitiatorSummary::Invalid,
@@ -347,11 +351,16 @@ impl PyEdhocInitiator {
         }
     }
 
-    fn take_processing_m4(&mut self) -> Result<ProcessingM4, StateMismatch<PyEdhocInitiatorSummary>> {
+    fn take_processing_m4(
+        &mut self,
+    ) -> Result<ProcessingM4, StateMismatch<PyEdhocInitiatorSummary>> {
         let summary = self.summarize();
         match self.processing_m4.take() {
             Some(o) => Ok(o),
-            None => Err(StateMismatch::new(PyEdhocInitiatorSummary::ProcessingM4, summary)),
+            None => Err(StateMismatch::new(
+                PyEdhocInitiatorSummary::ProcessingM4,
+                summary,
+            )),
         }
     }
 
