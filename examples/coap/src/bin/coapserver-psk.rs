@@ -103,7 +103,7 @@ fn main() {
                 println!("message_3 parsed");
                 let valid_cred_i =
                     credential_check_or_fetch(Some(cred_i), id_cred_i.unwrap()).unwrap();
-                println!("valid_cred_i: 0x{}", encode(valid_cred_i.bytes.as_slice()));
+                // println!("valid_cred_i: 0x{}", encode(valid_cred_i.bytes.as_slice()));
 
                 let Ok((responder, prk_out)) =
                     responder.verify_message_3(valid_cred_i.clone(), Some(cred_r.clone()))

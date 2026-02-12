@@ -146,7 +146,7 @@ impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
 
         Ok((
             EdhocResponderProcessedM1 {
-                state: state.clone(),
+                state,
                 r: self.r,
                 cred_r: self.cred_r,
                 crypto: self.crypto,
