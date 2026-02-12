@@ -16,6 +16,7 @@ pub struct EdhocInitiator {
     pub processing_m2: ProcessingM2C,
     pub processed_m2: ProcessedM2,
     pub wait_m4: WaitM4,
+    pub processing_m4: ProcessingM4,
     pub cred_i: *mut CredentialC,
     pub completed: Completed,
 }
@@ -26,11 +27,12 @@ pub unsafe extern "C" fn initiator_new(initiator: *mut EdhocInitiator) -> i8 {
     let suites_i =
         prepare_suites_i(&crypto.supported_suites(), EDHOCSuite::CipherSuite2.into()).unwrap();
     let (x, g_x) = crypto.p256_generate_key_pair();
-
+    let cred_i = None;
     let start = InitiatorStart {
         x,
         g_x,
         suites_i,
+        cred_i,
         method: EDHOCMethod::StatStat.into(),
     };
 
@@ -107,6 +109,11 @@ pub unsafe extern "C" fn initiator_parse_message_2(
 
     let result = match i_parse_message_2(&state, crypto, &(*message_2)) {
         Ok((state, c_r, id_cred_r, ead_2)) => {
+            let id_cred_r = match id_cred_r {
+                Some(v) => v,
+                None => return EDHOCError::MissingIdentity as i8,
+            };
+
             ProcessingM2C::copy_into_c(state, &mut (*initiator_c).processing_m2);
             let c_r = c_r.as_slice();
             assert_eq!(c_r.len(), 1, "C API only supports short C_R");
@@ -133,14 +140,14 @@ pub unsafe extern "C" fn initiator_verify_message_2(
     cred_i: *mut CredentialC,
     valid_cred_r: *mut CredentialC,
 ) -> i8 {
-    if initiator_c.is_null() || i.is_null() {
+    if initiator_c.is_null() || i.is_null() || cred_i.is_null() || valid_cred_r.is_null() {
         return -1;
     }
     let crypto = &mut default_crypto();
 
     let state = core::ptr::read(&(*initiator_c).processing_m2).to_rust();
 
-    match i_verify_message_2(&state, crypto, (*valid_cred_r).to_rust(), &(*i)) {
+    match i_verify_message_2(&state, crypto, (*valid_cred_r).to_rust(), Some(&(*i))) {
         Ok(state) => {
             (*initiator_c).processed_m2 = state;
             (*initiator_c).cred_i = cred_i;
@@ -191,7 +198,7 @@ pub unsafe extern "C" fn initiator_prepare_message_3(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn initiator_process_message_4(
+pub unsafe extern "C" fn initiator_parse_message_4(
     // input params
     initiator_c: *mut EdhocInitiator,
     message_4: *const EdhocMessageBuffer,
@@ -206,9 +213,9 @@ pub unsafe extern "C" fn initiator_process_message_4(
 
     let mut state = core::ptr::read(&(*initiator_c).wait_m4);
 
-    let result = match i_process_message_4(&mut state, crypto, &(*message_4)) {
+    let result = match i_parse_message_4(&mut state, crypto, &(*message_4)) {
         Ok((state, ead_4)) => {
-            (*initiator_c).completed = state;
+            (*initiator_c).processing_m4 = state;
 
             EadItemsC::copy_into_c(ead_4, ead_4_c_out);
 
@@ -220,6 +227,21 @@ pub unsafe extern "C" fn initiator_process_message_4(
     result
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn initiator_verify_message_4(initiator_c: *mut EdhocInitiator) -> i8 {
+    if initiator_c.is_null() {
+        return -1;
+    }
+
+    let mut state = core::ptr::read(&(*initiator_c).processing_m4);
+    match i_verify_message_4(&mut state) {
+        Ok(completed) => {
+            (*initiator_c).completed = completed;
+            0
+        }
+        Err(err) => err as i8,
+    }
+}
 #[no_mangle]
 pub unsafe extern "C" fn completed_without_message_4(
     // input params
