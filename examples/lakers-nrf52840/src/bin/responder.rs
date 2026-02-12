@@ -84,9 +84,7 @@ async fn main(spawner: Spawner) {
         let result = responder.process_message_1(&message_1);
 
         if let Ok((responder, _c_i, mut ead_1)) = result {
-            c_r = generate_connection_identifier_cbor(
-                &mut lakers_crypto::default_crypto(),
-            );
+            c_r = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
             let ead_2 = EadItems::new();
 
             let (responder, message_2) = responder
@@ -99,7 +97,7 @@ async fn main(spawner: Spawner) {
                 Packet::new_from_slice(message_2.as_slice(), Some(0xf5)).expect("wrong length"),
                 Some(c_r.unwrap().as_slice()[0]),
             )
-                .await;
+            .await;
 
             match message_3 {
                 Ok(message_3) => {
@@ -123,14 +121,16 @@ async fn main(spawner: Spawner) {
                             Credential::parse_ccs(common::CRED_I.try_into().unwrap()).unwrap();
                         let valid_cred_i =
                             credential_check_or_fetch(Some(cred_i), id_cred_i.unwrap()).unwrap();
-                        let Ok((responder, r_prk_out)) = responder.verify_message_3(valid_cred_i.clone(), None)
+                        let Ok((responder, r_prk_out)) =
+                            responder.verify_message_3(valid_cred_i.clone(), None)
                         else {
                             info!("EDHOC error at parse_message_3");
                             continue;
                         };
 
                         info!("Prepare message_4");
-                        let (responder, message_4) = responder.prepare_message_4(&EadItems::new()).unwrap();
+                        let (responder, message_4) =
+                            responder.prepare_message_4(&EadItems::new()).unwrap();
 
                         info!("Send message_4");
                         common::transmit_without_response(
@@ -139,9 +139,9 @@ async fn main(spawner: Spawner) {
                                 message_4.as_slice(),
                                 Some(c_r.unwrap().as_slice()[0]),
                             )
-                                .unwrap(),
+                            .unwrap(),
                         )
-                            .await;
+                        .await;
 
                         info!("Handshake completed. prk_out = {:X}", r_prk_out);
                     } else {

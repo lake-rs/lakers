@@ -46,7 +46,7 @@ async fn main(spawner: Spawner) {
 
     // let mut led = Output::new(peripherals.P0_13, Level::Low, OutputDrive::Standard);
     // led.set_high();
-    
+
     radio.set_mode(Mode::BLE_1MBIT);
     radio.set_tx_power(TxPower::_0D_BM);
     radio.set_frequency(common::FREQ);

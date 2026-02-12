@@ -1,8 +1,8 @@
 use core::clone::Clone;
-use digest::Digest;
-use lakers_shared::{Crypto as CryptoTrait, *};
-use hex::encode;
 use defmt_or_log::trace;
+use digest::Digest;
+use hex::encode;
+use lakers_shared::{Crypto as CryptoTrait, *};
 
 pub fn edhoc_exporter(
     state: &Completed,
@@ -536,7 +536,10 @@ pub fn i_prepare_message_3(
             Some(cred_i.bytes.as_slice()),
             Some(state.cred_r.clone().unwrap().bytes.as_slice()),
         );
-        trace!("encoded ciphertext_3b :0x{}", encode(ciphertext_3b.as_slice()));
+        trace!(
+            "encoded ciphertext_3b :0x{}",
+            encode(ciphertext_3b.as_slice())
+        );
         // compute ciphertext_3a
         // id_cred_i is the id_cred_psk
         let pt_3a = id_cred_i.as_encoded_value();
@@ -549,7 +552,10 @@ pub fn i_prepare_message_3(
         trace!("ciphertext_3a: 0x{}", encode(ciphertext_3a.as_slice()));
         // CBOR encoding of ct_3a
         let encoded_ciphertext_3a = encode_ciphertext_3a(ciphertext_3a)?;
-        trace!("ciphertext_3a_encoded: 0x{}", encode(encoded_ciphertext_3a.as_slice()));
+        trace!(
+            "ciphertext_3a_encoded: 0x{}",
+            encode(encoded_ciphertext_3a.as_slice())
+        );
         //compute message_3
         message_3
             .extend_from_slice(encoded_ciphertext_3a.as_slice())
@@ -1476,11 +1482,12 @@ mod tests {
     // === PRK_exporter ===
     const PRK_EXPORTER_PSK_TV: BytesHashLen =
         hex!("2fcd08c0c01077c6d6486b9f9b677020e8d68f04bcdcce715dd277ed25931bef");
-    const ENC_STRUCURE_MESSAGE_3: EdhocBuffer<MAX_BUFFER_LEN> =
-        hex!("8368456e6372797074304058748441106088bc5c5f84d253d204e480a1b980cbd
+    const ENC_STRUCURE_MESSAGE_3: EdhocBuffer<MAX_BUFFER_LEN> = hex!(
+        "8368456e6372797074304058748441106088bc5c5f84d253d204e480a1b980cbd
                 7825fd15a6fe8fc926500144e3f53de9767a20269696e69746961746f7208a1
                 01a30104024110205050930ff462a77a3540cf546325dea21467a2026972657
-                3706f6e64657208a101a30104024110205050930ff462a77a3540cf546325dea214");
+                3706f6e64657208a101a30104024110205050930ff462a77a3540cf546325dea214"
+    );
 
     // STAT-STAT METHOD
     // message_1 (first_time)

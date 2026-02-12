@@ -59,7 +59,7 @@ fn main() {
                     #[allow(deprecated)]
                     let c_r = ConnId::from_int_raw(5);
                     // let c_r =
-                        // generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
+                    // generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
                     let (responder, message_2) = responder
                         .prepare_message_2(
                             CredentialTransfer::ByReference,

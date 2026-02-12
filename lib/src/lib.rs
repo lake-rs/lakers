@@ -53,22 +53,6 @@ pub struct EdhocInitiatorProcessedM2<Crypto: CryptoTrait> {
     crypto: Crypto,
 }
 
-/*
-#[derive(Debug)]
-pub struct EdhocInitiatorProcessingM3<Crypto: CryptoTrait> {
-    state: ProcessingM3, // opaque state
-    cred_i: Option<Credential>,
-    crypto: Crypto,
-}
-
-#[derive(Debug)]
-pub struct EdhocInitiatorProcessedM3<Crypto: CryptoTrait> {
-    state: ProcessedM3, // opaque state
-    cred_i: Option<Credential>,
-    crypto: Crypto,
-}
-*/
-
 #[derive(Debug)]
 pub struct EdhocInitiatorWaitM4<Crypto: CryptoTrait> {
     state: WaitM4, // opaque state
@@ -82,15 +66,6 @@ pub struct EdhocInitiatorProcessingM4<Crypto: CryptoTrait> {
     // cred_i: Option<Credential>,
     crypto: Crypto,
 }
-
-/*
-#[derive(Debug)]
-pub struct EdhocInitiatorProcessedM4<Crypto: CryptoTrait> {
-    state: ProcessedM4, // opaque state
-    cred_i: Option<Credential>,
-    crypto: Crypto,
-}
-*/
 
 #[derive(Debug)]
 pub struct EdhocInitiatorDone<Crypto: CryptoTrait> {
@@ -133,13 +108,6 @@ pub struct EdhocResponderProcessedM3<Crypto: CryptoTrait> {
     crypto: Crypto,
 }
 
-/*
-#[derive(Debug)]
-pub struct EdhocResponderPreparingM4<Crypto: CryptoTrait> {
-    state: ProcessedM3, // opaque state
-    crypto: Crypto,
-}
-*/
 #[derive(Debug)]
 pub struct EdhocResponderDone<Crypto: CryptoTrait> {
     state: Completed,

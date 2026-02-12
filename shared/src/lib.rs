@@ -518,9 +518,7 @@ pub struct WaitM3 {
     pub method: u8,
     pub y: BytesP256ElemLen, // ephemeral private key of the responder
     pub prk_3e2m: BytesHashLen,
-    // pub salt_3e2m: BytesHashLen,
     pub th_3: BytesHashLen,
-    // pub cred_r: Option<Credential>,
 }
 
 #[derive(Debug)]
@@ -534,7 +532,6 @@ pub struct ProcessingM2 {
     pub g_y: BytesP256ElemLen,
     pub plaintext_2: BufferPlaintext2,
     pub c_r: ConnId,
-    // pub cred_i: Option<Credential>,
     pub id_cred_r: Option<IdCred>,
     pub ead_2: EadItems,
 }

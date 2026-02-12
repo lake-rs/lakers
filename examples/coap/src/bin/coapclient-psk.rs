@@ -38,7 +38,7 @@ fn client_handshake() -> Result<(), EDHOCError> {
     println!("\n---------MESSAGE_1-----------\n");
     // Send Message 1 over CoAP and convert the response to byte
     let mut msg_1_buf = Vec::from([0xf5u8]); // EDHOC message_1 when transported over CoAP is prepended with CBOR true
-    // let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
+                                             // let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
     #[allow(deprecated)]
     let c_i = ConnId::from_int_raw(10);
     // println!("c_i: {:?}", c_i);
