@@ -364,6 +364,7 @@ impl ConnId {
 }
 
 #[derive(PartialEq, Debug, Copy, Clone)]
+#[repr(C)]
 pub enum EDHOCMethod {
     StatStat = 3,
     PSK = 4,
@@ -583,6 +584,7 @@ pub struct WaitM4 {
 }
 
 #[derive(Debug)]
+#[repr(C)]
 pub struct ProcessingM4 {
     pub prk_4e3m: BytesHashLen,
     pub th_4: BytesHashLen,
@@ -591,6 +593,7 @@ pub struct ProcessingM4 {
 }
 
 #[derive(Debug)]
+#[repr(C)]
 pub struct ProcessedM4 {
     pub prk_3e2m: BytesHashLen,
     pub prk_4e3m: BytesHashLen,
