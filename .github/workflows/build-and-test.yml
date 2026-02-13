@@ -98,7 +98,7 @@ jobs:
       with:
         # pin hax to known-working
         hax_reference: "af86315233bb8fb2ea29d775e3c42b2cd50c725f"
-        fstar: v2025.06.20
+        fstar: v2025.10.06
 
     - name: Hax extract from lakers and lakers-shared into F* (Fstar)
       run: |
