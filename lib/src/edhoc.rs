@@ -909,12 +909,17 @@ pub fn build_external_aad(
 
     if let (Some(id), Some(ci), Some(cr)) = (id_cred, cred_i, cred_r) {
         // PSK case: array of 4 items
-        buf.push(CBOR_MAJOR_ARRAY | 4).unwrap();
-        for item in [id, th_3, ci, cr] {
-            buf.push(CBOR_MAJOR_BYTE_STRING | (item.len() as u8))
-                .unwrap();
-            buf.extend_from_slice(item).unwrap();
-        }
+        //buf.push(CBOR_MAJOR_ARRAY | 4).unwrap();
+
+        // id_cred_psk is considered as a CBOR encoded int
+        buf.extend_from_slice(id).unwrap();
+        // th_3
+        buf.push(CBOR_BYTE_STRING).unwrap();
+        buf.push(th_3.len() as u8).unwrap();
+        buf.extend_from_slice(th_3).unwrap();
+        // cred_i, cred_r are already CBOR Web Token
+        buf.extend_from_slice(ci).unwrap();
+        buf.extend_from_slice(cr).unwrap();
     } else {
         // Non-PSK: array of 1 item (TH_3)
         buf.extend_from_slice(th_3).unwrap();
@@ -1435,23 +1440,19 @@ mod tests {
     const PLAINTEXT_3A_LEN_PSK_TV: usize = MESSAGE_3_PSK_TV.len() - 1;
     const PLAINTEXT_3B_PSK_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!(""));
     // === CIPHERTEXT_3B (9 bytes) ===
-    // FIXME: Old value whit external_aad = th_3
-    //const CIPHERTEXT_3B_PSK_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(
-    //    &hex!("480488b7f2a666b629")
-    //);
     const CIPHERTEXT_3B_PSK_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("482996d76b91ac456a"));
+        EdhocBuffer::new_from_array(&hex!("487f34496f3f69c288"));
     // === KEYSTREAM_3A (10 bytes) ===
     const KEYSTREAM_3A_PSK_TV: [u8; PLAINTEXT_3A_LEN_PSK_TV] = hex!("03e5d1571bbc9332471b");
     // === PLAINTEXT_3A (10 bytes) ===
     const PLAINTEXT_3A_PSK_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("1048af865535abd96142"));
+        EdhocBuffer::new_from_array(&hex!("10487f34496f3f69c288"));
     // === CIPHERTEXT_3A (10 bytes) ===
     const CIPHERTEXT_3A_PSK_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("13ad7ed14e8938eb2659"));
+        EdhocBuffer::new_from_array(&hex!("13adae6352d3ac5b8593"));
     // === message_3 (11 bytes) ===
     const MESSAGE_3_PSK_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("4a13ad7ed14e8938eb2659"));
+        EdhocBuffer::new_from_array(&hex!("4a13adae6352d3ac5b8593"));
     // === TH_4 ===
     const TH_4_PSK_TV: BytesHashLen =
         hex!("11481b9afef95c679a52038217eedd0e0ce08faa865bdc825511ca6dc3919413");
@@ -1470,10 +1471,9 @@ mod tests {
     const PRK_EXPORTER_PSK_TV: BytesHashLen =
         hex!("2fcd08c0c01077c6d6486b9f9b677020e8d68f04bcdcce715dd277ed25931bef");
     const ENC_STRUCURE_MESSAGE_3: EdhocBuffer<MAX_BUFFER_LEN> = EdhocBuffer::new_from_array(&hex!(
-        "8368456e6372797074304058748441106088bc5c5f84d253d204e480a1b980cbd
-                    7825fd15a6fe8fc926500144e3f53de9767a20269696e69746961746f7208a1
-                    01a30104024110205050930ff462a77a3540cf546325dea21467a2026972657
-                    3706f6e64657208a101a30104024110205050930ff462a77a3540cf546325dea214"
+        "8368456e637279707430405871105820386a9d052b255992eee5ffb594347d327418a2ea5183486c0c9e204
+        26e0bca2fa20269696e69746961746f7208a101a30104024110205050930ff462a77a3540cf546325dea214a
+        20269726573706f6e64657208a101a30104024110205050930ff462a77a3540cf546325dea214"
     ));
 
     // STAT-STAT METHOD
