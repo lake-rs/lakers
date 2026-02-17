@@ -109,7 +109,7 @@ fn main() -> ! {
         let responder = EdhocResponder::new(
             lakers_crypto::default_crypto(),
             EDHOCMethod::StatStat,
-            R.try_into().expect("Wrong length of responder private key"),
+            Some(R.try_into().expect("Wrong length of responder private key")),
             cred_r.clone(),
         );
 
@@ -122,10 +122,11 @@ fn main() -> ! {
 
         let (mut initiator, _c_r, id_cred_r, _ead_2) =
             initiator.parse_message_2(&message_2).unwrap();
-        let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r).unwrap();
+        let valid_cred_r =
+            credential_check_or_fetch(Some(cred_r), id_cred_r.expect("Missing identity")).unwrap();
         initiator
             .set_identity(
-                I.try_into().expect("Wrong length of initiator private key"),
+                Some(I.try_into().expect("Wrong length of initiator private key")),
                 cred_i.clone(),
             )
             .unwrap(); // exposing own identity only after validating cred_r
@@ -135,12 +136,14 @@ fn main() -> ! {
             .prepare_message_3(CredentialTransfer::ByReference, &EadItems::new())
             .unwrap();
 
-        let (responder, id_cred_i, _ead_3) = responder.parse_message_3(&message_3).unwrap();
-        let valid_cred_i = credential_check_or_fetch(Some(cred_i), id_cred_i).unwrap();
-        let (responder, r_prk_out) = responder.verify_message_3(valid_cred_i).unwrap();
+        let (responder, id_cred_i, _ead_3) =
+            responder.parse_message_3(&message_3, None, None).unwrap();
+        let valid_cred_i =
+            credential_check_or_fetch(Some(cred_i), id_cred_i.expect("Missing identity")).unwrap();
+        let (responder, r_prk_out) = responder.verify_message_3(valid_cred_i, None).unwrap();
 
         let mut initiator = initiator.completed_without_message_4().unwrap();
-        let mut responder = responder.completed_without_message_4().unwrap();
+        let (mut responder, _) = responder.completed_without_message_4().unwrap();
 
         // check that prk_out is equal at initiator and responder side
         assert_eq!(i_prk_out, r_prk_out);

@@ -93,23 +93,227 @@ impl EadItemsC {
     }
 }
 
+#[derive(Default, Clone, Copy, Debug)]
+#[repr(C)]
+pub struct OptionBytesMac2 {
+    pub is_some: bool,
+    pub value: BytesMac2,
+}
+
+impl OptionBytesMac2 {
+    pub fn to_rust(&self) -> Option<BytesMac2> {
+        if self.is_some {
+            Some(self.value)
+        } else {
+            None
+        }
+    }
+
+    pub fn from_rust(value: Option<BytesMac2>) -> Self {
+        match value {
+            Some(v) => Self {
+                is_some: true,
+                value: v,
+            },
+            None => Self {
+                is_some: false,
+                value: Default::default(),
+            },
+        }
+    }
+}
+
+#[derive(Default, Clone, Debug)]
+#[repr(C)]
+pub struct OptionIdCred {
+    pub is_some: bool,
+    pub value: IdCred,
+}
+
+impl OptionIdCred {
+    pub fn to_rust(&self) -> Option<IdCred> {
+        if self.is_some {
+            Some(self.value.clone())
+        } else {
+            None
+        }
+    }
+
+    pub fn from_rust(value: Option<IdCred>) -> Self {
+        match value {
+            Some(v) => Self {
+                is_some: true,
+                value: v,
+            },
+            None => Self {
+                is_some: false,
+                value: Default::default(),
+            },
+        }
+    }
+}
+#[derive(Clone, Copy, Debug)]
+#[repr(C)]
+pub struct OptionCredentialC {
+    pub value: *mut CredentialC, // NULL => None
+}
+
+impl Default for OptionCredentialC {
+    fn default() -> Self {
+        Self {
+            value: core::ptr::null_mut(),
+        }
+    }
+}
+
+impl OptionCredentialC {
+    pub fn to_rust(&self) -> Option<Credential> {
+        if self.value.is_null() {
+            None
+        } else {
+            Some(unsafe { (*self.value).to_rust() })
+        }
+    }
+}
+
+#[derive(Default, Clone, Debug)]
+#[repr(C)]
+pub struct SuitesBufferC {
+    pub content: [u8; MAX_SUITES_LEN],
+    pub len: usize,
+}
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct InitiatorStartC {
+    pub suites_i: SuitesBufferC,
+    pub method: EDHOCMethod,
+    pub x: BytesP256ElemLen,       // ephemeral private key of myself
+    pub g_x: BytesP256ElemLen,     // ephemeral public key of myself,
+    pub cred_i: OptionCredentialC, // Added for PSK
+}
+
+impl Default for InitiatorStartC {
+    fn default() -> Self {
+        InitiatorStartC {
+            suites_i: Default::default(),
+            method: EDHOCMethod::StatStat,
+            x: Default::default(),
+            g_x: Default::default(),
+            cred_i: Default::default(),
+        }
+    }
+}
+
+impl InitiatorStartC {
+    pub fn to_rust(&self) -> InitiatorStart {
+        let suites_i = EdhocBuffer::<MAX_SUITES_LEN>::new_from_slice(
+            &self.suites_i.content[..self.suites_i.len],
+        )
+        .unwrap();
+
+        InitiatorStart {
+            suites_i,
+            method: self.method,
+            x: self.x,
+            g_x: self.g_x,
+            cred_i: self.cred_i.to_rust(),
+        }
+    }
+
+    /// note that it is a shallow copy (ead_2 is handled separately by the caller)
+    pub unsafe fn copy_into_c(start: InitiatorStart, start_c: *mut InitiatorStartC) {
+        if start_c.is_null() {
+            panic!("initiator_start_c is null");
+        }
+
+        let suites = start.suites_i.as_slice();
+        (&mut (*start_c).suites_i.content)[..suites.len()].copy_from_slice(suites);
+        (*start_c).suites_i.len = suites.len();
+        (*start_c).method = start.method;
+        (*start_c).x = start.x;
+        (*start_c).g_x = start.g_x;
+
+        if let Some(cred_i) = start.cred_i {
+            if (*start_c).cred_i.value.is_null() {
+                panic!("initiator_start_c.cred_i.value is null but Rust state has Some(cred_i)");
+            }
+            CredentialC::copy_into_c(cred_i, (*start_c).cred_i.value);
+        } else {
+            (*start_c).cred_i.value = core::ptr::null_mut();
+        }
+    }
+}
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct WaitM2C {
+    pub method: EDHOCMethod,
+    pub x: BytesP256ElemLen,
+    pub h_message_1: BytesHashLen,
+    pub cred_i: OptionCredentialC,
+}
+
+impl Default for WaitM2C {
+    fn default() -> Self {
+        WaitM2C {
+            method: EDHOCMethod::StatStat,
+            x: Default::default(),
+            h_message_1: Default::default(),
+            cred_i: Default::default(),
+        }
+    }
+}
+
+impl WaitM2C {
+    pub fn to_rust(&self) -> WaitM2 {
+        WaitM2 {
+            method: self.method,
+            x: self.x,
+            h_message_1: self.h_message_1,
+            cred_i: self.cred_i.to_rust(),
+        }
+    }
+
+    pub unsafe fn copy_into_c(wait_m2: WaitM2, wait_m2c: *mut WaitM2C) {
+        if wait_m2c.is_null() {
+            panic!("wait_m2c is null");
+        }
+
+        (*wait_m2c).method = wait_m2.method;
+        (*wait_m2c).x = wait_m2.x;
+        (*wait_m2c).h_message_1 = wait_m2.h_message_1;
+
+        if let Some(cred_i) = wait_m2.cred_i {
+            if (*wait_m2c).cred_i.value.is_null() {
+                panic!("initiator_start_c.cred_i.value is null but Rust state has Some(cred_i)");
+            }
+            CredentialC::copy_into_c(cred_i, (*wait_m2c).cred_i.value);
+        } else {
+            (*wait_m2c).cred_i.value = core::ptr::null_mut();
+        }
+    }
+}
+
 #[derive(Debug)]
 #[repr(C)]
 pub struct ProcessingM2C {
-    pub mac_2: BytesMac2,
+    pub method: EDHOCMethod,
+    pub mac_2: OptionBytesMac2,
     pub prk_2e: BytesHashLen,
     pub th_2: BytesHashLen,
     pub x: BytesP256ElemLen,
     pub g_y: BytesP256ElemLen,
     pub plaintext_2: EdhocMessageBuffer,
     pub c_r: u8,
-    pub id_cred_r: IdCred,
+    pub id_cred_r: OptionIdCred,
     pub ead_2: *mut EadItemsC,
 }
 
 impl Default for ProcessingM2C {
     fn default() -> Self {
         ProcessingM2C {
+            method: EDHOCMethod::StatStat,
             mac_2: Default::default(),
             prk_2e: Default::default(),
             th_2: Default::default(),
@@ -126,7 +330,8 @@ impl Default for ProcessingM2C {
 impl ProcessingM2C {
     pub fn to_rust(&self) -> ProcessingM2 {
         ProcessingM2 {
-            mac_2: self.mac_2,
+            method: self.method,
+            mac_2: self.mac_2.to_rust(),
             prk_2e: self.prk_2e,
             th_2: self.th_2,
             x: self.x,
@@ -134,7 +339,7 @@ impl ProcessingM2C {
             plaintext_2: self.plaintext_2.clone(),
             #[allow(deprecated)]
             c_r: ConnId::from_int_raw(self.c_r),
-            id_cred_r: self.id_cred_r.clone(),
+            id_cred_r: self.id_cred_r.to_rust(),
             ead_2: unsafe { (*self.ead_2).to_rust() },
         }
     }
@@ -145,7 +350,7 @@ impl ProcessingM2C {
             panic!("processing_m2_c is null");
         }
 
-        (*processing_m2_c).mac_2 = processing_m2.mac_2;
+        (*processing_m2_c).mac_2 = OptionBytesMac2::from_rust(processing_m2.mac_2);
         (*processing_m2_c).prk_2e = processing_m2.prk_2e;
         (*processing_m2_c).th_2 = processing_m2.th_2;
         (*processing_m2_c).x = processing_m2.x;
@@ -154,7 +359,107 @@ impl ProcessingM2C {
         let c_r = processing_m2.c_r.as_slice();
         assert_eq!(c_r.len(), 1, "C API only supports short C_R");
         (*processing_m2_c).c_r = c_r[0];
-        (*processing_m2_c).id_cred_r = processing_m2.id_cred_r;
+        (*processing_m2_c).id_cred_r = OptionIdCred::from_rust(processing_m2.id_cred_r);
+    }
+}
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct ProcessedM2C {
+    pub method: EDHOCMethod,
+    pub prk_3e2m: BytesHashLen,
+    pub prk_4e3m: BytesHashLen,
+    pub th_3: BytesHashLen,
+    pub cred_r: OptionCredentialC,
+}
+
+impl Default for ProcessedM2C {
+    fn default() -> Self {
+        ProcessedM2C {
+            method: EDHOCMethod::StatStat,
+            prk_3e2m: Default::default(),
+            prk_4e3m: Default::default(),
+            th_3: Default::default(),
+            cred_r: Default::default(),
+        }
+    }
+}
+
+impl ProcessedM2C {
+    pub fn to_rust(&self) -> ProcessedM2 {
+        ProcessedM2 {
+            method: self.method,
+            prk_3e2m: self.prk_3e2m,
+            prk_4e3m: self.prk_4e3m,
+            th_3: self.th_3,
+            cred_r: self.cred_r.to_rust(),
+        }
+    }
+
+    /// note that it is a shallow copy (ead_2 is handled separately by the caller)
+    pub unsafe fn copy_into_c(processed_m2: ProcessedM2, processed_m2_c: *mut ProcessedM2C) {
+        if processed_m2_c.is_null() {
+            panic!("processed_m2_c is null");
+        }
+
+        (*processed_m2_c).method = processed_m2.method;
+        (*processed_m2_c).prk_3e2m = processed_m2.prk_3e2m;
+        (*processed_m2_c).prk_4e3m = processed_m2.prk_4e3m;
+        (*processed_m2_c).th_3 = processed_m2.th_3;
+        if let Some(cred_r) = processed_m2.cred_r {
+            if (*processed_m2_c).cred_r.value.is_null() {
+                panic!("initiator_start_c.cred_i.value is null but Rust state has Some(cred_i)");
+            }
+            CredentialC::copy_into_c(cred_r, (*processed_m2_c).cred_r.value);
+        } else {
+            (*processed_m2_c).cred_r.value = core::ptr::null_mut();
+        }
+    }
+}
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct WaitM4C {
+    pub prk_4e3m: BytesHashLen,
+    pub th_4: BytesHashLen,
+    pub ead_3: *mut EadItemsC,
+    pub prk_out: BytesHashLen,
+    pub prk_exporter: BytesHashLen,
+}
+
+impl Default for WaitM4C {
+    fn default() -> Self {
+        WaitM4C {
+            prk_4e3m: Default::default(),
+            th_4: Default::default(),
+            ead_3: core::ptr::null_mut(),
+            prk_out: Default::default(),
+            prk_exporter: Default::default(),
+        }
+    }
+}
+
+impl WaitM4C {
+    pub fn to_rust(&self) -> WaitM4 {
+        WaitM4 {
+            prk_4e3m: self.prk_4e3m,
+            th_4: self.th_4,
+            ead_3: unsafe { (*self.ead_3).to_rust() },
+            prk_out: self.prk_out,
+            prk_exporter: self.prk_exporter,
+        }
+    }
+
+    /// note that it is a shallow copy (ead_2 is handled separately by the caller)
+    pub unsafe fn copy_into_c(wait_m4: WaitM4, wait_m4_c: *mut WaitM4C) {
+        if wait_m4_c.is_null() {
+            panic!("wait_m4_c is null");
+        }
+
+        (*wait_m4_c).prk_4e3m = wait_m4.prk_4e3m;
+        (*wait_m4_c).th_4 = wait_m4.th_4;
+        (*wait_m4_c).prk_out = wait_m4.prk_out;
+        (*wait_m4_c).prk_exporter = wait_m4.prk_exporter;
     }
 }
 

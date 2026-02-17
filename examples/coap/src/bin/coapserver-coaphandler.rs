@@ -113,11 +113,13 @@ impl coap_handler::Handler for EdhocHandler {
 
             let message_1 =
                 &EdhocBuffer::new_from_slice(&request.payload()[1..]).map_err(too_small)?;
-
+            let r_arr: [u8; 32] = R.try_into().expect("Wrong length of responder private key");
+            let r_opt: Option<[u8; 32]> = Some(r_arr);
             let (responder, _c_i, mut ead_1) = EdhocResponder::new(
                 lakers_crypto::default_crypto(),
                 EDHOCMethod::StatStat,
-                R.try_into().expect("Wrong length of responder private key"),
+                r_opt,
+                //R.try_into().expect("Wrong length of responder private key"),
                 cred_r,
             )
             .process_message_1(message_1)
@@ -174,7 +176,7 @@ impl coap_handler::Handler for EdhocHandler {
             println!("Found state with connection identifier {:?}", c_r_rcvd);
 
             let message_3 = EdhocBuffer::new_from_slice(&message_3).map_err(too_small)?;
-            let result = responder.parse_message_3(&message_3);
+            let result = responder.parse_message_3(&message_3, None, None);
             let (responder, id_cred_i, ead_3) = result.map_err(|e| {
                 println!("EDHOC processing error: {:?}", e);
                 render_error(e)
@@ -186,12 +188,15 @@ impl coap_handler::Handler for EdhocHandler {
             let cred_i =
                 Credential::parse_ccs(CRED_I.try_into().expect("Static credential is too large"))
                     .expect("Static credential is not processable");
-            let valid_cred_i =
-                credential_check_or_fetch(Some(cred_i), id_cred_i).map_err(render_error)?;
-            let (responder, prk_out) = responder.verify_message_3(valid_cred_i).map_err(|e| {
-                println!("EDHOC processing error: {:?}", e);
-                render_error(e)
-            })?;
+            let valid_cred_i = credential_check_or_fetch(Some(cred_i), id_cred_i.unwrap())
+                .map_err(render_error)?;
+            let (responder, prk_out) =
+                responder
+                    .verify_message_3(valid_cred_i, None)
+                    .map_err(|e| {
+                        println!("EDHOC processing error: {:?}", e);
+                        render_error(e)
+                    })?;
 
             let (mut responder, _message_4) =
                 responder.prepare_message_4(&EadItems::new()).unwrap();

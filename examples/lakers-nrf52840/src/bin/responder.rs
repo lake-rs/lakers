@@ -75,7 +75,7 @@ async fn main(spawner: Spawner) {
         let responder = EdhocResponder::new(
             lakers_crypto::default_crypto(),
             EDHOCMethod::StatStat,
-            common::R.try_into().unwrap(),
+            Some(common::R.try_into().unwrap()),
             cred_r,
         );
 
@@ -83,14 +83,12 @@ async fn main(spawner: Spawner) {
 
         let result = responder.process_message_1(&message_1);
 
-        if let Ok((responder, _c_i, ead_1)) = result {
-            c_r = Some(generate_connection_identifier_cbor(
-                &mut lakers_crypto::default_crypto(),
-            ));
-            let ead_2 = None;
+        if let Ok((responder, _c_i, mut ead_1)) = result {
+            c_r = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
+            let ead_2 = EadItems::new();
 
             let (responder, message_2) = responder
-                .prepare_message_2(CredentialTransfer::ByReference, c_r, &ead_2)
+                .prepare_message_2(CredentialTransfer::ByReference, Some(c_r), &ead_2)
                 .unwrap();
 
             // prepend 0xf5 also to message_2 in order to allow the Initiator filter out from other BLE packets
@@ -104,7 +102,7 @@ async fn main(spawner: Spawner) {
             match message_3 {
                 Ok(message_3) => {
                     info!("Received message_3");
-
+                    #[allow(deprecated)]
                     let rcvd_c_r: ConnId = ConnId::from_int_raw(message_3.pdu[0] as u8);
 
                     if rcvd_c_r == c_r.unwrap() {
@@ -122,16 +120,17 @@ async fn main(spawner: Spawner) {
                         let cred_i: Credential =
                             Credential::parse_ccs(common::CRED_I.try_into().unwrap()).unwrap();
                         let valid_cred_i =
-                            credential_check_or_fetch(Some(cred_i), id_cred_i).unwrap();
-                        let Ok((responder, r_prk_out)) = responder.verify_message_3(valid_cred_i)
+                            credential_check_or_fetch(Some(cred_i), id_cred_i.unwrap()).unwrap();
+                        let Ok((responder, r_prk_out)) =
+                            responder.verify_message_3(valid_cred_i.clone(), None)
                         else {
                             info!("EDHOC error at parse_message_3");
                             continue;
                         };
 
                         info!("Prepare message_4");
-                        let ead_4 = None;
-                        let (responder, message_4) = responder.prepare_message_4(&ead_4).unwrap();
+                        let (responder, message_4) =
+                            responder.prepare_message_4(&EadItems::new()).unwrap();
 
                         info!("Send message_4");
                         common::transmit_without_response(
