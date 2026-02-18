@@ -44,7 +44,6 @@ pub fn r_process_message_1(
                     let h_message_1 = crypto.sha256_digest(message_1.as_slice());
                     Ok((
                         ProcessingM1 {
-                            method,
                             y: state.y,
                             g_y: state.g_y,
                             c_i,
@@ -122,7 +121,6 @@ pub fn r_prepare_message_2(
 
     Ok((
         WaitM3 {
-            method: state.method,
             y: state.y,
             prk_3e2m: prk_3e2m,
             th_3: th_3,
@@ -144,7 +142,6 @@ pub fn r_parse_message_3(
         if let Ok((id_cred_i, mac_3, ead_3)) = decoded_p3_res {
             Ok((
                 ProcessingM3 {
-                    method: state.method,
                     mac_3,
                     y: state.y,
                     prk_3e2m: state.prk_3e2m,
@@ -268,7 +265,6 @@ pub fn i_prepare_message_1(
 
     Ok((
         WaitM2 {
-            method: state.method,
             x: state.x,
             h_message_1,
         },
@@ -296,7 +292,6 @@ pub fn i_parse_message_2<'a>(
 
         if let Ok((c_r_2, id_cred_r, mac_2, ead_2)) = plaintext_2_decoded {
             let state = ProcessingM2 {
-                method: state.method,
                 mac_2,
                 prk_2e,
                 th_2,
@@ -363,7 +358,6 @@ pub fn i_verify_message_2(
         };
 
         let state = ProcessedM2 {
-            method: state.method,
             prk_3e2m: prk_3e2m,
             prk_4e3m: prk_4e3m,
             th_3: th_3,
