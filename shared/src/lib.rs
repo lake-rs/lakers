@@ -361,12 +361,23 @@ impl ConnId {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Copy, Clone)]
+#[repr(C)]
 pub enum EDHOCMethod {
     StatStat = 3,
-    // add others, such as:
-    // PSK1 = ?,
-    // PSK2 = ?,
+    PSK = 4,
+}
+
+impl TryFrom<u8> for EDHOCMethod {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            3 => Ok(EDHOCMethod::StatStat),
+            4 => Ok(EDHOCMethod::PSK),
+            _ => Err(()),
+        }
+    }
 }
 
 impl From<EDHOCMethod> for u8 {
@@ -467,20 +478,21 @@ impl ErrCode {
 #[repr(C)]
 pub struct InitiatorStart {
     pub suites_i: EdhocBuffer<MAX_SUITES_LEN>,
-    pub method: u8,
+    pub method: EDHOCMethod,
     pub x: BytesP256ElemLen,   // ephemeral private key of myself
     pub g_x: BytesP256ElemLen, // ephemeral public key of myself
 }
 
 #[derive(Debug)]
 pub struct ResponderStart {
-    pub method: u8,
+    pub method: EDHOCMethod,
     pub y: BytesP256ElemLen,   // ephemeral private key of myself
     pub g_y: BytesP256ElemLen, // ephemeral public key of myself
 }
 
 #[derive(Debug)]
 pub struct ProcessingM1 {
+    pub method: EDHOCMethod,
     pub y: BytesP256ElemLen,
     pub g_y: BytesP256ElemLen,
     pub c_i: ConnId,
@@ -491,12 +503,14 @@ pub struct ProcessingM1 {
 #[derive(Clone, Debug)]
 #[repr(C)]
 pub struct WaitM2 {
+    pub method: EDHOCMethod,
     pub x: BytesP256ElemLen, // ephemeral private key of the initiator
     pub h_message_1: BytesHashLen,
 }
 
 #[derive(Debug)]
 pub struct WaitM3 {
+    pub method: EDHOCMethod,
     pub y: BytesP256ElemLen, // ephemeral private key of the responder
     pub prk_3e2m: BytesHashLen,
     pub th_3: BytesHashLen,
@@ -505,6 +519,7 @@ pub struct WaitM3 {
 #[derive(Debug)]
 #[repr(C)]
 pub struct ProcessingM2 {
+    pub method: EDHOCMethod,
     pub mac_2: BytesMac2,
     pub prk_2e: BytesHashLen,
     pub th_2: BytesHashLen,
@@ -519,6 +534,7 @@ pub struct ProcessingM2 {
 #[derive(Debug)]
 #[repr(C)]
 pub struct ProcessedM2 {
+    pub method: EDHOCMethod,
     pub prk_3e2m: BytesHashLen,
     pub prk_4e3m: BytesHashLen,
     pub th_3: BytesHashLen,
@@ -526,6 +542,7 @@ pub struct ProcessedM2 {
 
 #[derive(Debug)]
 pub struct ProcessingM3 {
+    pub method: EDHOCMethod,
     pub mac_3: BytesMac3,
     pub y: BytesP256ElemLen, // ephemeral private key of the responder
     pub prk_3e2m: BytesHashLen,

@@ -96,6 +96,7 @@ impl EadItemsC {
 #[derive(Debug)]
 #[repr(C)]
 pub struct ProcessingM2C {
+    pub method: EDHOCMethod,
     pub mac_2: BytesMac2,
     pub prk_2e: BytesHashLen,
     pub th_2: BytesHashLen,
@@ -110,6 +111,7 @@ pub struct ProcessingM2C {
 impl Default for ProcessingM2C {
     fn default() -> Self {
         ProcessingM2C {
+            method: EDHOCMethod::StatStat,
             mac_2: Default::default(),
             prk_2e: Default::default(),
             th_2: Default::default(),
@@ -126,6 +128,7 @@ impl Default for ProcessingM2C {
 impl ProcessingM2C {
     pub fn to_rust(&self) -> ProcessingM2 {
         ProcessingM2 {
+            method: self.method,
             mac_2: self.mac_2,
             prk_2e: self.prk_2e,
             th_2: self.th_2,

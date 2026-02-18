@@ -34,28 +34,31 @@ pub fn r_process_message_1(
     // g_x will be saved to the state
     if let Ok((method, suites_i, g_x, c_i, ead_1)) = parse_message_1(message_1) {
         // verify that the method is supported
-        if method == EDHOC_METHOD {
-            // Step 2: verify that the selected cipher suite is supported
-            if suites_i[suites_i.len() - 1] == EDHOC_SUPPORTED_SUITES[0] {
-                // hash message_1 and save the hash to the state to avoid saving the whole message
-                let h_message_1 = crypto.sha256_digest(message_1.as_slice());
-
-                Ok((
-                    ProcessingM1 {
-                        y: state.y,
-                        g_y: state.g_y,
+        match EDHOCMethod::try_from(method) {
+            Ok(_supported_method) => {
+                // Step 2: verify that the selected cipher suite is supported
+                if suites_i[suites_i.len() - 1] == EDHOC_SUPPORTED_SUITES[0] {
+                    // hash message_1 and save the hash to the state to avoid saving the whole message
+                    let h_message_1 = crypto.sha256_digest(message_1.as_slice());
+                    let method =
+                        EDHOCMethod::try_from(method).map_err(|_| EDHOCError::UnsupportedMethod)?;
+                    Ok((
+                        ProcessingM1 {
+                            method,
+                            y: state.y,
+                            g_y: state.g_y,
+                            c_i,
+                            g_x,
+                            h_message_1,
+                        },
                         c_i,
-                        g_x,
-                        h_message_1,
-                    },
-                    c_i,
-                    ead_1,
-                ))
-            } else {
-                Err(EDHOCError::UnsupportedCipherSuite)
+                        ead_1,
+                    ))
+                } else {
+                    Err(EDHOCError::UnsupportedCipherSuite)
+                }
             }
-        } else {
-            Err(EDHOCError::UnsupportedMethod)
+            Err(_) => Err(EDHOCError::UnsupportedMethod),
         }
     } else {
         Err(EDHOCError::ParsingError)
@@ -77,7 +80,13 @@ pub fn r_prepare_message_2(
     // compute prk_3e2m
     let prk_2e = compute_prk_2e(crypto, &state.y, &state.g_x, &th_2);
     let salt_3e2m = compute_salt_3e2m(crypto, &prk_2e, &th_2);
-    let prk_3e2m = compute_prk_3e2m(crypto, &salt_3e2m, r, &state.g_x);
+
+    let prk_3e2m = match cred_r.key {
+        CredentialKey::EC2Compact(_public_key) => {
+            compute_prk_3e2m(crypto, &salt_3e2m, r, &state.g_x)
+        }
+        CredentialKey::Symmetric(_psk) => todo!("PSK not implemented"),
+    };
 
     let id_cred_r = match cred_transfer {
         CredentialTransfer::ByValue => cred_r.by_value()?,
@@ -113,6 +122,7 @@ pub fn r_prepare_message_2(
 
     Ok((
         WaitM3 {
+            method: state.method,
             y: state.y,
             prk_3e2m: prk_3e2m,
             th_3: th_3,
@@ -134,6 +144,7 @@ pub fn r_parse_message_3(
         if let Ok((id_cred_i, mac_3, ead_3)) = decoded_p3_res {
             Ok((
                 ProcessingM3 {
+                    method: state.method,
                     mac_3,
                     y: state.y,
                     prk_3e2m: state.prk_3e2m,
@@ -162,11 +173,12 @@ pub fn r_verify_message_3(
     // compute salt_4e3m
     let salt_4e3m = compute_salt_4e3m(crypto, &state.prk_3e2m, &state.th_3);
 
-    let prk_4e3m = match valid_cred_i.key {
-        CredentialKey::EC2Compact(public_key) => {
+    let prk_4e3m = match (valid_cred_i.key, state.method) {
+        (CredentialKey::EC2Compact(public_key), EDHOCMethod::StatStat) => {
             compute_prk_4e3m(crypto, &salt_4e3m, &state.y, &public_key)
         }
-        CredentialKey::Symmetric(_psk) => todo!("PSK not implemented"),
+        (CredentialKey::Symmetric(_psk), EDHOCMethod::PSK) => todo!("PSK not implemented"),
+        _ => Err(EDHOCError::UnsupportedMethod)?,
     };
 
     // compute mac_3
@@ -244,13 +256,20 @@ pub fn i_prepare_message_1(
     ead_1: &EadItems,
 ) -> Result<(WaitM2, BufferMessage1), EDHOCError> {
     // Encode message_1 as a sequence of CBOR encoded data items as specified in Section 5.2.1
-    let message_1 = encode_message_1(state.method, &state.suites_i, &state.g_x, c_i, &ead_1)?;
+    let message_1 = encode_message_1(
+        state.method.into(),
+        &state.suites_i,
+        &state.g_x,
+        c_i,
+        &ead_1,
+    )?;
 
     // hash message_1 here to avoid saving the whole message in the state
     let h_message_1 = crypto.sha256_digest(message_1.as_slice());
 
     Ok((
         WaitM2 {
+            method: state.method,
             x: state.x,
             h_message_1,
         },
@@ -278,6 +297,7 @@ pub fn i_parse_message_2<'a>(
 
         if let Ok((c_r_2, id_cred_r, mac_2, ead_2)) = plaintext_2_decoded {
             let state = ProcessingM2 {
+                method: state.method,
                 mac_2,
                 prk_2e,
                 th_2,
@@ -307,11 +327,12 @@ pub fn i_verify_message_2(
     // verify mac_2
     let salt_3e2m = compute_salt_3e2m(crypto, &state.prk_2e, &state.th_2);
 
-    let prk_3e2m = match valid_cred_r.key {
-        CredentialKey::EC2Compact(public_key) => {
+    let prk_3e2m = match (valid_cred_r.key, state.method) {
+        (CredentialKey::EC2Compact(public_key), EDHOCMethod::StatStat) => {
             compute_prk_3e2m(crypto, &salt_3e2m, &state.x, &public_key)
         }
-        CredentialKey::Symmetric(_psk) => todo!("PSK not implemented"),
+        (CredentialKey::Symmetric(_psk), EDHOCMethod::PSK) => todo!("PSK not implemented"),
+        _ => Err(EDHOCError::UnsupportedMethod)?,
     };
 
     let expected_mac_2 = compute_mac_2(
@@ -336,10 +357,16 @@ pub fn i_verify_message_2(
         // message 3 processing
 
         let salt_4e3m = compute_salt_4e3m(crypto, &prk_3e2m, &th_3);
-
-        let prk_4e3m = compute_prk_4e3m(crypto, &salt_4e3m, i, &state.g_y);
+        let prk_4e3m = match (valid_cred_r.key, state.method) {
+            (CredentialKey::EC2Compact(_public_key), EDHOCMethod::StatStat) => {
+                compute_prk_4e3m(crypto, &salt_4e3m, i, &state.g_y)
+            }
+            (CredentialKey::Symmetric(_psk), EDHOCMethod::PSK) => todo!("PSK not implemented"),
+            _ => Err(EDHOCError::UnsupportedMethod)?,
+        };
 
         let state = ProcessedM2 {
+            method: state.method,
             prk_3e2m: prk_3e2m,
             prk_4e3m: prk_4e3m,
             th_3: th_3,
@@ -428,7 +455,7 @@ pub fn i_complete_without_message_4(state: &WaitM4) -> Result<Completed, EDHOCEr
 }
 
 fn encode_message_1(
-    method: u8,
+    method: EDHOCMethod,
     suites: &EdhocBuffer<MAX_SUITES_LEN>,
     g_x: &BytesP256ElemLen,
     c_i: ConnId,
@@ -436,7 +463,7 @@ fn encode_message_1(
 ) -> Result<BufferMessage1, EDHOCError> {
     let mut output = BufferMessage1::new();
 
-    output.push(method).unwrap(); // CBOR unsigned int less than 24 is encoded verbatim
+    output.push(method.into()).unwrap(); // CBOR unsigned int less than 24 is encoded verbatim
 
     if suites.len() == 1 {
         // only one suite, will be encoded as a single integer
@@ -970,7 +997,7 @@ mod tests {
     // test vectors (TV)
 
     // message_1 (first_time)
-    const METHOD_TV_FIRST_TIME: u8 = 0x03;
+    const METHOD_TV_FIRST_TIME: EDHOCMethod = EDHOCMethod::StatStat;
     const SUITES_I_TV_FIRST_TIME: EdhocBuffer<MAX_SUITES_LEN> =
         EdhocBuffer::new_from_array(&hex!("06"));
     const G_X_TV_FIRST_TIME: BytesP256ElemLen =
@@ -982,7 +1009,7 @@ mod tests {
     ));
 
     // message_1 (second time)
-    const METHOD_TV: u8 = 0x03;
+    const METHOD_TV: EDHOCMethod = EDHOCMethod::StatStat;
     // manually modified test vector to include a single supported cipher suite
     const SUITES_I_TV: EdhocBuffer<MAX_SUITES_LEN> = EdhocBuffer::new_from_array(&hex!("0602"));
     const G_X_TV: BytesP256ElemLen =
@@ -1161,7 +1188,7 @@ mod tests {
         assert!(res.is_ok());
         let (method, suites_i, g_x, c_i, ead_1) = res.unwrap();
 
-        assert_eq!(method, METHOD_TV_FIRST_TIME);
+        assert_eq!(method, METHOD_TV_FIRST_TIME.into());
         assert_eq!(suites_i, SUITES_I_TV_FIRST_TIME);
         assert_eq!(g_x, G_X_TV_FIRST_TIME);
         assert_eq!(c_i, C_I_TV_FIRST_TIME);
@@ -1172,7 +1199,7 @@ mod tests {
         assert!(res.is_ok());
         let (method, suites_i, g_x, c_i, ead_1) = res.unwrap();
 
-        assert_eq!(method, METHOD_TV);
+        assert_eq!(method, METHOD_TV.into());
         assert_eq!(suites_i, SUITES_I_TV);
         assert_eq!(g_x, G_X_TV);
         assert_eq!(c_i, C_I_TV);

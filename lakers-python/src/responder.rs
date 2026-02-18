@@ -51,7 +51,7 @@ impl PyEdhocResponder {
             r,
             cred_r,
             start: Some(ResponderStart {
-                method: EDHOCMethod::StatStat.into(),
+                method: EDHOCMethod::StatStat,
                 y,
                 g_y,
             }),

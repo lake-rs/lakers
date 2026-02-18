@@ -53,7 +53,7 @@ impl PyEdhocInitiator {
             start: InitiatorStart {
                 x,
                 g_x,
-                method: EDHOCMethod::StatStat.into(),
+                method: EDHOCMethod::StatStat,
                 suites_i,
             },
             wait_m2: None,
