@@ -34,14 +34,14 @@ pub fn r_process_message_1(
     // g_x will be saved to the state
     if let Ok((method, suites_i, g_x, c_i, ead_1)) = parse_message_1(message_1) {
         // verify that the method is supported
-        match EDHOCMethod::try_from(method) {
-            Ok(_supported_method) => {
+        let method = EDHOCMethod::try_from(method)?;
+
+        match method {
+            EDHOCMethod::StatStat => {
                 // Step 2: verify that the selected cipher suite is supported
                 if suites_i[suites_i.len() - 1] == EDHOC_SUPPORTED_SUITES[0] {
                     // hash message_1 and save the hash to the state to avoid saving the whole message
                     let h_message_1 = crypto.sha256_digest(message_1.as_slice());
-                    let method =
-                        EDHOCMethod::try_from(method).map_err(|_| EDHOCError::UnsupportedMethod)?;
                     Ok((
                         ProcessingM1 {
                             method,
@@ -58,7 +58,7 @@ pub fn r_process_message_1(
                     Err(EDHOCError::UnsupportedCipherSuite)
                 }
             }
-            Err(_) => Err(EDHOCError::UnsupportedMethod),
+            _ => Err(EDHOCError::UnsupportedMethod),
         }
     } else {
         Err(EDHOCError::ParsingError)
@@ -173,12 +173,11 @@ pub fn r_verify_message_3(
     // compute salt_4e3m
     let salt_4e3m = compute_salt_4e3m(crypto, &state.prk_3e2m, &state.th_3);
 
-    let prk_4e3m = match (valid_cred_i.key, state.method) {
-        (CredentialKey::EC2Compact(public_key), EDHOCMethod::StatStat) => {
+    let prk_4e3m = match valid_cred_i.key {
+        CredentialKey::EC2Compact(public_key) => {
             compute_prk_4e3m(crypto, &salt_4e3m, &state.y, &public_key)
         }
-        (CredentialKey::Symmetric(_psk), EDHOCMethod::PSK) => todo!("PSK not implemented"),
-        _ => Err(EDHOCError::UnsupportedMethod)?,
+        CredentialKey::Symmetric(_psk) => todo!("PSK not implemented"),
     };
 
     // compute mac_3
@@ -327,12 +326,11 @@ pub fn i_verify_message_2(
     // verify mac_2
     let salt_3e2m = compute_salt_3e2m(crypto, &state.prk_2e, &state.th_2);
 
-    let prk_3e2m = match (valid_cred_r.key, state.method) {
-        (CredentialKey::EC2Compact(public_key), EDHOCMethod::StatStat) => {
+    let prk_3e2m = match valid_cred_r.key {
+        CredentialKey::EC2Compact(public_key) => {
             compute_prk_3e2m(crypto, &salt_3e2m, &state.x, &public_key)
         }
-        (CredentialKey::Symmetric(_psk), EDHOCMethod::PSK) => todo!("PSK not implemented"),
-        _ => Err(EDHOCError::UnsupportedMethod)?,
+        CredentialKey::Symmetric(_psk) => todo!("PSK not implemented"),
     };
 
     let expected_mac_2 = compute_mac_2(
@@ -357,12 +355,11 @@ pub fn i_verify_message_2(
         // message 3 processing
 
         let salt_4e3m = compute_salt_4e3m(crypto, &prk_3e2m, &th_3);
-        let prk_4e3m = match (valid_cred_r.key, state.method) {
-            (CredentialKey::EC2Compact(_public_key), EDHOCMethod::StatStat) => {
+        let prk_4e3m = match valid_cred_r.key {
+            CredentialKey::EC2Compact(_public_key) => {
                 compute_prk_4e3m(crypto, &salt_4e3m, i, &state.g_y)
             }
-            (CredentialKey::Symmetric(_psk), EDHOCMethod::PSK) => todo!("PSK not implemented"),
-            _ => Err(EDHOCError::UnsupportedMethod)?,
+            CredentialKey::Symmetric(_psk) => todo!("PSK not implemented"),
         };
 
         let state = ProcessedM2 {
