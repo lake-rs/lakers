@@ -57,6 +57,7 @@ pub fn r_process_message_1(
                     Err(EDHOCError::UnsupportedCipherSuite)
                 }
             }
+            // If lakers-shared gets merged into lakers, this can be removed:
             _ => Err(EDHOCError::UnsupportedMethod),
         }
     } else {
@@ -252,13 +253,7 @@ pub fn i_prepare_message_1(
     ead_1: &EadItems,
 ) -> Result<(WaitM2, BufferMessage1), EDHOCError> {
     // Encode message_1 as a sequence of CBOR encoded data items as specified in Section 5.2.1
-    let message_1 = encode_message_1(
-        state.method.into(),
-        &state.suites_i,
-        &state.g_x,
-        c_i,
-        &ead_1,
-    )?;
+    let message_1 = encode_message_1(state.method, &state.suites_i, &state.g_x, c_i, &ead_1)?;
 
     // hash message_1 here to avoid saving the whole message in the state
     let h_message_1 = crypto.sha256_digest(message_1.as_slice());
