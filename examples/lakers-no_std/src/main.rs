@@ -108,7 +108,6 @@ fn main() -> ! {
         );
         let responder = EdhocResponder::new(
             lakers_crypto::default_crypto(),
-            EDHOCMethod::StatStat,
             R.try_into().expect("Wrong length of responder private key"),
             cred_r.clone(),
         );

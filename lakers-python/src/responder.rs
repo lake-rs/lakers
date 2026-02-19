@@ -50,11 +50,7 @@ impl PyEdhocResponder {
         Ok(Self {
             r,
             cred_r,
-            start: Some(ResponderStart {
-                method: EDHOCMethod::StatStat,
-                y,
-                g_y,
-            }),
+            start: Some(ResponderStart { y, g_y }),
             processing_m1: None,
             wait_m3: None,
             processing_m3: None,

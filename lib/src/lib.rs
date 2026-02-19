@@ -107,21 +107,12 @@ pub struct EdhocResponderDone<Crypto: CryptoTrait> {
 }
 
 impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
-    pub fn new(
-        mut crypto: Crypto,
-        method: EDHOCMethod,
-        r: BytesP256ElemLen,
-        cred_r: Credential,
-    ) -> Self {
+    pub fn new(mut crypto: Crypto, r: BytesP256ElemLen, cred_r: Credential) -> Self {
         trace!("Initializing EdhocResponder");
         let (y, g_y) = crypto.p256_generate_key_pair();
 
         EdhocResponder {
-            state: ResponderStart {
-                y,
-                g_y,
-                method: method.into(),
-            },
+            state: ResponderStart { y, g_y },
             r,
             cred_r,
             crypto,
@@ -566,7 +557,6 @@ mod test {
     fn test_new_responder() {
         let _responder = EdhocResponder::new(
             default_crypto(),
-            EDHOCMethod::StatStat,
             R.try_into().expect("Wrong length of responder private key"),
             Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap(),
         );
@@ -589,7 +579,6 @@ mod test {
     fn test_process_message_1() {
         let responder = EdhocResponder::new(
             default_crypto(),
-            EDHOCMethod::StatStat,
             R.try_into().expect("Wrong length of responder private key"),
             Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap(),
         );
@@ -603,7 +592,6 @@ mod test {
         // responder or initiator
         let responder = EdhocResponder::new(
             default_crypto(),
-            EDHOCMethod::StatStat,
             R.try_into().expect("Wrong length of responder private key"),
             Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap(),
         );
@@ -633,7 +621,6 @@ mod test {
 
         let responder = EdhocResponder::new(
             default_crypto(),
-            EDHOCMethod::StatStat,
             R.try_into().expect("Wrong length of responder private key"),
             cred_r.clone(),
         ); // has to select an identity before learning who is I
@@ -753,7 +740,6 @@ mod test_authz {
         );
         let responder = EdhocResponder::new(
             default_crypto(),
-            EDHOCMethod::StatStat,
             R.try_into().expect("Wrong length of responder private key"),
             cred_r.clone(),
         );

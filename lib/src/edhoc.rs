@@ -80,13 +80,7 @@ pub fn r_prepare_message_2(
     // compute prk_3e2m
     let prk_2e = compute_prk_2e(crypto, &state.y, &state.g_x, &th_2);
     let salt_3e2m = compute_salt_3e2m(crypto, &prk_2e, &th_2);
-
-    let prk_3e2m = match cred_r.key {
-        CredentialKey::EC2Compact(_public_key) => {
-            compute_prk_3e2m(crypto, &salt_3e2m, r, &state.g_x)
-        }
-        CredentialKey::Symmetric(_psk) => todo!("PSK not implemented"),
-    };
+    let prk_3e2m = compute_prk_3e2m(crypto, &salt_3e2m, r, &state.g_x);
 
     let id_cred_r = match cred_transfer {
         CredentialTransfer::ByValue => cred_r.by_value()?,
@@ -345,12 +339,8 @@ pub fn i_verify_message_2(
         // message 3 processing
 
         let salt_4e3m = compute_salt_4e3m(crypto, &prk_3e2m, &th_3);
-        let prk_4e3m = match valid_cred_r.key {
-            CredentialKey::EC2Compact(_public_key) => {
-                compute_prk_4e3m(crypto, &salt_4e3m, i, &state.g_y)
-            }
-            CredentialKey::Symmetric(_psk) => todo!("PSK not implemented"),
-        };
+
+        let prk_4e3m = compute_prk_4e3m(crypto, &salt_4e3m, i, &state.g_y);
 
         let state = ProcessedM2 {
             prk_3e2m: prk_3e2m,
