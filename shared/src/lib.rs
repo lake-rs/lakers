@@ -492,6 +492,7 @@ pub struct ResponderStart {
 
 #[derive(Debug)]
 pub struct ProcessingM1 {
+    pub method: EDHOCMethod,
     pub y: BytesP256ElemLen,
     pub g_y: BytesP256ElemLen,
     pub c_i: ConnId,
@@ -502,20 +503,25 @@ pub struct ProcessingM1 {
 #[derive(Clone, Debug)]
 #[repr(C)]
 pub struct WaitM2 {
+    pub method: EDHOCMethod,
     pub x: BytesP256ElemLen, // ephemeral private key of the initiator
     pub h_message_1: BytesHashLen,
 }
 
 #[derive(Debug)]
 pub struct WaitM3 {
+    pub method: EDHOCMethod,
     pub y: BytesP256ElemLen, // ephemeral private key of the responder
     pub prk_3e2m: BytesHashLen,
     pub th_3: BytesHashLen,
 }
-
+#[derive(Debug)]
+pub enum ProcessingM2 {
+    StatStat(ProcessingM2StatStat), // PSK(PProcessingM2PSK) // To be added later
+}
 #[derive(Debug)]
 #[repr(C)]
-pub struct ProcessingM2 {
+pub struct ProcessingM2StatStat {
     pub mac_2: BytesMac2,
     pub prk_2e: BytesHashLen,
     pub th_2: BytesHashLen,
@@ -530,13 +536,17 @@ pub struct ProcessingM2 {
 #[derive(Debug)]
 #[repr(C)]
 pub struct ProcessedM2 {
+    pub method: EDHOCMethod,
     pub prk_3e2m: BytesHashLen,
     pub prk_4e3m: BytesHashLen,
     pub th_3: BytesHashLen,
 }
-
 #[derive(Debug)]
-pub struct ProcessingM3 {
+pub enum ProcessingM3 {
+    StatStat(ProcessingM3StatStat), // PSK(ProcessingM3PSK) // To be added later
+}
+#[derive(Debug)]
+pub struct ProcessingM3StatStat {
     pub mac_3: BytesMac3,
     pub y: BytesP256ElemLen, // ephemeral private key of the responder
     pub prk_3e2m: BytesHashLen,
@@ -544,14 +554,6 @@ pub struct ProcessingM3 {
     pub id_cred_i: IdCred,
     pub plaintext_3: BufferPlaintext3,
     pub ead_3: EadItems,
-}
-
-#[derive(Debug)]
-pub struct PreparingM3 {
-    pub prk_3e2m: BytesHashLen,
-    pub prk_4e3m: BytesHashLen,
-    pub th_3: BytesHashLen,
-    pub mac_3: BytesMac3,
 }
 
 #[derive(Debug)]
