@@ -685,11 +685,7 @@ fn encrypt_message_3(
     suite: EDHOCSuite,
 ) -> BufferMessage3 {
     let mut output: BufferMessage3 = BufferMessage3::new();
-    let tag_len = match suite {
-        EDHOCSuite::CipherSuite2 => 8,
-        EDHOCSuite::CipherSuite3 => 16,
-    };
-    let bytestring_length = plaintext_3.len() + tag_len;
+    let bytestring_length = plaintext_3.len() + suite.tag_len();
     // FIXME: Reuse CBOR encoder
     if bytestring_length < 24 {
         output
@@ -791,11 +787,7 @@ fn encrypt_message_4(
     suite: EDHOCSuite,
 ) -> BufferMessage4 {
     let mut output: BufferMessage4 = BufferMessage4::new();
-    let tag_len = match suite {
-        EDHOCSuite::CipherSuite2 => 8,
-        EDHOCSuite::CipherSuite3 => 16,
-    };
-    let bytestring_length = plaintext_4.len() + tag_len;
+    let bytestring_length = plaintext_4.len() + suite.tag_len();
     // FIXME: Reuse CBOR encoder
     if bytestring_length < 24 {
         output

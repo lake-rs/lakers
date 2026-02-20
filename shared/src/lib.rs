@@ -400,6 +400,15 @@ pub enum EDHOCSuite {
     // CipherSuite4 = 4,
 }
 
+impl EDHOCSuite {
+    pub const fn tag_len(&self) -> usize {
+        match self {
+            EDHOCSuite::CipherSuite2 => 8,
+            EDHOCSuite::CipherSuite3 => 16,
+        }
+    }
+}
+
 impl From<EDHOCSuite> for u8 {
     fn from(suite: EDHOCSuite) -> u8 {
         suite as u8
