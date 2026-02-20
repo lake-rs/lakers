@@ -34,28 +34,31 @@ pub fn r_process_message_1(
     // g_x will be saved to the state
     if let Ok((method, suites_i, g_x, c_i, ead_1)) = parse_message_1(message_1) {
         // verify that the method is supported
-        if method == EDHOC_METHOD {
-            // Step 2: verify that the selected cipher suite is supported
-            if suites_i[suites_i.len() - 1] == EDHOC_SUPPORTED_SUITES[0] {
-                // hash message_1 and save the hash to the state to avoid saving the whole message
-                let h_message_1 = crypto.sha256_digest(message_1.as_slice());
+        let method = EDHOCMethod::try_from(method)?;
 
-                Ok((
-                    ProcessingM1 {
-                        y: state.y,
-                        g_y: state.g_y,
+        match method {
+            EDHOCMethod::StatStat => {
+                // Step 2: verify that the selected cipher suite is supported
+                if suites_i[suites_i.len() - 1] == EDHOC_SUPPORTED_SUITES[0] {
+                    // hash message_1 and save the hash to the state to avoid saving the whole message
+                    let h_message_1 = crypto.sha256_digest(message_1.as_slice());
+                    Ok((
+                        ProcessingM1 {
+                            y: state.y,
+                            g_y: state.g_y,
+                            c_i,
+                            g_x,
+                            h_message_1,
+                        },
                         c_i,
-                        g_x,
-                        h_message_1,
-                    },
-                    c_i,
-                    ead_1,
-                ))
-            } else {
-                Err(EDHOCError::UnsupportedCipherSuite)
+                        ead_1,
+                    ))
+                } else {
+                    Err(EDHOCError::UnsupportedCipherSuite)
+                }
             }
-        } else {
-            Err(EDHOCError::UnsupportedMethod)
+            // If lakers-shared gets merged into lakers, this can be removed:
+            _ => Err(EDHOCError::UnsupportedMethod),
         }
     } else {
         Err(EDHOCError::ParsingError)
@@ -428,7 +431,7 @@ pub fn i_complete_without_message_4(state: &WaitM4) -> Result<Completed, EDHOCEr
 }
 
 fn encode_message_1(
-    method: u8,
+    method: EDHOCMethod,
     suites: &EdhocBuffer<MAX_SUITES_LEN>,
     g_x: &BytesP256ElemLen,
     c_i: ConnId,
@@ -436,7 +439,7 @@ fn encode_message_1(
 ) -> Result<BufferMessage1, EDHOCError> {
     let mut output = BufferMessage1::new();
 
-    output.push(method).unwrap(); // CBOR unsigned int less than 24 is encoded verbatim
+    output.push(method.into()).unwrap(); // CBOR unsigned int less than 24 is encoded verbatim
 
     if suites.len() == 1 {
         // only one suite, will be encoded as a single integer
@@ -970,7 +973,7 @@ mod tests {
     // test vectors (TV)
 
     // message_1 (first_time)
-    const METHOD_TV_FIRST_TIME: u8 = 0x03;
+    const METHOD_TV_FIRST_TIME: EDHOCMethod = EDHOCMethod::StatStat;
     const SUITES_I_TV_FIRST_TIME: EdhocBuffer<MAX_SUITES_LEN> =
         EdhocBuffer::new_from_array(&hex!("06"));
     const G_X_TV_FIRST_TIME: BytesP256ElemLen =
@@ -982,7 +985,7 @@ mod tests {
     ));
 
     // message_1 (second time)
-    const METHOD_TV: u8 = 0x03;
+    const METHOD_TV: EDHOCMethod = EDHOCMethod::StatStat;
     // manually modified test vector to include a single supported cipher suite
     const SUITES_I_TV: EdhocBuffer<MAX_SUITES_LEN> = EdhocBuffer::new_from_array(&hex!("0602"));
     const G_X_TV: BytesP256ElemLen =
@@ -1161,7 +1164,7 @@ mod tests {
         assert!(res.is_ok());
         let (method, suites_i, g_x, c_i, ead_1) = res.unwrap();
 
-        assert_eq!(method, METHOD_TV_FIRST_TIME);
+        assert_eq!(method, METHOD_TV_FIRST_TIME.into());
         assert_eq!(suites_i, SUITES_I_TV_FIRST_TIME);
         assert_eq!(g_x, G_X_TV_FIRST_TIME);
         assert_eq!(c_i, C_I_TV_FIRST_TIME);
@@ -1172,7 +1175,7 @@ mod tests {
         assert!(res.is_ok());
         let (method, suites_i, g_x, c_i, ead_1) = res.unwrap();
 
-        assert_eq!(method, METHOD_TV);
+        assert_eq!(method, METHOD_TV.into());
         assert_eq!(suites_i, SUITES_I_TV);
         assert_eq!(g_x, G_X_TV);
         assert_eq!(c_i, C_I_TV);

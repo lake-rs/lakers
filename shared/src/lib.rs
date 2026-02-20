@@ -361,12 +361,24 @@ impl ConnId {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Copy, Clone)]
+#[repr(C)]
+#[non_exhaustive]
 pub enum EDHOCMethod {
     StatStat = 3,
-    // add others, such as:
-    // PSK1 = ?,
-    // PSK2 = ?,
+    // PSK = 4,
+}
+
+impl TryFrom<u8> for EDHOCMethod {
+    type Error = EDHOCError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            3 => Ok(EDHOCMethod::StatStat),
+            // 4 => Ok(EDHOCMethod::PSK),
+            _ => Err(EDHOCError::UnsupportedMethod),
+        }
+    }
 }
 
 impl From<EDHOCMethod> for u8 {
@@ -467,14 +479,13 @@ impl ErrCode {
 #[repr(C)]
 pub struct InitiatorStart {
     pub suites_i: EdhocBuffer<MAX_SUITES_LEN>,
-    pub method: u8,
+    pub method: EDHOCMethod,
     pub x: BytesP256ElemLen,   // ephemeral private key of myself
     pub g_x: BytesP256ElemLen, // ephemeral public key of myself
 }
 
 #[derive(Debug)]
 pub struct ResponderStart {
-    pub method: u8,
     pub y: BytesP256ElemLen,   // ephemeral private key of myself
     pub g_y: BytesP256ElemLen, // ephemeral public key of myself
 }

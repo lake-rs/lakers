@@ -31,7 +31,7 @@ pub unsafe extern "C" fn initiator_new(initiator: *mut EdhocInitiator) -> i8 {
         x,
         g_x,
         suites_i,
-        method: EDHOCMethod::StatStat.into(),
+        method: EDHOCMethod::StatStat,
     };
 
     core::ptr::write(&mut (*initiator).start, start);
