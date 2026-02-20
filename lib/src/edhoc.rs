@@ -1402,7 +1402,6 @@ mod tests {
             &MESSAGE_3_CIPHER_3,
             EDHOCSuite::CipherSuite3,
         );
-        println!("{:?}", plaintext_3);
         assert!(plaintext_3.is_ok());
         assert_eq!(plaintext_3.unwrap(), PLAINTEXT_3_TV);
     }
