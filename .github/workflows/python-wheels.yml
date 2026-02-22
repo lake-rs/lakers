@@ -41,7 +41,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-          # currently for 3.13; could be disabled when 3.13 is out until 3.14 is being tested
+          # practical while new releases are coming out, and doesn't hurt to keep around.
           allow-prereleases: true
           architecture: ${{ (startsWith(matrix.os, 'macos') || endsWith(matrix.os, '-arm')) && 'arm64' || 'x64' }}
 
