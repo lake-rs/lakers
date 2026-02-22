@@ -16,6 +16,7 @@ jobs:
       matrix:
         os: [
             ubuntu-latest,
+            ubuntu-24.04-arm,
             windows-latest,
             macos-latest,
         ] # see https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners/about-github-hosted-runners
