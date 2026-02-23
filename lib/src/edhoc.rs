@@ -174,65 +174,69 @@ pub fn r_parse_message_3(
 }
 
 pub fn r_verify_message_3(
-    state: &mut ProcessingM3,
+    state: &ProcessingM3,
     crypto: &mut impl CryptoTrait,
     valid_cred_i: Credential,
 ) -> Result<(ProcessedM3, BytesHashLen), EDHOCError> {
     match state {
-        ProcessingM3::StatStat(inner_state) => {
-            // compute salt_4e3m
-            let salt_4e3m = compute_salt_4e3m(crypto, &inner_state.prk_3e2m, &inner_state.th_3);
+        ProcessingM3::StatStat(inner) => r_verify_message_3_statstat(inner, crypto, valid_cred_i), // ProcessingM3::Psk(inner) => r_verify_message_3_psk(inner, crypto, valid_cred_i),
+    }
+}
+pub fn r_verify_message_3_statstat(
+    inner_state: &ProcessingM3StatStat,
+    crypto: &mut impl CryptoTrait,
+    valid_cred_i: Credential,
+) -> Result<(ProcessedM3, BytesHashLen), EDHOCError> {
+    // compute salt_4e3m
+    let salt_4e3m = compute_salt_4e3m(crypto, &inner_state.prk_3e2m, &inner_state.th_3);
 
-            let prk_4e3m = match valid_cred_i.key {
-                CredentialKey::EC2Compact(public_key) => {
-                    compute_prk_4e3m(crypto, &salt_4e3m, &inner_state.y, &public_key)
-                }
-                CredentialKey::Symmetric(_psk) => todo!("PSK not implemented"),
-            };
+    let prk_4e3m = match valid_cred_i.key {
+        CredentialKey::EC2Compact(public_key) => {
+            compute_prk_4e3m(crypto, &salt_4e3m, &inner_state.y, &public_key)
+        }
+        CredentialKey::Symmetric(_psk) => todo!("PSK not implemented"),
+    };
 
-            // compute mac_3
-            let expected_mac_3 = compute_mac_3(
-                crypto,
-                &prk_4e3m,
-                &inner_state.th_3,
-                inner_state.id_cred_i.as_full_value(),
-                valid_cred_i.bytes.as_slice(),
-                &inner_state.ead_3,
-            );
+    // compute mac_3
+    let expected_mac_3 = compute_mac_3(
+        crypto,
+        &prk_4e3m,
+        &inner_state.th_3,
+        inner_state.id_cred_i.as_full_value(),
+        valid_cred_i.bytes.as_slice(),
+        &inner_state.ead_3,
+    );
 
-            // verify mac_3
-            if inner_state.mac_3 == expected_mac_3 {
-                let th_4 = compute_th_4(
-                    crypto,
-                    &inner_state.th_3,
-                    &inner_state.plaintext_3,
-                    valid_cred_i.bytes.as_slice(),
-                );
+    // verify mac_3
+    if inner_state.mac_3 == expected_mac_3 {
+        let th_4 = compute_th_4(
+            crypto,
+            &inner_state.th_3,
+            &inner_state.plaintext_3,
+            valid_cred_i.bytes.as_slice(),
+        );
 
-                // compute prk_out
-                // PRK_out = EDHOC-KDF( PRK_4e3m, 7, TH_4, hash_length )
-                let mut prk_out: BytesHashLen = Default::default();
-                edhoc_kdf(crypto, &prk_4e3m, 7u8, &th_4, &mut prk_out);
+        // compute prk_out
+        // PRK_out = EDHOC-KDF( PRK_4e3m, 7, TH_4, hash_length )
+        let mut prk_out: BytesHashLen = Default::default();
+        edhoc_kdf(crypto, &prk_4e3m, 7u8, &th_4, &mut prk_out);
 
-                // compute prk_exporter from prk_out
-                // PRK_exporter  = EDHOC-KDF( PRK_out, 10, h'', hash_length )
-                let mut prk_exporter = BytesHashLen::default();
-                edhoc_kdf(crypto, &prk_out, 10u8, &[], &mut prk_exporter);
+        // compute prk_exporter from prk_out
+        // PRK_exporter  = EDHOC-KDF( PRK_out, 10, h'', hash_length )
+        let mut prk_exporter = BytesHashLen::default();
+        edhoc_kdf(crypto, &prk_out, 10u8, &[], &mut prk_exporter);
 
-                Ok((
-                    ProcessedM3 {
-                        prk_4e3m: prk_4e3m,
-                        th_4: th_4,
-                        prk_out: prk_out,
-                        prk_exporter: prk_exporter,
-                    },
-                    prk_out,
-                ))
-            } else {
-                Err(EDHOCError::MacVerificationFailed)
-            }
-        } // Not needed
-          // _ => Err(EDHOCError::UnsupportedMethod),
+        Ok((
+            ProcessedM3 {
+                prk_4e3m: prk_4e3m,
+                th_4: th_4,
+                prk_out: prk_out,
+                prk_exporter: prk_exporter,
+            },
+            prk_out,
+        ))
+    } else {
+        Err(EDHOCError::MacVerificationFailed)
     }
 }
 
@@ -337,57 +341,64 @@ pub fn i_verify_message_2(
 ) -> Result<ProcessedM2, EDHOCError> {
     match state {
         ProcessingM2::StatStat(inner_state) => {
-            // verify mac_2
-            let salt_3e2m = compute_salt_3e2m(crypto, &inner_state.prk_2e, &inner_state.th_2);
+            i_verify_message_2_statstat(inner_state, crypto, valid_cred_r, i)
+        } // ProcessingM2::Psk(inner_state) => i_verify_message_2_psk();
+    }
+}
+pub fn i_verify_message_2_statstat(
+    inner_state: &ProcessingM2StatStat,
+    crypto: &mut impl CryptoTrait,
+    valid_cred_r: Credential,
+    i: &BytesP256ElemLen, // I's static private DH key
+) -> Result<ProcessedM2, EDHOCError> {
+    // verify mac_2
+    let salt_3e2m = compute_salt_3e2m(crypto, &inner_state.prk_2e, &inner_state.th_2);
 
-            let prk_3e2m = match valid_cred_r.key {
-                CredentialKey::EC2Compact(public_key) => {
-                    compute_prk_3e2m(crypto, &salt_3e2m, &inner_state.x, &public_key)
-                }
-                CredentialKey::Symmetric(_psk) => todo!("PSK not implemented"),
-            };
+    let prk_3e2m = match valid_cred_r.key {
+        CredentialKey::EC2Compact(public_key) => {
+            compute_prk_3e2m(crypto, &salt_3e2m, &inner_state.x, &public_key)
+        }
+        CredentialKey::Symmetric(_psk) => todo!("PSK not implemented"),
+    };
 
-            let expected_mac_2 = compute_mac_2(
-                crypto,
-                &prk_3e2m,
-                inner_state.c_r,
-                inner_state.id_cred_r.as_full_value(),
-                valid_cred_r.bytes.as_slice(),
-                &inner_state.th_2,
-                &inner_state.ead_2,
-            );
+    let expected_mac_2 = compute_mac_2(
+        crypto,
+        &prk_3e2m,
+        inner_state.c_r,
+        inner_state.id_cred_r.as_full_value(),
+        valid_cred_r.bytes.as_slice(),
+        &inner_state.th_2,
+        &inner_state.ead_2,
+    );
 
-            if inner_state.mac_2 == expected_mac_2 {
-                // step is actually from processing of message_3
-                // but we do it here to avoid storing plaintext_2 in State
-                let th_3 = compute_th_3(
-                    crypto,
-                    &inner_state.th_2,
-                    &inner_state.plaintext_2,
-                    valid_cred_r.bytes.as_slice(),
-                );
-                // message 3 processing
+    if inner_state.mac_2 == expected_mac_2 {
+        // step is actually from processing of message_3
+        // but we do it here to avoid storing plaintext_2 in State
+        let th_3 = compute_th_3(
+            crypto,
+            &inner_state.th_2,
+            &inner_state.plaintext_2,
+            valid_cred_r.bytes.as_slice(),
+        );
+        // message 3 processing
 
-                let salt_4e3m = compute_salt_4e3m(crypto, &prk_3e2m, &th_3);
+        let salt_4e3m = compute_salt_4e3m(crypto, &prk_3e2m, &th_3);
 
-                let prk_4e3m = compute_prk_4e3m(crypto, &salt_4e3m, i, &inner_state.g_y);
+        let prk_4e3m = compute_prk_4e3m(crypto, &salt_4e3m, i, &inner_state.g_y);
 
-                let state = ProcessedM2 {
-                    // FIXME
-                    // We need the method for next step. Since we are in the branch of StatStat,
-                    // we can add EDHOCMethod::StatStat
-                    method: EDHOCMethod::StatStat,
-                    prk_3e2m: prk_3e2m,
-                    prk_4e3m: prk_4e3m,
-                    th_3: th_3,
-                };
+        let state = ProcessedM2 {
+            // FIXME
+            // We need the method for next step. Since we are in the branch of StatStat,
+            // we can add EDHOCMethod::StatStat
+            method: EDHOCMethod::StatStat,
+            prk_3e2m: prk_3e2m,
+            prk_4e3m: prk_4e3m,
+            th_3: th_3,
+        };
 
-                Ok(state)
-            } else {
-                Err(EDHOCError::MacVerificationFailed)
-            }
-        } // Not needed
-          // _ => Err(EDHOCError::UnsupportedMethod),
+        Ok(state)
+    } else {
+        Err(EDHOCError::MacVerificationFailed)
     }
 }
 
