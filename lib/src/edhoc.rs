@@ -129,7 +129,14 @@ pub fn r_parse_message_3(
     crypto: &mut impl CryptoTrait,
     message_3: &BufferMessage3,
 ) -> Result<(ProcessingM3, IdCred, EadItems), EDHOCError> {
-    let plaintext_3 = decrypt_message_3(crypto, &state.prk_3e2m, &state.th_3, message_3);
+    // FIXME: support cipher suite negotiation
+    let plaintext_3 = decrypt_message_3(
+        crypto,
+        &state.prk_3e2m,
+        &state.th_3,
+        message_3,
+        EDHOCSuite::CipherSuite2,
+    );
 
     if let Ok(plaintext_3) = plaintext_3 {
         let decoded_p3_res = decode_plaintext_3(&plaintext_3);
@@ -222,7 +229,14 @@ pub fn r_prepare_message_4(
 ) -> Result<(Completed, BufferMessage4), EDHOCError> {
     // compute ciphertext_4
     let plaintext_4 = encode_plaintext_4(&ead_4)?;
-    let message_4 = encrypt_message_4(crypto, &state.prk_4e3m, &state.th_4, &plaintext_4);
+    // FIXME: support cipher suite negotiation
+    let message_4 = encrypt_message_4(
+        crypto,
+        &state.prk_4e3m,
+        &state.th_4,
+        &plaintext_4,
+        EDHOCSuite::CipherSuite2,
+    );
 
     Ok((
         Completed {
@@ -376,7 +390,14 @@ pub fn i_prepare_message_3(
     );
 
     let plaintext_3 = encode_plaintext_3(id_cred_i.as_encoded_value(), &mac_3, &ead_3)?;
-    let message_3 = encrypt_message_3(crypto, &state.prk_3e2m, &state.th_3, &plaintext_3);
+    // FIXME: support cipher suite negotiation
+    let message_3 = encrypt_message_3(
+        crypto,
+        &state.prk_3e2m,
+        &state.th_3,
+        &plaintext_3,
+        EDHOCSuite::CipherSuite2,
+    );
 
     let th_4 = compute_th_4(crypto, &state.th_3, &plaintext_3, cred_i.bytes.as_slice());
 
@@ -407,7 +428,14 @@ pub fn i_process_message_4(
     crypto: &mut impl CryptoTrait,
     message_4: &BufferMessage4,
 ) -> Result<(Completed, EadItems), EDHOCError> {
-    let plaintext_4 = decrypt_message_4(crypto, &state.prk_4e3m, &state.th_4, &message_4)?;
+    // FIXME: support cipher suite negotiation
+    let plaintext_4 = decrypt_message_4(
+        crypto,
+        &state.prk_4e3m,
+        &state.th_4,
+        &message_4,
+        EDHOCSuite::CipherSuite2,
+    )?;
     let decoded_p4_res = decode_plaintext_4(&plaintext_4);
 
     if let Ok(ead_4) = decoded_p4_res {
@@ -657,9 +685,10 @@ fn encrypt_message_3(
     prk_3e2m: &BytesHashLen,
     th_3: &BytesHashLen,
     plaintext_3: &BufferPlaintext3,
+    suite: EDHOCSuite,
 ) -> BufferMessage3 {
     let mut output: BufferMessage3 = BufferMessage3::new();
-    let bytestring_length = plaintext_3.len() + AES_CCM_TAG_LEN;
+    let bytestring_length = plaintext_3.len() + suite.tag_len();
     // FIXME: Reuse CBOR encoder
     if bytestring_length < 24 {
         output
@@ -681,8 +710,20 @@ fn encrypt_message_3(
 
     let (k_3, iv_3) = compute_k_3_iv_3(crypto, prk_3e2m, th_3);
 
-    let ciphertext_3: BufferCiphertext3 =
-        crypto.aes_ccm_encrypt_tag_8(&k_3, &iv_3, &enc_structure[..], plaintext_3.as_slice());
+    let ciphertext_3: BufferCiphertext3 = match suite {
+        EDHOCSuite::CipherSuite2 => crypto.aes_ccm_encrypt::<MAX_MESSAGE_SIZE_LEN, 8>(
+            &k_3,
+            &iv_3,
+            &enc_structure[..],
+            plaintext_3.as_slice(),
+        ),
+        EDHOCSuite::CipherSuite3 => crypto.aes_ccm_encrypt::<MAX_MESSAGE_SIZE_LEN, 16>(
+            &k_3,
+            &iv_3,
+            &enc_structure[..],
+            plaintext_3.as_slice(),
+        ),
+    };
 
     output.extend_from_slice(ciphertext_3.as_slice()).unwrap();
 
@@ -694,6 +735,7 @@ fn decrypt_message_3(
     prk_3e2m: &BytesHashLen,
     th_3: &BytesHashLen,
     message_3: &BufferMessage3,
+    suite: EDHOCSuite,
 ) -> Result<BufferPlaintext3, EDHOCError> {
     // decode message_3
     // FIXME: Reuse CBOR decoder
@@ -724,7 +766,20 @@ fn decrypt_message_3(
 
     let enc_structure = encode_enc_structure(th_3);
 
-    crypto.aes_ccm_decrypt_tag_8(&k_3, &iv_3, &enc_structure, ciphertext_3.as_slice())
+    match suite {
+        EDHOCSuite::CipherSuite2 => crypto.aes_ccm_decrypt::<MAX_MESSAGE_SIZE_LEN, 8>(
+            &k_3,
+            &iv_3,
+            &enc_structure,
+            ciphertext_3.as_slice(),
+        ),
+        EDHOCSuite::CipherSuite3 => crypto.aes_ccm_decrypt::<MAX_MESSAGE_SIZE_LEN, 16>(
+            &k_3,
+            &iv_3,
+            &enc_structure,
+            ciphertext_3.as_slice(),
+        ),
+    }
 }
 
 fn encrypt_message_4(
@@ -732,9 +787,10 @@ fn encrypt_message_4(
     prk_4e3m: &BytesHashLen,
     th_4: &BytesHashLen,
     plaintext_4: &BufferPlaintext4,
+    suite: EDHOCSuite,
 ) -> BufferMessage4 {
     let mut output: BufferMessage4 = BufferMessage4::new();
-    let bytestring_length = plaintext_4.len() + AES_CCM_TAG_LEN;
+    let bytestring_length = plaintext_4.len() + suite.tag_len();
     // FIXME: Reuse CBOR encoder
     if bytestring_length < 24 {
         output
@@ -751,8 +807,20 @@ fn encrypt_message_4(
 
     let (k_4, iv_4) = compute_k_4_iv_4(crypto, prk_4e3m, th_4);
 
-    let ciphertext_4: BufferCiphertext4 =
-        crypto.aes_ccm_encrypt_tag_8(&k_4, &iv_4, &enc_structure[..], plaintext_4.as_slice());
+    let ciphertext_4: BufferCiphertext4 = match suite {
+        EDHOCSuite::CipherSuite2 => crypto.aes_ccm_encrypt::<MAX_MESSAGE_SIZE_LEN, 8>(
+            &k_4,
+            &iv_4,
+            &enc_structure[..],
+            plaintext_4.as_slice(),
+        ),
+        EDHOCSuite::CipherSuite3 => crypto.aes_ccm_encrypt::<MAX_MESSAGE_SIZE_LEN, 16>(
+            &k_4,
+            &iv_4,
+            &enc_structure[..],
+            plaintext_4.as_slice(),
+        ),
+    };
 
     output.extend_from_slice(ciphertext_4.as_slice()).unwrap();
 
@@ -764,6 +832,7 @@ fn decrypt_message_4(
     prk_4e3m: &BytesHashLen,
     th_4: &BytesHashLen,
     message_4: &BufferMessage4,
+    suite: EDHOCSuite,
 ) -> Result<BufferPlaintext4, EDHOCError> {
     // decode message_4
     // FIXME: Reuse CBOR decoder
@@ -794,7 +863,20 @@ fn decrypt_message_4(
 
     let enc_structure = encode_enc_structure(th_4);
 
-    crypto.aes_ccm_decrypt_tag_8(&k_4, &iv_4, &enc_structure, ciphertext_4.as_slice())
+    match suite {
+        EDHOCSuite::CipherSuite2 => crypto.aes_ccm_decrypt::<MAX_MESSAGE_SIZE_LEN, 8>(
+            &k_4,
+            &iv_4,
+            &enc_structure,
+            ciphertext_4.as_slice(),
+        ),
+        EDHOCSuite::CipherSuite3 => crypto.aes_ccm_decrypt::<MAX_MESSAGE_SIZE_LEN, 16>(
+            &k_4,
+            &iv_4,
+            &enc_structure,
+            ciphertext_4.as_slice(),
+        ),
+    }
 }
 
 // output must hold id_cred.len() + cred.len()
@@ -1101,6 +1183,13 @@ mod tests {
     const PLAINTEXT_2_SURPLUS_BSTR_ID_CRED_TV: EdhocMessageBuffer =
         EdhocBuffer::new_from_array(&hex!("27413248fa5efa2ebf920bf3"));
 
+    // Other cipher suites
+    const MESSAGE_3_CIPHER_3: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!(
+        "581ae562097bc417dd59194862c4b6e33f47568dba3ee6ba7ed5b048"
+    ));
+    const MESSAGE_4_CIPHER_3: EdhocMessageBuffer =
+        EdhocBuffer::new_from_array(&hex!("509859a3cc4ebba0cb78a4ae26ec9964c0"));
+
     #[test]
     fn test_ecdh() {
         let g_xy = default_crypto().p256_ecdh(&X_TV, &G_Y_TV);
@@ -1277,14 +1366,45 @@ mod tests {
             &PRK_3E2M_TV,
             &TH_3_TV,
             &PLAINTEXT_3_TV,
+            EDHOCSuite::CipherSuite2,
         );
         assert_eq!(message_3, MESSAGE_3_TV);
     }
 
     #[test]
     fn test_decrypt_message_3() {
-        let plaintext_3 =
-            decrypt_message_3(&mut default_crypto(), &PRK_3E2M_TV, &TH_3_TV, &MESSAGE_3_TV);
+        let plaintext_3 = decrypt_message_3(
+            &mut default_crypto(),
+            &PRK_3E2M_TV,
+            &TH_3_TV,
+            &MESSAGE_3_TV,
+            EDHOCSuite::CipherSuite2,
+        );
+        assert!(plaintext_3.is_ok());
+        assert_eq!(plaintext_3.unwrap(), PLAINTEXT_3_TV);
+    }
+
+    #[test]
+    fn test_encrypt_message_3_suite_3() {
+        let message_3 = encrypt_message_3(
+            &mut default_crypto(),
+            &PRK_3E2M_TV,
+            &TH_3_TV,
+            &PLAINTEXT_3_TV,
+            EDHOCSuite::CipherSuite3,
+        );
+        assert_eq!(message_3, MESSAGE_3_CIPHER_3);
+    }
+
+    #[test]
+    fn test_decrypt_message_3_suite_3() {
+        let plaintext_3 = decrypt_message_3(
+            &mut default_crypto(),
+            &PRK_3E2M_TV,
+            &TH_3_TV,
+            &MESSAGE_3_CIPHER_3,
+            EDHOCSuite::CipherSuite3,
+        );
         assert!(plaintext_3.is_ok());
         assert_eq!(plaintext_3.unwrap(), PLAINTEXT_3_TV);
     }
@@ -1386,14 +1506,45 @@ mod tests {
             &PRK_4E3M_TV,
             &TH_4_TV,
             &PLAINTEXT_4_TV,
+            EDHOCSuite::CipherSuite2,
         );
         assert_eq!(message_4, MESSAGE_4_TV);
     }
 
     #[test]
     fn test_decrypt_message_4() {
-        let plaintext_4 =
-            decrypt_message_4(&mut default_crypto(), &PRK_4E3M_TV, &TH_4_TV, &MESSAGE_4_TV);
+        let plaintext_4 = decrypt_message_4(
+            &mut default_crypto(),
+            &PRK_4E3M_TV,
+            &TH_4_TV,
+            &MESSAGE_4_TV,
+            EDHOCSuite::CipherSuite2,
+        );
+        assert!(plaintext_4.is_ok());
+        assert_eq!(plaintext_4.unwrap(), PLAINTEXT_4_TV);
+    }
+
+    #[test]
+    fn test_encrypt_message_4_suite_3() {
+        let message_4 = encrypt_message_4(
+            &mut default_crypto(),
+            &PRK_4E3M_TV,
+            &TH_4_TV,
+            &PLAINTEXT_4_TV,
+            EDHOCSuite::CipherSuite3,
+        );
+        assert_eq!(message_4, MESSAGE_4_CIPHER_3);
+    }
+
+    #[test]
+    fn test_decrypt_message_4_suite_3() {
+        let plaintext_4 = decrypt_message_4(
+            &mut default_crypto(),
+            &PRK_4E3M_TV,
+            &TH_4_TV,
+            &MESSAGE_4_CIPHER_3,
+            EDHOCSuite::CipherSuite3,
+        );
         assert!(plaintext_4.is_ok());
         assert_eq!(plaintext_4.unwrap(), PLAINTEXT_4_TV);
     }

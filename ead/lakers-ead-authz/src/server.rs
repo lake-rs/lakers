@@ -139,7 +139,12 @@ fn decrypt_enc_id<Crypto: CryptoTrait>(
     let enc_structure = encode_enc_structure(ss);
 
     // ENC_ID = 'ciphertext' of COSE_Encrypt0
-    crypto.aes_ccm_decrypt_tag_8(&k_1, &iv_1, &enc_structure[..], enc_id.as_slice())
+    crypto.aes_ccm_decrypt::<MAX_MESSAGE_SIZE_LEN, 8>(
+        &k_1,
+        &iv_1,
+        &enc_structure[..],
+        enc_id.as_slice(),
+    )
 }
 
 fn decode_id_u(id_u_bstr: EdhocMessageBuffer) -> Result<EdhocMessageBuffer, EDHOCError> {
