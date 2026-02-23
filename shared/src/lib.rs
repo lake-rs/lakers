@@ -64,23 +64,12 @@ pub const MAC_LENGTH_3: usize = MAC_LENGTH_2;
 pub const VOUCHER_LEN: usize = MAC_LENGTH;
 pub const MAX_EAD_ITEMS: usize = 4;
 
-pub trait AesCcmTagLen {
-    type TagSize: ccm::aead::generic_array::ArrayLength<u8> + ccm::TagSize;
+pub trait CcmTagLen {}
 
-    const LEN: usize;
-}
-pub struct AesCcmTag8;
-impl AesCcmTagLen for AesCcmTag8 {
-    type TagSize = ccm::consts::U8;
+pub struct TagLen<const LEN: usize>;
 
-    const LEN: usize = 8;
-}
-pub struct AesCcmTag16;
-impl AesCcmTagLen for AesCcmTag16 {
-    type TagSize = ccm::consts::U16;
-
-    const LEN: usize = 16;
-}
+impl CcmTagLen for TagLen<8> {}
+impl CcmTagLen for TagLen<16> {}
 
 // maximum supported length of connection identifier for R
 //

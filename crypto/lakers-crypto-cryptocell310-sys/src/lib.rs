@@ -80,7 +80,7 @@ impl CryptoTrait for Crypto {
         output
     }
 
-    fn aes_ccm_encrypt<const N: usize, Tag: AesCcmTagLen>(
+    fn aes_ccm_encrypt<const N: usize, const TAG_LEN: usize>(
         &mut self,
         key: &BytesCcmKeyLen,
         iv: &BytesCcmIvLen,
@@ -114,18 +114,18 @@ impl CryptoTrait for Crypto {
                     reason = "hax won't allow creating a .as_mut_slice() method"
                 )]
                 output.content.as_mut_ptr(),
-                Tag::LEN as u8,
+                TAG_LEN as u8,
                 tag.as_mut_ptr(),
                 0 as u32, // CCM
             )
         };
 
-        output.extend_from_slice(&tag[..Tag::LEN]).unwrap();
+        output.extend_from_slice(&tag[..TAG_LEN]).unwrap();
 
         output
     }
 
-    fn aes_ccm_decrypt<const N: usize, Tag: AesCcmTagLen>(
+    fn aes_ccm_decrypt<const N: usize, const TAG_LEN: usize>(
         &mut self,
         key: &BytesCcmKeyLen,
         iv: &BytesCcmIvLen,
@@ -133,12 +133,12 @@ impl CryptoTrait for Crypto {
         ciphertext: &[u8],
     ) -> Result<EdhocBuffer<N>, EDHOCError> {
         let mut output = EdhocBuffer::new();
-        output.extend_reserve(ciphertext.len() - Tag::LEN).unwrap();
+        output.extend_reserve(ciphertext.len() - TAG_LEN).unwrap();
         let mut aesccm_key: CRYS_AESCCM_Key_t = Default::default();
 
         aesccm_key[0..AES_CCM_KEY_LEN].copy_from_slice(&key[..]);
 
-        assert!(ciphertext.len() - Tag::LEN <= N);
+        assert!(ciphertext.len() - TAG_LEN <= N);
 
         #[allow(deprecated, reason = "using extend_reserve")]
         unsafe {
@@ -152,11 +152,11 @@ impl CryptoTrait for Crypto {
                 ad.len() as u32,
                 // CC_AESCCM does not really write there, it's just missing a `const`
                 ciphertext.as_ptr() as *mut _,
-                (ciphertext.len() - Tag::LEN) as u32,
+                (ciphertext.len() - TAG_LEN) as u32,
                 output.content.as_mut_ptr(),
-                Tag::LEN as u8,
+                TAG_LEN as u8,
                 // as before
-                ciphertext[ciphertext.len() - Tag::LEN..].as_ptr() as *mut _,
+                ciphertext[ciphertext.len() - TAG_LEN..].as_ptr() as *mut _,
                 0 as u32, // CCM
             ) {
                 CRYS_OK => Ok(output),

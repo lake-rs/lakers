@@ -1,6 +1,5 @@
 #![no_std]
 
-use lakers_shared::AesCcmTagLen;
 use lakers_shared::{
     BytesCcmIvLen, BytesCcmKeyLen, BytesHashLen, BytesP256ElemLen, Crypto as CryptoTrait,
     EDHOCError, EDHOCSuite, EdhocBuffer, MAX_SUITES_LEN,
@@ -71,7 +70,7 @@ impl<Rng: rand_core::RngCore + rand_core::CryptoRng> CryptoTrait for Crypto<Rng>
         extracted.finalize().0.into()
     }
 
-    fn aes_ccm_encrypt<const N: usize, Tag: AesCcmTagLen>(
+    fn aes_ccm_encrypt<const N: usize, const TAG_LEN: usize>(
         &mut self,
         key: &BytesCcmKeyLen,
         iv: &BytesCcmIvLen,
@@ -79,46 +78,75 @@ impl<Rng: rand_core::RngCore + rand_core::CryptoRng> CryptoTrait for Crypto<Rng>
         plaintext: &[u8],
     ) -> EdhocBuffer<N> {
         let mut outbuffer = EdhocBuffer::new_from_slice(plaintext).unwrap();
-        type AesCcm<Tag> = ccm::Ccm<aes::Aes128, <Tag as AesCcmTagLen>::TagSize, ccm::consts::U13>;
         #[allow(
             deprecated,
             reason = "hax won't allow creating a .as_mut_slice() method"
         )]
-        if let Ok(tag) = AesCcm::<Tag>::new(key.into()).encrypt_in_place_detached(
-            iv.into(),
-            ad,
-            &mut outbuffer.content[..plaintext.len()],
-        ) {
-            outbuffer.extend_from_slice(&tag).unwrap();
-        } else {
-            panic!("Preconfigured sizes should not allow encryption to fail")
-        }
+        match TAG_LEN {
+            8 => {
+                let tag =
+                    ccm::Ccm::<aes::Aes128, ccm::consts::U8, ccm::consts::U13>::new(key.into())
+                        .encrypt_in_place_detached(
+                            iv.into(),
+                            ad,
+                            &mut outbuffer.content[..plaintext.len()],
+                        )
+                        .expect("Preconfigured sizes should not allow encryption to fail");
+
+                outbuffer.extend_from_slice(&tag).unwrap()
+            }
+
+            16 => {
+                let tag =
+                    ccm::Ccm::<aes::Aes128, ccm::consts::U16, ccm::consts::U13>::new(key.into())
+                        .encrypt_in_place_detached(
+                            iv.into(),
+                            ad,
+                            &mut outbuffer.content[..plaintext.len()],
+                        )
+                        .expect("Preconfigured sizes should not allow encryption to fail");
+
+                outbuffer.extend_from_slice(&tag).unwrap()
+            }
+
+            _ => unreachable!(), // CcmTagLen bound guarantees this
+        };
         outbuffer
     }
 
-    fn aes_ccm_decrypt<const N: usize, Tag: AesCcmTagLen>(
+    fn aes_ccm_decrypt<const N: usize, const TAG_LEN: usize>(
         &mut self,
         key: &BytesCcmKeyLen,
         iv: &BytesCcmIvLen,
         ad: &[u8],
         ciphertext: &[u8],
     ) -> Result<EdhocBuffer<N>, EDHOCError> {
-        let plaintext_len = ciphertext.len() - Tag::LEN;
+        let plaintext_len = ciphertext.len() - TAG_LEN;
         let mut buffer = EdhocBuffer::new_from_slice(&ciphertext[..plaintext_len]).unwrap();
         let tag = &ciphertext[plaintext_len..];
-        type AesCcm<Tag> = ccm::Ccm<aes::Aes128, <Tag as AesCcmTagLen>::TagSize, ccm::consts::U13>;
         #[allow(
             deprecated,
             reason = "hax won't allow creating a .as_mut_slice() method"
         )]
-        AesCcm::<Tag>::new(key.into())
-            .decrypt_in_place_detached(
-                iv.into(),
-                ad,
-                &mut buffer.content[..plaintext_len],
-                tag.into(),
-            )
-            .map_err(|_| EDHOCError::MacVerificationFailed)?;
+        match TAG_LEN {
+            8 => ccm::Ccm::<aes::Aes128, ccm::consts::U8, ccm::consts::U13>::new(key.into())
+                .decrypt_in_place_detached(
+                    iv.into(),
+                    ad,
+                    &mut buffer.content[..plaintext_len],
+                    tag.into(),
+                )
+                .map_err(|_| EDHOCError::MacVerificationFailed)?,
+            16 => ccm::Ccm::<aes::Aes128, ccm::consts::U16, ccm::consts::U13>::new(key.into())
+                .decrypt_in_place_detached(
+                    iv.into(),
+                    ad,
+                    &mut buffer.content[..plaintext_len],
+                    tag.into(),
+                )
+                .map_err(|_| EDHOCError::MacVerificationFailed)?,
+            _ => unreachable!(), // CcmTagLen bound guarantees this
+        };
 
         Ok(buffer)
     }

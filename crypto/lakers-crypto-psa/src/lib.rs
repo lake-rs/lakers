@@ -88,7 +88,7 @@ impl CryptoTrait for Crypto {
         output
     }
 
-    fn aes_ccm_encrypt<const N: usize, Tag: AesCcmTagLen>(
+    fn aes_ccm_encrypt<const N: usize, const TAG_LEN: usize>(
         &mut self,
         key: &BytesCcmKeyLen,
         iv: &BytesCcmIvLen,
@@ -99,7 +99,7 @@ impl CryptoTrait for Crypto {
 
         let alg = Aead::AeadWithShortenedTag {
             aead_alg: AeadWithDefaultLengthTag::Ccm,
-            tag_length: Tag::LEN,
+            tag_length: TAG_LEN,
         };
         let mut usage_flags: UsageFlags = Default::default();
         usage_flags.set_encrypt();
@@ -116,7 +116,7 @@ impl CryptoTrait for Crypto {
         let my_key = key_management::import(attributes, None, &key[..]).unwrap();
         let mut output_buffer = EdhocBuffer::new();
         let full_range = output_buffer
-            .extend_reserve(plaintext.len() + Tag::LEN)
+            .extend_reserve(plaintext.len() + TAG_LEN)
             .unwrap();
 
         #[allow(deprecated, reason = "using extend_reserve")]
@@ -133,7 +133,7 @@ impl CryptoTrait for Crypto {
         output_buffer
     }
 
-    fn aes_ccm_decrypt<const N: usize, Tag: AesCcmTagLen>(
+    fn aes_ccm_decrypt<const N: usize, const TAG_LEN: usize>(
         &mut self,
         key: &BytesCcmKeyLen,
         iv: &BytesCcmIvLen,
@@ -144,7 +144,7 @@ impl CryptoTrait for Crypto {
 
         let alg = Aead::AeadWithShortenedTag {
             aead_alg: AeadWithDefaultLengthTag::Ccm,
-            tag_length: Tag::LEN,
+            tag_length: TAG_LEN,
         };
         let mut usage_flags: UsageFlags = Default::default();
         usage_flags.set_decrypt();
@@ -161,7 +161,7 @@ impl CryptoTrait for Crypto {
         let my_key = key_management::import(attributes, None, &key[..]).unwrap();
         let mut output_buffer = EdhocBuffer::new();
         let out_slice = output_buffer
-            .extend_reserve(ciphertext.len() - Tag::LEN)
+            .extend_reserve(ciphertext.len() - TAG_LEN)
             .unwrap();
 
         #[allow(deprecated, reason = "using extend_reserve")]
