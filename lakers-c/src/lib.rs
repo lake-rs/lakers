@@ -95,29 +95,47 @@ impl EadItemsC {
 
 #[derive(Debug)]
 #[repr(C)]
-pub struct ProcessingM2C {
+pub enum ProcessingM2MethodSpecificsKindC {
+    Pm2StatStat,
+}
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct ProcessingM2MethodSpecificsC {
+    pub kind: ProcessingM2MethodSpecificsKindC,
     pub mac_2: BytesMac2,
+    pub id_cred_r: IdCred,
+}
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct ProcessingM2C {
+    pub method_specifics: ProcessingM2MethodSpecificsC,
+    pub method: EDHOCMethod,
     pub prk_2e: BytesHashLen,
     pub th_2: BytesHashLen,
     pub x: BytesP256ElemLen,
     pub g_y: BytesP256ElemLen,
     pub plaintext_2: EdhocMessageBuffer,
     pub c_r: u8,
-    pub id_cred_r: IdCred,
     pub ead_2: *mut EadItemsC,
 }
 
 impl Default for ProcessingM2C {
     fn default() -> Self {
         ProcessingM2C {
-            mac_2: Default::default(),
+            method_specifics: ProcessingM2MethodSpecificsC {
+                kind: ProcessingM2MethodSpecificsKindC::Pm2StatStat,
+                mac_2: Default::default(),
+                id_cred_r: Default::default(),
+            },
+            method: EDHOCMethod::StatStat,
             prk_2e: Default::default(),
             th_2: Default::default(),
             x: Default::default(),
             g_y: Default::default(),
             plaintext_2: Default::default(),
             c_r: Default::default(),
-            id_cred_r: Default::default(),
             ead_2: core::ptr::null_mut(),
         }
     }
@@ -125,8 +143,18 @@ impl Default for ProcessingM2C {
 
 impl ProcessingM2C {
     pub fn to_rust(&self) -> ProcessingM2 {
-        ProcessingM2::StatStat(ProcessingM2StatStat {
-            mac_2: self.mac_2,
+        let method_specifics = match self.method_specifics.kind {
+            ProcessingM2MethodSpecificsKindC::Pm2StatStat => {
+                ProcessingM2MethodSpecifics::StatStat {
+                    mac_2: self.method_specifics.mac_2,
+                    id_cred_r: self.method_specifics.id_cred_r.clone(),
+                }
+            }
+        };
+
+        ProcessingM2 {
+            method_specifics,
+            method: self.method,
             prk_2e: self.prk_2e,
             th_2: self.th_2,
             x: self.x,
@@ -134,9 +162,8 @@ impl ProcessingM2C {
             plaintext_2: self.plaintext_2.clone(),
             #[allow(deprecated)]
             c_r: ConnId::from_int_raw(self.c_r),
-            id_cred_r: self.id_cred_r.clone(),
             ead_2: unsafe { (*self.ead_2).to_rust() },
-        })
+        }
     }
 
     /// note that it is a shallow copy (ead_2 is handled separately by the caller)
@@ -145,18 +172,23 @@ impl ProcessingM2C {
             panic!("processing_m2_c is null");
         }
 
-        match processing_m2 {
-            ProcessingM2::StatStat(s) => {
-                (*processing_m2_c).mac_2 = s.mac_2;
-                (*processing_m2_c).prk_2e = s.prk_2e;
-                (*processing_m2_c).th_2 = s.th_2;
-                (*processing_m2_c).x = s.x;
-                (*processing_m2_c).g_y = s.g_y;
-                (*processing_m2_c).plaintext_2 = s.plaintext_2;
-                let c_r = s.c_r.as_slice();
-                assert_eq!(c_r.len(), 1, "C API only supports short C_R");
-                (*processing_m2_c).c_r = c_r[0];
-                (*processing_m2_c).id_cred_r = s.id_cred_r;
+        (*processing_m2_c).prk_2e = processing_m2.prk_2e;
+        (*processing_m2_c).th_2 = processing_m2.th_2;
+        (*processing_m2_c).x = processing_m2.x;
+        (*processing_m2_c).g_y = processing_m2.g_y;
+        (*processing_m2_c).plaintext_2 = processing_m2.plaintext_2;
+        (*processing_m2_c).method = processing_m2.method;
+        let c_r = processing_m2.c_r.as_slice();
+        assert_eq!(c_r.len(), 1, "C API only supports short C_R");
+        (*processing_m2_c).c_r = c_r[0];
+
+        match processing_m2.method_specifics {
+            ProcessingM2MethodSpecifics::StatStat { mac_2, id_cred_r } => {
+                (*processing_m2_c).method_specifics = ProcessingM2MethodSpecificsC {
+                    kind: ProcessingM2MethodSpecificsKindC::Pm2StatStat,
+                    mac_2,
+                    id_cred_r,
+                };
             }
         }
     }

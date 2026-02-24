@@ -72,15 +72,18 @@ pub fn r_parse_message_3_statstat(
 
         if let Ok((id_cred_i, mac_3, ead_3)) = decoded_p3_res {
             Ok((
-                ProcessingM3::StatStat(ProcessingM3StatStat {
-                    mac_3,
+                ProcessingM3 {
+                    method_specifics: ProcessingM3MethodSpecifics::StatStat {
+                        mac_3,
+                        id_cred_i: id_cred_i.clone(), // needed for compute_mac_3
+                    },
+                    method: state.method,
                     y: state.y,
                     prk_3e2m: state.prk_3e2m,
                     th_3: state.th_3,
-                    id_cred_i: id_cred_i.clone(), // needed for compute_mac_3
                     plaintext_3, // NOTE: this is needed for th_4, which needs valid_cred_i, which is only available at the 'verify' step
                     ead_3: ead_3.clone(), // NOTE: this clone could be avoided by using a reference or an index to the ead_3 item in plaintext_3
-                }),
+                },
                 id_cred_i,
                 ead_3,
             ))
@@ -94,36 +97,44 @@ pub fn r_parse_message_3_statstat(
 }
 
 pub fn r_verify_message_3_statstat(
-    inner_state: &ProcessingM3StatStat,
+    state: &ProcessingM3,
     crypto: &mut impl CryptoTrait,
     valid_cred_i: Credential,
 ) -> Result<(ProcessedM3, BytesHashLen), EDHOCError> {
     // compute salt_4e3m
-    let salt_4e3m = compute_salt_4e3m(crypto, &inner_state.prk_3e2m, &inner_state.th_3);
+    let salt_4e3m = compute_salt_4e3m(crypto, &state.prk_3e2m, &state.th_3);
 
     let prk_4e3m = match valid_cred_i.key {
         CredentialKey::EC2Compact(public_key) => {
-            compute_prk_4e3m(crypto, &salt_4e3m, &inner_state.y, &public_key)
+            compute_prk_4e3m(crypto, &salt_4e3m, &state.y, &public_key)
         }
         CredentialKey::Symmetric(_psk) => todo!("PSK not implemented"),
+    };
+
+    let id_cred_i = match &state.method_specifics {
+        ProcessingM3MethodSpecifics::StatStat { id_cred_i, .. } => id_cred_i,
     };
 
     // compute mac_3
     let expected_mac_3 = compute_mac_3(
         crypto,
         &prk_4e3m,
-        &inner_state.th_3,
-        inner_state.id_cred_i.as_full_value(),
+        &state.th_3,
+        id_cred_i.as_full_value(),
         valid_cred_i.bytes.as_slice(),
-        &inner_state.ead_3,
+        &state.ead_3,
     );
 
+    let mac_3 = match state.method_specifics {
+        ProcessingM3MethodSpecifics::StatStat { mac_3, .. } => mac_3,
+    };
+
     // verify mac_3
-    if inner_state.mac_3 == expected_mac_3 {
+    if mac_3 == expected_mac_3 {
         let th_4 = compute_th_4(
             crypto,
-            &inner_state.th_3,
-            &inner_state.plaintext_3,
+            &state.th_3,
+            &state.plaintext_3,
             valid_cred_i.bytes.as_slice(),
         );
 
@@ -169,17 +180,20 @@ pub fn i_parse_message_2_statstat<'a>(
         let plaintext_2_decoded = decode_plaintext_2(&plaintext_2);
 
         if let Ok((c_r_2, id_cred_r, mac_2, ead_2)) = plaintext_2_decoded {
-            let state = ProcessingM2::StatStat(ProcessingM2StatStat {
-                mac_2,
+            let state = ProcessingM2 {
+                method_specifics: ProcessingM2MethodSpecifics::StatStat {
+                    mac_2,
+                    id_cred_r: id_cred_r.clone(), // needed for compute_mac_2
+                },
+                method: state.method,
                 prk_2e,
                 th_2,
                 x: state.x,
                 g_y,
                 plaintext_2: plaintext_2,
                 c_r: c_r_2,
-                id_cred_r: id_cred_r.clone(), // needed for compute_mac_2
-                ead_2: ead_2.clone(),         // needed for compute_mac_2
-            });
+                ead_2: ead_2.clone(), // needed for compute_mac_2
+            };
 
             Ok((state, c_r_2, id_cred_r, ead_2))
         } else {
@@ -191,45 +205,53 @@ pub fn i_parse_message_2_statstat<'a>(
 }
 
 pub fn i_verify_message_2_statstat(
-    inner_state: &ProcessingM2StatStat,
+    state: &ProcessingM2,
     crypto: &mut impl CryptoTrait,
     valid_cred_r: Credential,
     i: &BytesP256ElemLen, // I's static private DH key
 ) -> Result<ProcessedM2, EDHOCError> {
     // verify mac_2
-    let salt_3e2m = compute_salt_3e2m(crypto, &inner_state.prk_2e, &inner_state.th_2);
+    let salt_3e2m = compute_salt_3e2m(crypto, &state.prk_2e, &state.th_2);
 
     let prk_3e2m = match valid_cred_r.key {
         CredentialKey::EC2Compact(public_key) => {
-            compute_prk_3e2m(crypto, &salt_3e2m, &inner_state.x, &public_key)
+            compute_prk_3e2m(crypto, &salt_3e2m, &state.x, &public_key)
         }
         CredentialKey::Symmetric(_psk) => todo!("PSK not implemented"),
+    };
+
+    let id_cred_r = match &state.method_specifics {
+        ProcessingM2MethodSpecifics::StatStat { id_cred_r, .. } => id_cred_r,
     };
 
     let expected_mac_2 = compute_mac_2(
         crypto,
         &prk_3e2m,
-        inner_state.c_r,
-        inner_state.id_cred_r.as_full_value(),
+        state.c_r,
+        id_cred_r.as_full_value(),
         valid_cred_r.bytes.as_slice(),
-        &inner_state.th_2,
-        &inner_state.ead_2,
+        &state.th_2,
+        &state.ead_2,
     );
 
-    if inner_state.mac_2 == expected_mac_2 {
+    let mac_2 = match state.method_specifics {
+        ProcessingM2MethodSpecifics::StatStat { mac_2, .. } => mac_2,
+    };
+
+    if mac_2 == expected_mac_2 {
         // step is actually from processing of message_3
         // but we do it here to avoid storing plaintext_2 in State
         let th_3 = compute_th_3(
             crypto,
-            &inner_state.th_2,
-            &inner_state.plaintext_2,
+            &state.th_2,
+            &state.plaintext_2,
             valid_cred_r.bytes.as_slice(),
         );
         // message 3 processing
 
         let salt_4e3m = compute_salt_4e3m(crypto, &prk_3e2m, &th_3);
 
-        let prk_4e3m = compute_prk_4e3m(crypto, &salt_4e3m, i, &inner_state.g_y);
+        let prk_4e3m = compute_prk_4e3m(crypto, &salt_4e3m, i, &state.g_y);
 
         let state = ProcessedM2 {
             // We need the method for next step. Since we are in the branch of StatStat,

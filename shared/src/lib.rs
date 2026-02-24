@@ -515,21 +515,24 @@ pub struct WaitM3 {
     pub prk_3e2m: BytesHashLen,
     pub th_3: BytesHashLen,
 }
+
 #[derive(Debug)]
-pub enum ProcessingM2 {
-    StatStat(ProcessingM2StatStat), // PSK(PProcessingM2PSK) // To be added later
+#[repr(C)]
+pub enum ProcessingM2MethodSpecifics {
+    StatStat { mac_2: BytesMac2, id_cred_r: IdCred },
+    // PSK, -- is empty, but in other stages it might have fields that StatStat has not.
 }
 #[derive(Debug)]
 #[repr(C)]
-pub struct ProcessingM2StatStat {
-    pub mac_2: BytesMac2,
+pub struct ProcessingM2 {
+    pub method_specifics: ProcessingM2MethodSpecifics,
+    pub method: EDHOCMethod,
     pub prk_2e: BytesHashLen,
     pub th_2: BytesHashLen,
     pub x: BytesP256ElemLen,
     pub g_y: BytesP256ElemLen,
     pub plaintext_2: BufferPlaintext2,
     pub c_r: ConnId,
-    pub id_cred_r: IdCred,
     pub ead_2: EadItems,
 }
 
@@ -542,16 +545,16 @@ pub struct ProcessedM2 {
     pub th_3: BytesHashLen,
 }
 #[derive(Debug)]
-pub enum ProcessingM3 {
-    StatStat(ProcessingM3StatStat), // PSK(ProcessingM3PSK) // To be added later
+pub enum ProcessingM3MethodSpecifics {
+    StatStat { mac_3: BytesMac3, id_cred_i: IdCred },
 }
 #[derive(Debug)]
-pub struct ProcessingM3StatStat {
-    pub mac_3: BytesMac3,
+pub struct ProcessingM3 {
+    pub method_specifics: ProcessingM3MethodSpecifics,
+    pub method: EDHOCMethod,
     pub y: BytesP256ElemLen, // ephemeral private key of the responder
     pub prk_3e2m: BytesHashLen,
     pub th_3: BytesHashLen,
-    pub id_cred_i: IdCred,
     pub plaintext_3: BufferPlaintext3,
     pub ead_3: EadItems,
 }
