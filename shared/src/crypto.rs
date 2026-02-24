@@ -61,14 +61,14 @@ pub trait Crypto: core::fmt::Debug {
     fn sha256_start<'a>(&'a mut self) -> Self::HashInProcess<'a>;
     fn hkdf_expand(&mut self, prk: &BytesHashLen, info: &[u8], result: &mut [u8]);
     fn hkdf_extract(&mut self, salt: &BytesHashLen, ikm: &BytesP256ElemLen) -> BytesHashLen;
-    fn aes_ccm_encrypt_tag_8<const N: usize>(
+    fn aes_ccm_encrypt<const N: usize, TagLen: CcmTagLen>(
         &mut self,
         key: &BytesCcmKeyLen,
         iv: &BytesCcmIvLen,
         ad: &[u8],
         plaintext: &[u8],
     ) -> EdhocBuffer<N>;
-    fn aes_ccm_decrypt_tag_8<const N: usize>(
+    fn aes_ccm_decrypt<const N: usize, TagLen: CcmTagLen>(
         &mut self,
         key: &BytesCcmKeyLen,
         iv: &BytesCcmIvLen,
@@ -82,4 +82,19 @@ pub trait Crypto: core::fmt::Debug {
     ) -> BytesP256ElemLen;
     fn get_random_byte(&mut self) -> u8;
     fn p256_generate_key_pair(&mut self) -> (BytesP256ElemLen, BytesP256ElemLen);
+}
+
+/// Trait for valid CCM tag lengths.
+/// Only implemented for sizes we explicitly use (8 and 16 bytes).
+pub trait CcmTagLen {
+    const LEN: usize;
+}
+pub struct CcmTagLen8;
+impl CcmTagLen for CcmTagLen8 {
+    const LEN: usize = 8;
+}
+
+pub struct CcmTagLen16;
+impl CcmTagLen for CcmTagLen16 {
+    const LEN: usize = 16;
 }
