@@ -103,8 +103,9 @@ pub fn r_verify_message_3(
     crypto: &mut impl CryptoTrait,
     valid_cred_i: Credential,
 ) -> Result<(ProcessedM3, BytesHashLen), EDHOCError> {
-    match state {
-        ProcessingM3::StatStat(inner) => r_verify_message_3_statstat(inner, crypto, valid_cred_i), // ProcessingM3::Psk(inner) => r_verify_message_3_psk(inner, crypto, valid_cred_i),
+    match state.method {
+        EDHOCMethod::StatStat => r_verify_message_3_statstat(state, crypto, valid_cred_i),
+        _ => Err(EDHOCError::UnsupportedMethod),
     }
 }
 
@@ -174,10 +175,10 @@ pub fn i_verify_message_2(
     valid_cred_r: Credential,
     i: &BytesP256ElemLen, // I's static private DH key
 ) -> Result<ProcessedM2, EDHOCError> {
-    match state {
-        ProcessingM2::StatStat(inner_state) => {
-            i_verify_message_2_statstat(inner_state, crypto, valid_cred_r, i)
-        } // ProcessingM2::Psk(inner_state) => i_verify_message_2_psk();
+    match state.method {
+        EDHOCMethod::StatStat => i_verify_message_2_statstat(state, crypto, valid_cred_r, i),
+        // EDHOCMethod::PSK => i_verify_message_2_psk()
+        _ => Err(EDHOCError::UnsupportedMethod),
     }
 }
 
@@ -192,7 +193,7 @@ pub fn i_prepare_message_3(
         EDHOCMethod::StatStat => {
             i_prepare_message_3_statstat(state, crypto, cred_i, cred_transfer, ead_3)
         }
-        // EDHOCMethod::PSK => r_parse_message_3_psk()
+        // EDHOCMethod::PSK => i_prepare_message_3_psk()
         _ => Err(EDHOCError::UnsupportedMethod),
     }
 }
