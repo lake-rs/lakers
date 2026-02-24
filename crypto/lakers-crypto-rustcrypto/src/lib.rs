@@ -185,3 +185,23 @@ impl<Rng: rand_core::RngCore + rand_core::CryptoRng> CryptoTrait for Crypto<Rng>
         (private_key.into(), public_key.into())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use lakers_shared::test_helper::{
+        test_aes_ccm_roundtrip, test_aes_ccm_tag_16, test_aes_ccm_tag_8,
+    };
+    use lakers_shared::{CcmTagLen16, CcmTagLen8};
+
+    use super::*;
+
+    #[test]
+    fn test_rustcrypto_aes_ccm() {
+        let mut crypto = Crypto::new(rand_core::OsRng);
+        test_aes_ccm_roundtrip::<Crypto<rand_core::OsRng>, CcmTagLen8>(&mut crypto);
+        test_aes_ccm_roundtrip::<Crypto<rand_core::OsRng>, CcmTagLen16>(&mut crypto);
+
+        test_aes_ccm_tag_8::<Crypto<rand_core::OsRng>>(&mut crypto);
+        test_aes_ccm_tag_16::<Crypto<rand_core::OsRng>>(&mut crypto);
+    }
+}

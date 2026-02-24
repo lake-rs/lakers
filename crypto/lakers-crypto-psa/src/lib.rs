@@ -324,6 +324,9 @@ impl digest::HashMarker for BufferedHasherSha256 {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use lakers_shared::test_helper::{
+        test_aes_ccm_roundtrip, test_aes_ccm_tag_16, test_aes_ccm_tag_8,
+    };
 
     #[test]
     fn test_hmac_sha256() {
@@ -346,5 +349,14 @@ mod tests {
 
         let result_2 = Crypto.hmac_sha256(&MESSAGE_2, &KEY);
         assert_eq!(result_2, RESULT_2_TV);
+    }
+
+    #[test]
+    fn test_psa_aes_ccm() {
+        test_aes_ccm_roundtrip::<Crypto, CcmTagLen8>(&mut Crypto);
+        test_aes_ccm_roundtrip::<Crypto, CcmTagLen16>(&mut Crypto);
+
+        test_aes_ccm_tag_8::<Crypto>(&mut Crypto);
+        test_aes_ccm_tag_16::<Crypto>(&mut Crypto);
     }
 }

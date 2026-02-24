@@ -366,3 +366,20 @@ impl digest::OutputSizeUser for HashInProcessSha256 {
     type OutputSize = digest::typenum::U32;
 }
 impl digest::HashMarker for HashInProcessSha256 {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lakers_shared::test_helper::{
+        test_aes_ccm_roundtrip, test_aes_ccm_tag_16, test_aes_ccm_tag_8,
+    };
+
+    #[test]
+    fn test_cryptocell_aes_ccm() {
+        test_aes_ccm_roundtrip::<Crypto, CcmTagLen8>(&mut Crypto);
+        test_aes_ccm_roundtrip::<Crypto, CcmTagLen16>(&mut Crypto);
+
+        test_aes_ccm_tag_8::<Crypto>(&mut Crypto);
+        test_aes_ccm_tag_16::<Crypto>(&mut Crypto);
+    }
+}
