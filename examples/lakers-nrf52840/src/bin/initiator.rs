@@ -92,7 +92,10 @@ async fn main(spawner: Spawner) {
                 // starts in 1 to consider only the content and not the metadata
                 pckt_2.pdu[1..pckt_2.len].try_into().expect("wrong length");
             info!("message_2 :{:?}", message_2.content);
-            let (initiator, c_r, id_cred_r, ead_2) = initiator.parse_message_2(&message_2).unwrap();
+            let (initiator, c_r, details) = initiator.parse_message_2(&message_2).unwrap();
+            let ParsedMessage2Details::StatStat { id_cred_r, ead_2 } = details else {
+                panic!("Expected stat-stat details");
+            };
             let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r).unwrap();
             let initiator = initiator.verify_message_2(valid_cred_r).unwrap();
 

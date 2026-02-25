@@ -173,7 +173,7 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM1<Crypto> {
                 r: self.r.as_ref().ok_or(EDHOCError::MissingIdentity)?,
                 cred_transfer,
             },
-            // EDHOCMethod::PSK => PrepareMessage2Details::Psk,
+            EDHOCMethod::PSK => PrepareMessage2Details::Psk,
             _ => return Err(EDHOCError::UnsupportedMethod),
         };
 
@@ -204,6 +204,40 @@ impl<'a, Crypto: CryptoTrait> EdhocResponderWaitM3<Crypto> {
     ) -> Result<(EdhocResponderProcessingM3<Crypto>, IdCred, EadItems), EDHOCError> {
         trace!("Enter parse_message_3");
         match r_parse_message_3(&mut self.state, &mut self.crypto, message_3) {
+            Ok((state, id_cred_i, ead_3)) => Ok((
+                EdhocResponderProcessingM3 {
+                    state,
+                    crypto: self.crypto,
+                },
+                id_cred_i,
+                ead_3,
+            )),
+            Err(error) => Err(error),
+        }
+    }
+
+    // Example of application of lookup
+    // let cred_table = [cred_i_1.clone(), cred_i_2.clone()];
+    // let (responder, id_cred_i, ead_3) =
+    // responder_wait_m3.parse_message_3_with_credential_lookup(&message_3, |id| {
+    // credential_lookup_or_fetch(&cred_table, id.clone())
+    // })?;
+
+    pub fn parse_message_3_with_credential_lookup<F>(
+        mut self,
+        message_3: &'a BufferMessage3,
+        resolve_cred_i: F, // we pass a function to look up for the credential: credential_lookup_or_fetch
+    ) -> Result<(EdhocResponderProcessingM3<Crypto>, IdCred, EadItems), EDHOCError>
+    where
+        F: Fn(&IdCred) -> Result<Credential, EDHOCError>,
+    {
+        trace!("Enter parse_message_3_with_credential_lookup");
+        match r_parse_message_3_with_cred_resolver(
+            &mut self.state,
+            &mut self.crypto,
+            message_3,
+            resolve_cred_i,
+        ) {
             Ok((state, id_cred_i, ead_3)) => Ok((
                 EdhocResponderProcessingM3 {
                     state,
@@ -396,7 +430,8 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessingM2<Crypto> {
         let i = match self.state.method_specifics {
             ProcessingM2MethodSpecifics::StatStat { .. } => {
                 Some(self.i.as_ref().ok_or(EDHOCError::MissingIdentity)?)
-            } // ProcessingM2MethodSpecifics::Psk { .. } => None,
+            }
+            ProcessingM2MethodSpecifics::Psk { .. } => None,
         };
         match i_verify_message_2(&self.state, &mut self.crypto, valid_cred_r, i) {
             Ok(state) => Ok(EdhocInitiatorProcessedM2 {
@@ -561,6 +596,36 @@ pub fn credential_check_or_fetch(
     // IMPL,TODO: we just skip this step for now
 }
 
+/// Resolve an authentication credential from a local table of trusted credentials.
+///
+/// This is useful when receiving ID_CRED by reference (for example `kid`): each candidate
+/// credential is converted to the matching ID_CRED form and compared against `id_cred_received`.
+/// If no entry matches and `id_cred_received` carries a full CCS by value, that CCS is returned.
+pub fn credential_lookup_or_fetch(
+    credentials: &[Credential],
+    id_cred_received: IdCred,
+) -> Result<Credential, EDHOCError> {
+    for cred in credentials {
+        let candidate = if id_cred_received.reference_only() {
+            cred.by_kid()
+        } else {
+            cred.by_value()
+        };
+
+        if let Ok(candidate) = candidate {
+            if candidate.as_full_value() == id_cred_received.as_full_value() {
+                return Ok(cred.clone());
+            }
+        }
+    }
+
+    if let Some(cred) = id_cred_received.get_ccs() {
+        Ok(cred)
+    } else {
+        Err(EDHOCError::MissingIdentity)
+    }
+}
+
 #[cfg(test)]
 mod test_vectors_common {
     use hexlit::hex;
@@ -695,7 +760,10 @@ mod test {
         let ParsedMessage2Details::StatStat {
             id_cred_r,
             ead_2: _ead_2,
-        } = details;
+        } = details
+        else {
+            panic!("Expected StatStat details");
+        };
         let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r).unwrap();
         initiator
             .set_identity(
@@ -854,7 +922,9 @@ mod test_authz {
             .unwrap();
 
         let (mut initiator, _c_r, details) = initiator.parse_message_2(&message_2).unwrap();
-        let ParsedMessage2Details::StatStat { id_cred_r, ead_2 } = details;
+        let ParsedMessage2Details::StatStat { id_cred_r, ead_2 } = details else {
+            panic!("Expected StatStat details");
+        };
         let valid_cred_r = credential_check_or_fetch(None, id_cred_r).unwrap();
         let result =
             device.process_ead_2(&mut default_crypto(), ead_2.iter().next().unwrap(), CRED_R);

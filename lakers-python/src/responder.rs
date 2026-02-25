@@ -110,7 +110,7 @@ impl PyEdhocResponder {
                 r: &r,
                 cred_transfer,
             },
-            // EDHOCMethod::PSK => PrepareMessage2Details::Psk,
+            EDHOCMethod::PSK => PrepareMessage2Details::Psk,
             _ => return Err(EDHOCError::UnsupportedMethod.into()),
         };
 

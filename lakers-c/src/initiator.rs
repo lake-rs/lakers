@@ -113,6 +113,7 @@ pub unsafe extern "C" fn initiator_parse_message_2(
             *c_r_out = c_r[0];
             let (id_cred_r, ead_2) = match details {
                 ParsedMessage2Details::StatStat { id_cred_r, ead_2 } => (id_cred_r, ead_2),
+                ParsedMessage2Details::Psk { ead_2 } => (IdCred::new(), ead_2),
             };
             *id_cred_r_out = id_cred_r;
 

@@ -1,6 +1,9 @@
 use digest::Digest;
 use lakers_shared::{Crypto as CryptoTrait, *};
+mod psk;
 mod statstat;
+
+use psk::*;
 use statstat::*;
 
 pub fn edhoc_exporter(
@@ -39,7 +42,7 @@ pub fn r_process_message_1(
         let method = EDHOCMethod::try_from(method)?;
 
         match method {
-            EDHOCMethod::StatStat => {
+            EDHOCMethod::StatStat | EDHOCMethod::PSK => {
                 // Step 2: verify that the selected cipher suite is supported
                 if suites_i[suites_i.len() - 1] == EDHOC_SUPPORTED_SUITES[0] {
                     // hash message_1 and save the hash to the state to avoid saving the whole message
@@ -80,7 +83,9 @@ pub fn r_prepare_message_2(
         (EDHOCMethod::StatStat, PrepareMessage2Details::StatStat { r, cred_transfer }) => {
             r_prepare_message_2_statstat(state, crypto, cred_r, r, c_r, cred_transfer, ead_2)
         }
-        // (EDHOCMethod::PSK, PrepareMessage2Details::Psk) =>
+        (EDHOCMethod::PSK, PrepareMessage2Details::Psk) => {
+            r_prepare_message_2_psk(state, crypto, cred_r, c_r, ead_2)
+        }
         _ => Err(EDHOCError::UnsupportedMethod),
     }
 }
@@ -93,7 +98,27 @@ pub fn r_parse_message_3(
     match state.method_specifics {
         WaitM3MethodSpecifics::StatStat { .. } => {
             r_parse_message_3_statstat(state, crypto, message_3)
-        } // WaitM3MethodSpecifics::Psk { .. } =>
+        }
+        WaitM3MethodSpecifics::Psk { .. } => r_parse_message_3_psk(state, crypto, message_3),
+    }
+}
+
+pub fn r_parse_message_3_with_cred_resolver<F>(
+    state: &mut WaitM3,
+    crypto: &mut impl CryptoTrait,
+    message_3: &BufferMessage3,
+    resolve_cred_i: F,
+) -> Result<(ProcessingM3, IdCred, EadItems), EDHOCError>
+where
+    F: Fn(&IdCred) -> Result<Credential, EDHOCError>,
+{
+    match state.method_specifics {
+        WaitM3MethodSpecifics::StatStat { .. } => {
+            r_parse_message_3_statstat(state, crypto, message_3)
+        }
+        WaitM3MethodSpecifics::Psk { .. } => {
+            r_parse_message_3_psk_with_cred_resolver(state, crypto, message_3, resolve_cred_i)
+        }
     }
 }
 
@@ -105,7 +130,10 @@ pub fn r_verify_message_3(
     match state.method_specifics {
         ProcessingM3MethodSpecifics::StatStat { .. } => {
             r_verify_message_3_statstat(state, crypto, valid_cred_i)
-        } // ProcessingM3MethodSpecifics::Psk { .. } =>
+        }
+        ProcessingM3MethodSpecifics::Psk { .. } => {
+            r_verify_message_3_psk(state, crypto, valid_cred_i)
+        }
     }
 }
 
@@ -163,7 +191,7 @@ pub fn i_parse_message_2<'a>(
 ) -> Result<(ProcessingM2, ConnId, ParsedMessage2Details), EDHOCError> {
     match state.method {
         EDHOCMethod::StatStat => i_parse_message_2_statstat(state, crypto, message_2),
-        // EDHOCMethod::PSK => i_parse_message_2_psk()
+        EDHOCMethod::PSK => i_parse_message_2_psk(state, crypto, message_2),
         _ => Err(EDHOCError::UnsupportedMethod),
     }
 }
@@ -179,7 +207,10 @@ pub fn i_verify_message_2(
         ProcessingM2MethodSpecifics::StatStat { .. } => {
             let i = i.ok_or(EDHOCError::MissingIdentity)?;
             i_verify_message_2_statstat(state, crypto, valid_cred_r, i)
-        } // ProcessingM2MethodSpecifics::Psk { .. } =>
+        }
+        ProcessingM2MethodSpecifics::Psk { .. } => {
+            i_verify_message_2_psk(state, crypto, valid_cred_r)
+        }
     }
 }
 
@@ -194,7 +225,7 @@ pub fn i_prepare_message_3(
         EDHOCMethod::StatStat => {
             i_prepare_message_3_statstat(state, crypto, cred_i, cred_transfer, ead_3)
         }
-        // EDHOCMethod::PSK => i_prepare_message_3_psk()
+        EDHOCMethod::PSK => i_prepare_message_3_psk(state, crypto, cred_i, cred_transfer, ead_3),
         _ => Err(EDHOCError::UnsupportedMethod),
     }
 }
@@ -365,6 +396,11 @@ fn edhoc_kdf_owned<const N: usize>(
     result
 }
 
+fn encode_plaintext_3_psk(ead_3: &EadItems) -> Result<BufferPlaintext3, EDHOCError> {
+    let mut plaintext_3 = BufferPlaintext3::new();
+    ead_3.encode(&mut plaintext_3)?;
+    Ok(plaintext_3)
+}
 fn encode_plaintext_3(
     id_cred_i: &[u8],
     mac_3: &BytesMac3,
@@ -657,7 +693,7 @@ fn compute_mac_2(
     edhoc_kdf_owned(crypto, prk_3e2m, 2_u8, context.as_slice())
 }
 
-fn encode_plaintext_2(
+fn encode_plaintext_2_statstat(
     c_r: ConnId,
     id_cred_r: &[u8],
     mac_2: &BytesMac2,
@@ -678,6 +714,20 @@ fn encode_plaintext_2(
         .push(CBOR_MAJOR_BYTE_STRING | MAC_LENGTH_2 as u8)
         .unwrap();
     plaintext_2.extend_from_slice(&mac_2[..]).unwrap();
+
+    // Encode optional EAD_2
+    ead_2.encode(&mut plaintext_2)?;
+
+    Ok(plaintext_2)
+}
+
+fn encode_plaintext_2_psk(c_r: ConnId, ead_2: &EadItems) -> Result<BufferPlaintext2, EDHOCError> {
+    let mut plaintext_2: BufferPlaintext2 = BufferPlaintext2::new();
+    let c_r = c_r.as_cbor();
+
+    plaintext_2
+        .extend_from_slice(c_r)
+        .or(Err(EDHOCError::EncodingError))?;
 
     // Encode optional EAD_2
     ead_2.encode(&mut plaintext_2)?;
@@ -727,6 +777,14 @@ fn compute_prk_4e3m(
     let g_iy = crypto.p256_ecdh(i, g_y);
 
     crypto.hkdf_extract(salt_4e3m, &g_iy)
+}
+
+fn compute_prk_4e3m_psk(
+    crypto: &mut impl CryptoTrait,
+    salt_4e3m: &BytesHashLen,
+    cred: &BytesKeyAES128, //TODO: what is the psk type? len?
+) -> BytesHashLen {
+    crypto.hkdf_extract_psk(salt_4e3m, &cred)
 }
 
 fn compute_salt_3e2m(
@@ -1116,7 +1174,7 @@ mod tests {
 
     #[test]
     fn test_encode_plaintext_2() {
-        let plaintext_2 = encode_plaintext_2(
+        let plaintext_2 = encode_plaintext_2_statstat(
             C_R_TV,
             IdCred::from_full_value(&ID_CRED_R_TV[..])
                 .unwrap()
