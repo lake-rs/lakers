@@ -97,6 +97,7 @@ impl EadItemsC {
 #[repr(C)]
 pub enum ProcessingM2MethodSpecificsKindC {
     Pm2StatStat,
+    Pm2Psk,
 }
 
 #[derive(Debug)]
@@ -148,6 +149,7 @@ impl ProcessingM2C {
                     id_cred_r: self.method_specifics.id_cred_r.clone(),
                 }
             }
+            ProcessingM2MethodSpecificsKindC::Pm2Psk => ProcessingM2MethodSpecifics::Psk {},
         };
 
         ProcessingM2 {
@@ -184,6 +186,13 @@ impl ProcessingM2C {
                     kind: ProcessingM2MethodSpecificsKindC::Pm2StatStat,
                     mac_2,
                     id_cred_r,
+                };
+            }
+            ProcessingM2MethodSpecifics::Psk {} => {
+                (*processing_m2_c).method_specifics = ProcessingM2MethodSpecificsC {
+                    kind: ProcessingM2MethodSpecificsKindC::Pm2Psk,
+                    mac_2: Default::default(),
+                    id_cred_r: Default::default(),
                 };
             }
         }

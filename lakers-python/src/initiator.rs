@@ -114,7 +114,7 @@ impl PyEdhocInitiator {
             i_parse_message_2(&self.take_wait_m2()?, &mut default_crypto(), &message_2)?;
         let (id_cred_r, ead_2) = match details {
             ParsedMessage2Details::StatStat { id_cred_r, ead_2 } => (id_cred_r, ead_2),
-            // ParsedMessage2Details::Psk { ead_2 } => (IdCred::new(), ead_2),
+            ParsedMessage2Details::Psk { ead_2 } => (IdCred::new(), ead_2),
         };
         self.processing_m2 = Some(state);
         Ok((

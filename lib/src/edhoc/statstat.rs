@@ -34,7 +34,8 @@ pub fn r_prepare_message_2_statstat(
     );
 
     // compute ciphertext_2
-    let plaintext_2 = encode_plaintext_2(c_r, id_cred_r.as_encoded_value(), &mac_2, &ead_2)?;
+    let plaintext_2 =
+        encode_plaintext_2_statstat(c_r, id_cred_r.as_encoded_value(), &mac_2, &ead_2)?;
 
     // step is actually from processing of message_3
     // but we do it here to avoid storing plaintext_2 in State
@@ -112,6 +113,7 @@ pub fn r_verify_message_3_statstat(
 
     let id_cred_i = match &state.method_specifics {
         ProcessingM3MethodSpecifics::StatStat { id_cred_i, .. } => id_cred_i,
+        _ => return Err(EDHOCError::UnsupportedMethod),
     };
 
     // compute mac_3
@@ -126,6 +128,7 @@ pub fn r_verify_message_3_statstat(
 
     let mac_3 = match &state.method_specifics {
         ProcessingM3MethodSpecifics::StatStat { mac_3, .. } => *mac_3,
+        _ => return Err(EDHOCError::UnsupportedMethod),
     };
 
     // verify mac_3
@@ -224,6 +227,7 @@ pub fn i_verify_message_2_statstat(
 
     let id_cred_r = match &state.method_specifics {
         ProcessingM2MethodSpecifics::StatStat { id_cred_r, .. } => id_cred_r,
+        ProcessingM2MethodSpecifics::Psk {} => todo!(),
     };
 
     let expected_mac_2 = compute_mac_2(
@@ -238,6 +242,7 @@ pub fn i_verify_message_2_statstat(
 
     let mac_2 = match state.method_specifics {
         ProcessingM2MethodSpecifics::StatStat { mac_2, .. } => mac_2,
+        ProcessingM2MethodSpecifics::Psk {} => todo!(),
     };
 
     if mac_2 == expected_mac_2 {
