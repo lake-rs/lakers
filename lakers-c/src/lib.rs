@@ -96,7 +96,7 @@ impl EadItemsC {
 #[repr(C)]
 pub enum ProcessingM2MethodSpecificsKindC {
     Pm2StatStat,
-    // Pm2Psk
+    Pm2Psk,
 }
 
 #[repr(C)]
@@ -106,8 +106,14 @@ pub struct ProcessingM2StatStatC {
 }
 
 #[repr(C)]
+pub struct ProcessingM2PskC {
+    pub id_cred_r: IdCred,
+}
+
+#[repr(C)]
 pub union ProcessingM2MethodSpecificsDataC {
     pub statstat: core::mem::ManuallyDrop<ProcessingM2StatStatC>,
+    pub psk: core::mem::ManuallyDrop<ProcessingM2PskC>,
 }
 
 #[repr(C)]
@@ -164,6 +170,12 @@ impl ProcessingM2C {
                     id_cred_r: stat.id_cred_r.clone(),
                 }
             }
+            ProcessingM2MethodSpecificsKindC::Pm2Psk => {
+                let psk = unsafe { &self.method_specifics.data.psk };
+                ProcessingM2MethodSpecifics::Psk {
+                    id_cred_r: psk.id_cred_r.clone(),
+                }
+            }
         };
 
         ProcessingM2 {
@@ -206,6 +218,15 @@ impl ProcessingM2C {
                     },
                 };
             }
+            ProcessingM2MethodSpecifics::Psk {} => todo!(), //     (*processing_m2_c).method_specifics = ProcessingM2MethodSpecificsC {
+                                                            //         kind: ProcessingM2MethodSpecificsKindC::Pm2Psk,
+                                                            //         data: ProcessingM2MethodSpecificsDataC {
+                                                            //             psk: core::mem::ManuallyDrop::new(ProcessingM2PskC) {
+                                                            //                 id_cred_r: id_cred_r,
+                                                            //             }),
+                                                            //         },
+                                                            //     };
+                                                            // }
         }
     }
 }

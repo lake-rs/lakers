@@ -42,7 +42,10 @@ let initiator = EdhocInitiator::new(default_crypto());
 
 let (initiator, message_1) = initiator.prepare_message_1(None, &EADItem::new_empty_array())?; // c_i and ead_1 are set to None
 
-let (initiator, _c_r, id_cred_r, _ead_2) = initiator.parse_message_2(&message_2)?;
+let (initiator, _c_r, details) = initiator.parse_message_2(&message_2)?;
+let ParsedMessage2Details::StatStat { id_cred_r, ead_2: _ead_2 } = details else {
+    unreachable!();
+};
 let valid_cred_r = credential_check_or_fetch(Some(CRED_R), id_cred_r)?; // CRED_R contains Responder's public key
 let initiator = initiator.verify_message_2(I, cred_i, valid_cred_r)?; // I is Initiator's private key
 

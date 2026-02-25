@@ -44,7 +44,8 @@ pub(crate) fn r_prepare_message_2_statstat(
     );
 
     // compute ciphertext_2
-    let plaintext_2 = encode_plaintext_2(c_r, id_cred_r.as_encoded_value(), &mac_2, &ead_2)?;
+    let plaintext_2 =
+        encode_plaintext_2_statstat(c_r, id_cred_r.as_encoded_value(), &mac_2, &ead_2)?;
 
     // step is actually from processing of message_3
     // but we do it here to avoid storing plaintext_2 in State
