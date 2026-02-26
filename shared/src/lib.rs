@@ -526,7 +526,6 @@ pub enum ProcessingM2MethodSpecifics {
 #[repr(C)]
 pub struct ProcessingM2 {
     pub method_specifics: ProcessingM2MethodSpecifics,
-    pub method: EDHOCMethod,
     pub prk_2e: BytesHashLen,
     pub th_2: BytesHashLen,
     pub x: BytesP256ElemLen,
@@ -551,7 +550,6 @@ pub enum ProcessingM3MethodSpecifics {
 #[derive(Debug)]
 pub struct ProcessingM3 {
     pub method_specifics: ProcessingM3MethodSpecifics,
-    pub method: EDHOCMethod,
     pub y: BytesP256ElemLen, // ephemeral private key of the responder
     pub prk_3e2m: BytesHashLen,
     pub th_3: BytesHashLen,
