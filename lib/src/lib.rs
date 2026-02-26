@@ -152,13 +152,21 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM1<Crypto> {
             None => generate_connection_identifier_cbor(&mut self.crypto),
         };
 
+        let method_details = match self.state.method {
+            EDHOCMethod::StatStat => PrepareMessage2Details::StatStat {
+                r: &self.r,
+                cred_transfer,
+            },
+            // EDHOCMethod::PSK => PrepareMessage2Details::Psk,
+            _ => return Err(EDHOCError::UnsupportedMethod),
+        };
+
         match r_prepare_message_2(
             &self.state,
             &mut self.crypto,
             self.cred_r,
-            &self.r,
+            method_details,
             c_r,
-            cred_transfer,
             ead_2,
         ) {
             Ok((state, message_2)) => Ok((

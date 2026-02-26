@@ -507,13 +507,27 @@ pub struct WaitM2 {
     pub x: BytesP256ElemLen, // ephemeral private key of the initiator
     pub h_message_1: BytesHashLen,
 }
-
+#[derive(Debug)]
+pub enum WaitM3MethodSpecifics {
+    StatStat {},
+    // Psk { cred_r: Credential },
+}
 #[derive(Debug)]
 pub struct WaitM3 {
-    pub method: EDHOCMethod,
+    pub method_specifics: WaitM3MethodSpecifics,
     pub y: BytesP256ElemLen, // ephemeral private key of the responder
     pub prk_3e2m: BytesHashLen,
     pub th_3: BytesHashLen,
+}
+
+/// Method-specific details required to prepare EDHOC message_2.
+#[derive(Copy, Clone, Debug)]
+pub enum PrepareMessage2Details<'a> {
+    StatStat {
+        r: &'a BytesP256ElemLen,
+        cred_transfer: CredentialTransfer,
+    },
+    // Psk,
 }
 
 #[derive(Debug)]

@@ -72,16 +72,15 @@ pub fn r_prepare_message_2(
     state: &ProcessingM1,
     crypto: &mut impl CryptoTrait,
     cred_r: Credential,
-    r: &BytesP256ElemLen, // R's static private DH key
+    method_details: PrepareMessage2Details<'_>,
     c_r: ConnId,
-    cred_transfer: CredentialTransfer,
     ead_2: &EadItems,
 ) -> Result<(WaitM3, BufferMessage2), EDHOCError> {
-    match state.method {
-        EDHOCMethod::StatStat => {
+    match (state.method, method_details) {
+        (EDHOCMethod::StatStat, PrepareMessage2Details::StatStat { r, cred_transfer }) => {
             r_prepare_message_2_statstat(state, crypto, cred_r, r, c_r, cred_transfer, ead_2)
         }
-        // EDHOCMethod::PSK => r_prepare_message_2_psk()
+        // (EDHOCMethod::PSK, PrepareMessage2Details::Psk) =>
         _ => Err(EDHOCError::UnsupportedMethod),
     }
 }
@@ -91,10 +90,10 @@ pub fn r_parse_message_3(
     crypto: &mut impl CryptoTrait,
     message_3: &BufferMessage3,
 ) -> Result<(ProcessingM3, IdCred, EadItems), EDHOCError> {
-    match state.method {
-        EDHOCMethod::StatStat => r_parse_message_3_statstat(state, crypto, message_3),
-        // EDHOCMethod::PSK => r_parse_message_3_psk()
-        _ => Err(EDHOCError::UnsupportedMethod),
+    match state.method_specifics {
+        WaitM3MethodSpecifics::StatStat { .. } => {
+            r_parse_message_3_statstat(state, crypto, message_3)
+        } // WaitM3MethodSpecifics::Psk { .. } =>
     }
 }
 
@@ -106,7 +105,7 @@ pub fn r_verify_message_3(
     match state.method_specifics {
         ProcessingM3MethodSpecifics::StatStat { .. } => {
             r_verify_message_3_statstat(state, crypto, valid_cred_i)
-        }
+        } // ProcessingM3MethodSpecifics::Psk { .. } =>
     }
 }
 
@@ -179,8 +178,7 @@ pub fn i_verify_message_2(
     match state.method_specifics {
         ProcessingM2MethodSpecifics::StatStat { .. } => {
             i_verify_message_2_statstat(state, crypto, valid_cred_r, i)
-        }
-        // EDHOCMethod::PSK => i_verify_message_2_psk()
+        } // ProcessingM2MethodSpecifics::Psk { .. } =>
     }
 }
 
