@@ -105,15 +105,22 @@ impl PyEdhocResponder {
         let ead_2 = ead_2.try_into()?;
         let mut r = BytesP256ElemLen::default();
         r.copy_from_slice(self.r.as_slice());
+        let method_details = match self.as_ref_processing_m1()?.method {
+            EDHOCMethod::StatStat => PrepareMessage2Details::StatStat {
+                r: &r,
+                cred_transfer,
+            },
+            // EDHOCMethod::PSK => PrepareMessage2Details::Psk,
+            _ => return Err(EDHOCError::UnsupportedMethod.into()),
+        };
 
         let (state, message_2) = r_prepare_message_2(
             self.as_ref_processing_m1()?,
             &mut default_crypto(),
             // FIXME: take as reference rather than cloning
             self.cred_r.clone(),
-            &r,
+            method_details,
             c_r,
-            cred_transfer,
             &ead_2,
         )?;
         self.wait_m3 = Some(state);

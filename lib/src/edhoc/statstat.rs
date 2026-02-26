@@ -51,7 +51,7 @@ pub fn r_prepare_message_2_statstat(
 
     Ok((
         WaitM3 {
-            method: state.method,
+            method_specifics: WaitM3MethodSpecifics::StatStat {},
             y: state.y,
             prk_3e2m: prk_3e2m,
             th_3: th_3,
