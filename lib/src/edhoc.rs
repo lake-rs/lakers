@@ -103,9 +103,10 @@ pub fn r_verify_message_3(
     crypto: &mut impl CryptoTrait,
     valid_cred_i: Credential,
 ) -> Result<(ProcessedM3, BytesHashLen), EDHOCError> {
-    match state.method {
-        EDHOCMethod::StatStat => r_verify_message_3_statstat(state, crypto, valid_cred_i),
-        _ => Err(EDHOCError::UnsupportedMethod),
+    match state.method_specifics {
+        ProcessingM3MethodSpecifics::StatStat { .. } => {
+            r_verify_message_3_statstat(state, crypto, valid_cred_i)
+        }
     }
 }
 
@@ -175,10 +176,11 @@ pub fn i_verify_message_2(
     valid_cred_r: Credential,
     i: &BytesP256ElemLen, // I's static private DH key
 ) -> Result<ProcessedM2, EDHOCError> {
-    match state.method {
-        EDHOCMethod::StatStat => i_verify_message_2_statstat(state, crypto, valid_cred_r, i),
+    match state.method_specifics {
+        ProcessingM2MethodSpecifics::StatStat { .. } => {
+            i_verify_message_2_statstat(state, crypto, valid_cred_r, i)
+        }
         // EDHOCMethod::PSK => i_verify_message_2_psk()
-        _ => Err(EDHOCError::UnsupportedMethod),
     }
 }
 

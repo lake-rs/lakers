@@ -77,7 +77,6 @@ pub fn r_parse_message_3_statstat(
                         mac_3,
                         id_cred_i: id_cred_i.clone(), // needed for compute_mac_3
                     },
-                    method: state.method,
                     y: state.y,
                     prk_3e2m: state.prk_3e2m,
                     th_3: state.th_3,
@@ -185,7 +184,6 @@ pub fn i_parse_message_2_statstat<'a>(
                     mac_2,
                     id_cred_r: id_cred_r.clone(), // needed for compute_mac_2
                 },
-                method: state.method,
                 prk_2e,
                 th_2,
                 x: state.x,
