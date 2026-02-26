@@ -88,7 +88,7 @@ impl<Rng: rand_core::RngCore + rand_core::CryptoRng> CryptoTrait for Crypto<Rng>
         )]
         match Tag::LEN {
             8 => {
-                let tag = AesCcm16_64_128::new(key.into())
+                let enc = AesCcm16_64_128::new(key.into())
                     .encrypt_in_place_detached(
                         iv.into(),
                         ad,
@@ -96,11 +96,11 @@ impl<Rng: rand_core::RngCore + rand_core::CryptoRng> CryptoTrait for Crypto<Rng>
                     )
                     .expect("Preconfigured sizes should not allow encryption to fail");
 
-                outbuffer.extend_from_slice(&tag).unwrap()
+                outbuffer.extend_from_slice(&enc).unwrap()
             }
 
             16 => {
-                let tag = AesCcm16_128_128::new(key.into())
+                let enc = AesCcm16_128_128::new(key.into())
                     .encrypt_in_place_detached(
                         iv.into(),
                         ad,
@@ -108,7 +108,7 @@ impl<Rng: rand_core::RngCore + rand_core::CryptoRng> CryptoTrait for Crypto<Rng>
                     )
                     .expect("Preconfigured sizes should not allow encryption to fail");
 
-                outbuffer.extend_from_slice(&tag).unwrap()
+                outbuffer.extend_from_slice(&enc).unwrap()
             }
 
             _ => unreachable!(), // CcmTagLen bound guarantees this
