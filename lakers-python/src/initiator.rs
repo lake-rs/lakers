@@ -110,8 +110,12 @@ impl PyEdhocInitiator {
         let message_2 = EdhocMessageBuffer::new_from_slice(message_2.as_slice())
             .with_cause(py, "Message 2 too long")?;
 
-        let (state, c_r, id_cred_r, ead_2) =
+        let (state, c_r, details) =
             i_parse_message_2(&self.take_wait_m2()?, &mut default_crypto(), &message_2)?;
+        let (id_cred_r, ead_2) = match details {
+            ParsedMessage2Details::StatStat { id_cred_r, ead_2 } => (id_cred_r, ead_2),
+            // ParsedMessage2Details::Psk { ead_2 } => (IdCred::new(), ead_2),
+        };
         self.processing_m2 = Some(state);
         Ok((
             PyBytes::new(py, c_r.as_slice()),
@@ -143,9 +147,11 @@ impl PyEdhocInitiator {
             &self.take_processing_m2()?,
             &mut default_crypto(),
             valid_cred_r,
-            i.as_slice()
-                .try_into()
-                .expect("Wrong length of initiator private key"),
+            Some(
+                i.as_slice()
+                    .try_into()
+                    .expect("Wrong length of initiator private key"),
+            ),
         )?;
         self.processed_m2 = Some(state);
         self.cred_i = Some(cred_i);

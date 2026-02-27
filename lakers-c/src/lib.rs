@@ -111,7 +111,6 @@ pub struct ProcessingM2MethodSpecificsC {
 #[repr(C)]
 pub struct ProcessingM2C {
     pub method_specifics: ProcessingM2MethodSpecificsC,
-    pub method: EDHOCMethod,
     pub prk_2e: BytesHashLen,
     pub th_2: BytesHashLen,
     pub x: BytesP256ElemLen,
@@ -129,7 +128,6 @@ impl Default for ProcessingM2C {
                 mac_2: Default::default(),
                 id_cred_r: Default::default(),
             },
-            method: EDHOCMethod::StatStat,
             prk_2e: Default::default(),
             th_2: Default::default(),
             x: Default::default(),
@@ -154,7 +152,6 @@ impl ProcessingM2C {
 
         ProcessingM2 {
             method_specifics,
-            method: self.method,
             prk_2e: self.prk_2e,
             th_2: self.th_2,
             x: self.x,
@@ -177,7 +174,6 @@ impl ProcessingM2C {
         (*processing_m2_c).x = processing_m2.x;
         (*processing_m2_c).g_y = processing_m2.g_y;
         (*processing_m2_c).plaintext_2 = processing_m2.plaintext_2;
-        (*processing_m2_c).method = processing_m2.method;
         let c_r = processing_m2.c_r.as_slice();
         assert_eq!(c_r.len(), 1, "C API only supports short C_R");
         (*processing_m2_c).c_r = c_r[0];
@@ -221,6 +217,79 @@ impl CredentialC {
         (*cred_c).key = cred.key;
         (*cred_c).kid = cred.kid.unwrap();
         (*cred_c).cred_type = cred.cred_type;
+    }
+}
+
+#[derive(Debug)]
+#[repr(C)]
+pub enum ProcessedM2MethodSpecificsKindC {
+    Prm2StatStat,
+}
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct ProcessedM2MethodSpecificsC {
+    pub kind: ProcessedM2MethodSpecificsKindC,
+}
+
+#[derive(Debug)]
+#[repr(C)]
+pub struct ProcessedM2C {
+    pub method: EDHOCMethod,
+    pub method_specifics: ProcessedM2MethodSpecificsC,
+    pub prk_3e2m: BytesHashLen,
+    pub prk_4e3m: BytesHashLen,
+    pub th_3: BytesHashLen,
+}
+
+impl Default for ProcessedM2C {
+    fn default() -> Self {
+        Self {
+            method: EDHOCMethod::StatStat,
+            method_specifics: ProcessedM2MethodSpecificsC {
+                kind: ProcessedM2MethodSpecificsKindC::Prm2StatStat,
+            },
+            prk_3e2m: Default::default(),
+            prk_4e3m: Default::default(),
+            th_3: Default::default(),
+        }
+    }
+}
+
+impl ProcessedM2C {
+    pub fn to_rust(&self) -> ProcessedM2 {
+        let method_specifics = match self.method_specifics.kind {
+            ProcessedM2MethodSpecificsKindC::Prm2StatStat => {
+                ProcessedM2MethodSpecifics::StatStat {}
+            }
+        };
+
+        ProcessedM2 {
+            method: self.method,
+            method_specifics,
+            prk_3e2m: self.prk_3e2m,
+            prk_4e3m: self.prk_4e3m,
+            th_3: self.th_3,
+        }
+    }
+
+    pub unsafe fn copy_into_c(processed_m2: ProcessedM2, processed_m2_c: *mut ProcessedM2C) {
+        if processed_m2_c.is_null() {
+            panic!("processed_m2_c is null");
+        }
+
+        (*processed_m2_c).method = processed_m2.method;
+        (*processed_m2_c).prk_3e2m = processed_m2.prk_3e2m;
+        (*processed_m2_c).prk_4e3m = processed_m2.prk_4e3m;
+        (*processed_m2_c).th_3 = processed_m2.th_3;
+
+        match processed_m2.method_specifics {
+            ProcessedM2MethodSpecifics::StatStat {} => {
+                (*processed_m2_c).method_specifics = ProcessedM2MethodSpecificsC {
+                    kind: ProcessedM2MethodSpecificsKindC::Prm2StatStat,
+                };
+            }
+        }
     }
 }
 
