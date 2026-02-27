@@ -160,10 +160,10 @@ pub fn i_parse_message_2<'a>(
     state: &WaitM2,
     crypto: &mut impl CryptoTrait,
     message_2: &BufferMessage2,
-) -> Result<(ProcessingM2, ConnId, IdCred, EadItems), EDHOCError> {
+) -> Result<(ProcessingM2, ConnId, ParsedMessage2Details), EDHOCError> {
     match state.method {
         EDHOCMethod::StatStat => i_parse_message_2_statstat(state, crypto, message_2),
-        // EDHOCMethod::PSK => r_parse_message_3_psk()
+        // EDHOCMethod::PSK => i_parse_message_2_psk()
         _ => Err(EDHOCError::UnsupportedMethod),
     }
 }
@@ -173,10 +173,11 @@ pub fn i_verify_message_2(
     state: &ProcessingM2,
     crypto: &mut impl CryptoTrait,
     valid_cred_r: Credential,
-    i: &BytesP256ElemLen, // I's static private DH key
+    i: Option<&BytesP256ElemLen>, // I's static private DH key when required by method
 ) -> Result<ProcessedM2, EDHOCError> {
     match state.method_specifics {
         ProcessingM2MethodSpecifics::StatStat { .. } => {
+            let i = i.ok_or(EDHOCError::MissingIdentity)?;
             i_verify_message_2_statstat(state, crypto, valid_cred_r, i)
         } // ProcessingM2MethodSpecifics::Psk { .. } =>
     }

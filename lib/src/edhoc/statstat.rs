@@ -124,8 +124,8 @@ pub fn r_verify_message_3_statstat(
         &state.ead_3,
     );
 
-    let mac_3 = match state.method_specifics {
-        ProcessingM3MethodSpecifics::StatStat { mac_3, .. } => mac_3,
+    let mac_3 = match &state.method_specifics {
+        ProcessingM3MethodSpecifics::StatStat { mac_3, .. } => *mac_3,
     };
 
     // verify mac_3
@@ -165,7 +165,7 @@ pub fn i_parse_message_2_statstat<'a>(
     state: &WaitM2,
     crypto: &mut impl CryptoTrait,
     message_2: &BufferMessage2,
-) -> Result<(ProcessingM2, ConnId, IdCred, EadItems), EDHOCError> {
+) -> Result<(ProcessingM2, ConnId, ParsedMessage2Details), EDHOCError> {
     let res = parse_message_2(message_2);
     if let Ok((g_y, ciphertext_2)) = res {
         let th_2 = compute_th_2(crypto, &g_y, &state.h_message_1);
@@ -193,7 +193,11 @@ pub fn i_parse_message_2_statstat<'a>(
                 ead_2: ead_2.clone(), // needed for compute_mac_2
             };
 
-            Ok((state, c_r_2, id_cred_r, ead_2))
+            Ok((
+                state,
+                c_r_2,
+                ParsedMessage2Details::StatStat { id_cred_r, ead_2 },
+            ))
         } else {
             Err(EDHOCError::ParsingError)
         }
@@ -255,6 +259,7 @@ pub fn i_verify_message_2_statstat(
             // We need the method for next step. Since we are in the branch of StatStat,
             // we can add EDHOCMethod::StatStat
             method: EDHOCMethod::StatStat,
+            method_specifics: ProcessedM2MethodSpecifics::StatStat {},
             prk_3e2m: prk_3e2m,
             prk_4e3m: prk_4e3m,
             th_3: th_3,
