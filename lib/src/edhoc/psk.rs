@@ -269,8 +269,7 @@ pub fn i_prepare_message_3_psk(
     let mut ct_3a: BufferCiphertext3 = BufferCiphertext3::new();
     ct_3a.extend_from_slice(pt_3a).unwrap();
     ct_3a.extend_from_slice(ciphertext_3b.as_slice()).unwrap();
-    let ciphertext_3a =
-        encrypt_decrypt_ciphertext_3a(crypto, &state.prk_3e2m, &state.th_3, &ct_3a);
+    let ciphertext_3a = encrypt_decrypt_ciphertext_3a(crypto, &state.prk_3e2m, &state.th_3, &ct_3a);
     // CBOR encoding of ct_3a
     let encoded_ciphertext_3a = encode_ciphertext_3a(ciphertext_3a)?;
     //compute message_3

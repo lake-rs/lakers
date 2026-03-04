@@ -427,10 +427,13 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessingM2<Crypto> {
         valid_cred_r: Credential,
     ) -> Result<EdhocInitiatorProcessedM2<Crypto>, EDHOCError> {
         trace!("Enter verify_message_2");
-        let Some(i) = self.i else {
-            return Err(EDHOCError::MissingIdentity);
+        let i = match self.state.method_specifics {
+            ProcessingM2MethodSpecifics::StatStat { .. } => {
+                Some(self.i.as_ref().ok_or(EDHOCError::MissingIdentity)?)
+            }
+            ProcessingM2MethodSpecifics::Psk { .. } => None,
         };
-        match i_verify_message_2(&self.state, &mut self.crypto, valid_cred_r, Some(&i)) {
+        match i_verify_message_2(&self.state, &mut self.crypto, valid_cred_r, i) {
             Ok(state) => Ok(EdhocInitiatorProcessedM2 {
                 state,
                 cred_i: self.cred_i,
@@ -757,7 +760,10 @@ mod test {
         let ParsedMessage2Details::StatStat {
             id_cred_r,
             ead_2: _ead_2,
-        } = details;
+        } = details
+        else {
+            panic!("Expected StatStat details");
+        };
         let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r).unwrap();
         initiator
             .set_identity(
@@ -916,7 +922,9 @@ mod test_authz {
             .unwrap();
 
         let (mut initiator, _c_r, details) = initiator.parse_message_2(&message_2).unwrap();
-        let ParsedMessage2Details::StatStat { id_cred_r, ead_2 } = details;
+        let ParsedMessage2Details::StatStat { id_cred_r, ead_2 } = details else {
+            panic!("Expected StatStat details");
+        };
         let valid_cred_r = credential_check_or_fetch(None, id_cred_r).unwrap();
         let result =
             device.process_ead_2(&mut default_crypto(), ead_2.iter().next().unwrap(), CRED_R);

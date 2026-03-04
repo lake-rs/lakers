@@ -1174,7 +1174,7 @@ mod tests {
 
     #[test]
     fn test_encode_plaintext_2() {
-        let plaintext_2 = encode_plaintext_2(
+        let plaintext_2 = encode_plaintext_2_statstat(
             C_R_TV,
             IdCred::from_full_value(&ID_CRED_R_TV[..])
                 .unwrap()

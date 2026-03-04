@@ -125,7 +125,10 @@ fn main() -> ! {
         let ParsedMessage2Details::StatStat {
             id_cred_r,
             ead_2: _ead_2,
-        } = details;
+        } = details
+        else {
+            panic!("Expected StatStat details");
+        };
         let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r).unwrap();
         initiator
             .set_identity(
