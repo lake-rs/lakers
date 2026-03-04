@@ -42,8 +42,7 @@ impl<'py> pyo3::conversion::FromPyObject<'_, 'py> for EadItems {
         if ob.is_none() {
             return Ok(items);
         };
-        let value: &Bound<'py, pyo3::types::PySequence> = ob.downcast()?;
-        for item in value.try_iter()? {
+        for item in ob.try_iter()? {
             items
                 .try_push(item?.extract()?)
                 .map_err(|err| PyValueError::new_err(format!("ead already full: {:?}", err)))?;
