@@ -208,7 +208,7 @@ impl CryptoTrait for Crypto {
 
         key_agreement::raw_key_agreement(alg, my_key, &peer_public_key, &mut output_buffer)
             .unwrap();
-
+        let _ = unsafe { key_management::destroy(my_key) };
         output_buffer
     }
 
