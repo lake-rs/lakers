@@ -88,6 +88,15 @@ impl CryptoTrait for Crypto {
         output
     }
 
+    // added for PSK
+    fn hkdf_extract_psk(&mut self, salt: &BytesHashLen, ikm: &BytesElemLenPSK) -> BytesHashLen {
+        // TODO
+        // TODO generalize if salt is not provided
+        let output = self.hmac_sha256(&mut ikm.clone()[..], salt);
+
+        output
+    }
+
     fn aes_ccm_encrypt_tag_8<const N: usize>(
         &mut self,
         key: &BytesCcmKeyLen,
