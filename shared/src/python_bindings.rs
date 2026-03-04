@@ -57,8 +57,9 @@ impl<'py> pyo3::conversion::IntoPyObject<'py> for EadItems {
 
     fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
         let list = pyo3::types::PyList::new(py, core::iter::empty::<PyObject>())?;
-        // Can't pass it into new as it doesn't have an ExactSizeItertor -- FIXME: should we
-        // implement and use that?
+        // Can't pass it into new as it doesn't have an ExactSizeIterator -- and while we *could*
+        // implement that on EadItems, it would currently be more cumbersome than this one line, as
+        // iteration is implemented through FilterMap at the time of writing.
         for item in self.iter() {
             list.append(item.clone())?;
         }
