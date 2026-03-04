@@ -9,13 +9,13 @@ description = "An implementation of EDHOC, written in Rust"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-pyo3 = { version = "0.25", features = ["extension-module"] }
+pyo3 = { version = "0.26", features = ["extension-module"] }
 lakers = { package = "lakers", path = "../lib", default-features = false, features = [ "log" ] }
 lakers-ead-authz = { path = "../ead/lakers-ead-authz", features = [ "log" ] }
 lakers-shared = { path = "../shared", features = ["python-bindings", "large_buffers"] }
 lakers-crypto = { path = "../crypto", default-features = false, features = ["rustcrypto"] }
 log = "0.4"
-pyo3-log = "0.12.0"
+pyo3-log = "0.13.0"
 
 [dev-dependencies]
 # We don't need it to build, but it is listed in the manifest Cargo.toml, and
