@@ -56,7 +56,7 @@ impl<'py> pyo3::conversion::IntoPyObject<'py> for EadItems {
     type Error = PyErr;
 
     fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
-        let list = pyo3::types::PyList::new(py, core::iter::empty::<PyObject>())?;
+        let list = pyo3::types::PyList::new(py, core::iter::empty::<Py<PyAny>>())?;
         // Can't pass it into new as it doesn't have an ExactSizeIterator -- and while we *could*
         // implement that on EadItems, it would currently be more cumbersome than this one line, as
         // iteration is implemented through FilterMap at the time of writing.
