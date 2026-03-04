@@ -168,9 +168,7 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM1<Crypto> {
             (EDHOCMethod::StatStat, ResponderIdentity::StatStat { r }) => {
                 PrepareMessage2Details::StatStat { r, cred_transfer }
             }
-            (EDHOCMethod::Psk, ResponderIdentity::Psk) => {
-            PrepareMessage2Details::Psk { }
-            }
+            (EDHOCMethod::PSK, ResponderIdentity::Psk) => PrepareMessage2Details::Psk {},
             // FIXME: Distinguish `MissingIdentity` from `MethodIdentityMismatch` here;
             _ => return Err(EDHOCError::MissingIdentity), // or UnsupportedMethod
         };
@@ -741,8 +739,7 @@ mod test {
 
         // ---- being initiator handling
         let (mut initiator, _c_r, details, _ead_2) = initiator.parse_message_2(&message_2).unwrap();
-        let ParsedMessage2Details::StatStat { id_cred_r } = details
-        else {
+        let ParsedMessage2Details::StatStat { id_cred_r } = details else {
             panic!("Expected StatStat details");
         };
         let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r).unwrap();

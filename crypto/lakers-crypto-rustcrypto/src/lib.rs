@@ -2,8 +2,8 @@
 
 use lakers_shared::CcmTagLen;
 use lakers_shared::{
-    BytesCcmIvLen, BytesCcmKeyLen, BytesHashLen, BytesP256ElemLen, Crypto as CryptoTrait,
-    EDHOCError, EDHOCSuite, EdhocBuffer, MAX_SUITES_LEN, BytesElemLenPSK,
+    BytesCcmIvLen, BytesCcmKeyLen, BytesElemLenPSK, BytesHashLen, BytesP256ElemLen,
+    Crypto as CryptoTrait, EDHOCError, EDHOCSuite, EdhocBuffer, MAX_SUITES_LEN,
 };
 
 use ccm::AeadInPlace;

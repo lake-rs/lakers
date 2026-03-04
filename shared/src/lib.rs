@@ -555,7 +555,7 @@ pub struct ProcessingM2 {
 #[derive(Debug)]
 pub enum ParsedMessage2Details {
     StatStat { id_cred_r: IdCred },
-    Psk {  },
+    Psk {},
 }
 
 #[derive(Debug)]

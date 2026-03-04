@@ -112,7 +112,7 @@ pub unsafe extern "C" fn initiator_parse_message_2(
             *c_r_out = c_r[0];
             let id_cred_r = match details {
                 ParsedMessage2Details::StatStat { id_cred_r } => id_cred_r,
-                ParsedMessage2Details::Psk { } => IdCred::new(),
+                ParsedMessage2Details::Psk {} => IdCred::new(),
             };
             *id_cred_r_out = id_cred_r;
 
@@ -142,7 +142,7 @@ pub unsafe extern "C" fn initiator_verify_message_2(
     let crypto = &mut default_crypto();
 
     let state = core::ptr::read(&(*initiator_c).processing_m2).to_rust();
-    
+
     // FIXME
     match i_verify_message_2(
         &state,

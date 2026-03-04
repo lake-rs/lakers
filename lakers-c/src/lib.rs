@@ -106,9 +106,7 @@ pub struct ProcessingM2StatStatC {
 }
 
 #[repr(C)]
-pub struct ProcessingM2PskC {
-    pub id_cred_r: IdCred,
-}
+pub struct ProcessingM2PskC {}
 
 #[repr(C)]
 pub union ProcessingM2MethodSpecificsDataC {
@@ -170,12 +168,7 @@ impl ProcessingM2C {
                     id_cred_r: stat.id_cred_r.clone(),
                 }
             }
-            ProcessingM2MethodSpecificsKindC::Pm2Psk => {
-                let psk = unsafe { &self.method_specifics.data.psk };
-                ProcessingM2MethodSpecifics::Psk {
-                    id_cred_r: psk.id_cred_r.clone(),
-                }
-            }
+            ProcessingM2MethodSpecificsKindC::Pm2Psk => ProcessingM2MethodSpecifics::Psk {},
         };
 
         ProcessingM2 {
@@ -218,15 +211,14 @@ impl ProcessingM2C {
                     },
                 };
             }
-            ProcessingM2MethodSpecifics::Psk {} => todo!(), //     (*processing_m2_c).method_specifics = ProcessingM2MethodSpecificsC {
-                                                            //         kind: ProcessingM2MethodSpecificsKindC::Pm2Psk,
-                                                            //         data: ProcessingM2MethodSpecificsDataC {
-                                                            //             psk: core::mem::ManuallyDrop::new(ProcessingM2PskC) {
-                                                            //                 id_cred_r: id_cred_r,
-                                                            //             }),
-                                                            //         },
-                                                            //     };
-                                                            // }
+            ProcessingM2MethodSpecifics::Psk {} => {
+                (*processing_m2_c).method_specifics = ProcessingM2MethodSpecificsC {
+                    kind: ProcessingM2MethodSpecificsKindC::Pm2Psk,
+                    data: ProcessingM2MethodSpecificsDataC {
+                        psk: core::mem::ManuallyDrop::new(ProcessingM2PskC {}),
+                    },
+                };
+            }
         }
     }
 }
@@ -264,14 +256,20 @@ impl CredentialC {
 #[repr(C)]
 pub enum ProcessedM2MethodSpecificsKindC {
     Prm2StatStat,
-    // Pm2Psk,
+    Prm2Psk,
 }
 #[repr(C)]
 pub struct ProcessedM2StatStatC {}
 
 #[repr(C)]
+pub struct ProcessedM2PskC {
+    cred_r: CredentialC,
+}
+
+#[repr(C)]
 pub union ProcessedM2MethodSpecificsDataC {
     pub statstat: core::mem::ManuallyDrop<ProcessedM2StatStatC>,
+    pub psk: core::mem::ManuallyDrop<ProcessedM2PskC>,
 }
 
 #[repr(C)]
@@ -309,10 +307,16 @@ impl ProcessedM2C {
         let method_specifics = match self.method_specifics.kind {
             ProcessedM2MethodSpecificsKindC::Prm2StatStat => {
                 ProcessedM2MethodSpecifics::StatStat {}
-            } // ProcessedM2MethodSpecificsKindC::Prm2Psk => {
-              //     let psk = unsafe { &self.method_specifics.data.psk };
-              //     ProcessedM2MethodSpecifics::Psk { ...from psk... }
-              // }
+            }
+            ProcessedM2MethodSpecificsKindC::Prm2Psk => {
+                // SAFETY: Accessing a union field is unsafe. We just matched on
+                // `self.method_specifics.kind == ProcessedM2MethodSpecificsKindC::Prm2Psk`,
+                // so `data.psk` is the active variant.
+                let psk = unsafe { &self.method_specifics.data.psk };
+                ProcessedM2MethodSpecifics::Psk {
+                    cred_r: psk.cred_r.to_rust(),
+                }
+            }
         };
 
         ProcessedM2 {
@@ -338,6 +342,17 @@ impl ProcessedM2C {
                     kind: ProcessedM2MethodSpecificsKindC::Prm2StatStat,
                     data: ProcessedM2MethodSpecificsDataC {
                         statstat: core::mem::ManuallyDrop::new(ProcessedM2StatStatC {}),
+                    },
+                };
+            }
+            ProcessedM2MethodSpecifics::Psk { cred_r } => {
+                let mut cred_r_c = core::mem::MaybeUninit::<CredentialC>::uninit();
+                CredentialC::copy_into_c(cred_r, cred_r_c.as_mut_ptr());
+                let cred_r_c = cred_r_c.assume_init();
+                (*processed_m2_c).method_specifics = ProcessedM2MethodSpecificsC {
+                    kind: ProcessedM2MethodSpecificsKindC::Prm2Psk,
+                    data: ProcessedM2MethodSpecificsDataC {
+                        psk: core::mem::ManuallyDrop::new(ProcessedM2PskC { cred_r: cred_r_c }),
                     },
                 };
             }
