@@ -12,9 +12,6 @@ dynamic = [
     "license",
     "readme",
     "requires-python",
+    "urls",
     "version",
 ]
-
-[project.urls]
-"Source Code" = "https://github.com/lake-rs/lakers/tree/main/lakers-python"
-Documentation = "https://lakers.readthedocs.io/"

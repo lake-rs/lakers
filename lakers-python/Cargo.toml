@@ -5,6 +5,7 @@ version ="0.6.0"
 repository.workspace = true
 license.workspace = true
 description = "An implementation of EDHOC, written in Rust"
+documentation = "https://lakers.readthedocs.io/"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
