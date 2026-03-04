@@ -12,6 +12,15 @@ See the project README_ file for installation, maintenance and license informati
 .. _lakers-python: https://pypi.org/project/lakers-python/
 .. _`on docs.rs`: https://docs.rs/lakers/
 
+.. toctree::
+   :hidden:
+
+   API documentation <self>
+   CHANGELOG.md
+
+API documentation
+=================
+
 .. automodule:: lakers
    :members:
    :undoc-members:

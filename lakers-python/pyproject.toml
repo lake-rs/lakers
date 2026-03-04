@@ -15,3 +15,6 @@ dynamic = [
     "urls",
     "version",
 ]
+
+[project.optional-dependencies]
+docs = ["sphinx", "myst-parser"]
