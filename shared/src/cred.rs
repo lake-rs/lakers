@@ -166,7 +166,7 @@ impl IdCred {
 /// For now supports CCS credentials only.
 /// Experimental support for CCS_PSK credentials is also available.
 // TODO: add back support for C and Python bindings
-#[cfg_attr(feature = "python-bindings", pyclass)]
+#[cfg_attr(feature = "python-bindings", pyclass(from_py_object))]
 #[derive(Clone, Debug, PartialEq)]
 #[repr(C)]
 pub struct Credential {
