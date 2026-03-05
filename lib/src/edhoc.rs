@@ -81,6 +81,7 @@ pub fn r_prepare_message_2(
             r_prepare_message_2_statstat(state, crypto, cred_r, r, c_r, cred_transfer, ead_2)
         }
         // (EDHOCMethod::PSK, PrepareMessage2Details::Psk) =>
+        // FIXME: it is not an error, but more a lack of agreement between peers.
         _ => Err(EDHOCError::UnsupportedMethod),
     }
 }
@@ -102,10 +103,12 @@ pub fn r_verify_message_3(
     crypto: &mut impl CryptoTrait,
     valid_cred_i: Credential,
 ) -> Result<(ProcessedM3, BytesHashLen), EDHOCError> {
-    match state.method_specifics {
-        ProcessingM3MethodSpecifics::StatStat { .. } => {
-            r_verify_message_3_statstat(state, crypto, valid_cred_i)
-        } // ProcessingM3MethodSpecifics::Psk { .. } =>
+    match &state.method_specifics {
+        ProcessingM3MethodSpecifics::StatStat { mac_3, id_cred_i } => {
+            r_verify_message_3_statstat(state, crypto, valid_cred_i, *mac_3, id_cred_i)
+        } // ProcessingM3MethodSpecifics::Psk { ... } => {
+          //     r_verify_message_3_psk(state, crypto, valid_cred_i, ...)
+          // }
     }
 }
 
@@ -160,14 +163,13 @@ pub fn i_parse_message_2<'a>(
     state: &WaitM2,
     crypto: &mut impl CryptoTrait,
     message_2: &BufferMessage2,
-) -> Result<(ProcessingM2, ConnId, ParsedMessage2Details), EDHOCError> {
+) -> Result<(ProcessingM2, ConnId, ParsedMessage2Details, EadItems), EDHOCError> {
     match state.method {
         EDHOCMethod::StatStat => i_parse_message_2_statstat(state, crypto, message_2),
         // EDHOCMethod::PSK => i_parse_message_2_psk()
         _ => Err(EDHOCError::UnsupportedMethod),
     }
 }
-// returns c_r
 
 pub fn i_verify_message_2(
     state: &ProcessingM2,

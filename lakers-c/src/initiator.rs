@@ -106,13 +106,13 @@ pub unsafe extern "C" fn initiator_parse_message_2(
     let state = core::ptr::read(&(*initiator_c).wait_m2);
 
     let result = match i_parse_message_2(&state, crypto, &(*message_2)) {
-        Ok((state, c_r, details)) => {
+        Ok((state, c_r, details, ead_2)) => {
             ProcessingM2C::copy_into_c(state, &mut (*initiator_c).processing_m2);
             let c_r = c_r.as_slice();
             assert_eq!(c_r.len(), 1, "C API only supports short C_R");
             *c_r_out = c_r[0];
-            let (id_cred_r, ead_2) = match details {
-                ParsedMessage2Details::StatStat { id_cred_r, ead_2 } => (id_cred_r, ead_2),
+            let id_cred_r = match details {
+                ParsedMessage2Details::StatStat { id_cred_r } => id_cred_r,
             };
             *id_cred_r_out = id_cred_r;
 

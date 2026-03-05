@@ -68,17 +68,17 @@ pub struct EdhocInitiatorDone<Crypto: CryptoTrait> {
 /// Starting point for performing EDHOC in the role of the Responder.
 #[derive(Debug)]
 pub struct EdhocResponder<Crypto: CryptoTrait> {
-    state: ResponderStart,       // opaque state
-    r: Option<BytesP256ElemLen>, // private authentication key of R when required by method
-    cred_r: Credential,          // R's full credential
+    state: ResponderStart, // opaque state
+    r: ResponderIdentity,  // private authentication key of R when required by method
+    cred_r: Credential,    // R's full credential
     crypto: Crypto,
 }
 
 #[derive(Debug)]
 pub struct EdhocResponderProcessedM1<Crypto: CryptoTrait> {
-    state: ProcessingM1,         // opaque state
-    r: Option<BytesP256ElemLen>, // private authentication key of R when required by method
-    cred_r: Credential,          // R's full credential
+    state: ProcessingM1,  // opaque state
+    r: ResponderIdentity, // private authentication key of R when required by method
+    cred_r: Credential,   // R's full credential
     crypto: Crypto,
 }
 
@@ -122,14 +122,10 @@ impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
     pub fn new(mut crypto: Crypto, identity: ResponderIdentity, cred_r: Credential) -> Self {
         trace!("Initializing EdhocResponder");
         let (y, g_y) = crypto.p256_generate_key_pair();
-        let r = match identity {
-            ResponderIdentity::StatStat { r } => Some(r),
-            ResponderIdentity::Psk => None,
-        };
 
         EdhocResponder {
             state: ResponderStart { y, g_y },
-            r,
+            r: identity,
             cred_r,
             crypto,
         }
@@ -168,13 +164,14 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM1<Crypto> {
             None => generate_connection_identifier_cbor(&mut self.crypto),
         };
 
-        let method_details = match self.state.method {
-            EDHOCMethod::StatStat => PrepareMessage2Details::StatStat {
-                r: self.r.as_ref().ok_or(EDHOCError::MissingIdentity)?,
-                cred_transfer,
-            },
-            // EDHOCMethod::PSK => PrepareMessage2Details::Psk,
-            _ => return Err(EDHOCError::UnsupportedMethod),
+        let method_details = match (self.state.method, &self.r) {
+            (EDHOCMethod::StatStat, ResponderIdentity::StatStat { r }) => {
+                PrepareMessage2Details::StatStat { r, cred_transfer }
+            }
+            // (EDHOCMethod::Psk, ResponderIdentity::Psk) => {
+            // PrepareMessage2Details::Psk
+            // }
+            _ => return Err(EDHOCError::MissingIdentity), // or UnsupportedMethod
         };
 
         match r_prepare_message_2(
@@ -343,12 +340,13 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorWaitM2<Crypto> {
             EdhocInitiatorProcessingM2<Crypto>,
             ConnId,
             ParsedMessage2Details,
+            EadItems,
         ),
         EDHOCError,
     > {
         trace!("Enter parse_message_2");
         match i_parse_message_2(&self.state, &mut self.crypto, message_2) {
-            Ok((state, c_r, details)) => Ok((
+            Ok((state, c_r, details, ead_2)) => Ok((
                 EdhocInitiatorProcessingM2 {
                     state,
                     i: self.i,
@@ -357,6 +355,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorWaitM2<Crypto> {
                 },
                 c_r,
                 details,
+                ead_2,
             )),
             Err(error) => Err(error),
         }
@@ -691,11 +690,8 @@ mod test {
         // ---- end responder handling
 
         // ---- being initiator handling
-        let (mut initiator, _c_r, details) = initiator.parse_message_2(&message_2).unwrap();
-        let ParsedMessage2Details::StatStat {
-            id_cred_r,
-            ead_2: _ead_2,
-        } = details;
+        let (mut initiator, _c_r, details, _ead_2) = initiator.parse_message_2(&message_2).unwrap();
+        let ParsedMessage2Details::StatStat { id_cred_r } = details;
         let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r).unwrap();
         initiator
             .set_identity(
@@ -853,8 +849,8 @@ mod test_authz {
             .prepare_message_2(CredentialTransfer::ByValue, None, &ead_2)
             .unwrap();
 
-        let (mut initiator, _c_r, details) = initiator.parse_message_2(&message_2).unwrap();
-        let ParsedMessage2Details::StatStat { id_cred_r, ead_2 } = details;
+        let (mut initiator, _c_r, details, _ead_2) = initiator.parse_message_2(&message_2).unwrap();
+        let ParsedMessage2Details::StatStat { id_cred_r } = details;
         let valid_cred_r = credential_check_or_fetch(None, id_cred_r).unwrap();
         let result =
             device.process_ead_2(&mut default_crypto(), ead_2.iter().next().unwrap(), CRED_R);
