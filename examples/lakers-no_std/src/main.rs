@@ -126,7 +126,9 @@ fn main() -> ! {
         let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r).unwrap();
         initiator
             .set_identity(
-                I.try_into().expect("Wrong length of initiator private key"),
+                InitiatorIdentity::StatStat {
+                    i: I.try_into().expect("Wrong length of initiator private key"),
+                },
                 cred_i.clone(),
             )
             .unwrap(); // exposing own identity only after validating cred_r

@@ -1,7 +1,11 @@
+use crate::InitiatorIdentity;
 use digest::Digest;
 use lakers_shared::{Crypto as CryptoTrait, *};
 mod statstat;
-use statstat::*;
+use statstat::{
+    i_parse_message_2_statstat, i_prepare_message_3_statstat, i_verify_message_2_statstat,
+    r_parse_message_3_statstat, r_prepare_message_2_statstat, r_verify_message_3_statstat,
+};
 
 pub fn edhoc_exporter(
     state: &Completed,
@@ -175,13 +179,13 @@ pub fn i_verify_message_2(
     state: &ProcessingM2,
     crypto: &mut impl CryptoTrait,
     valid_cred_r: Credential,
-    i: Option<&BytesP256ElemLen>, // I's static private DH key when required by method
+    i: InitiatorIdentity, // I's static private DH key when required by method
 ) -> Result<ProcessedM2, EDHOCError> {
-    match state.method_specifics {
-        ProcessingM2MethodSpecifics::StatStat { .. } => {
-            let i = i.ok_or(EDHOCError::MissingIdentity)?;
+    match (&state.method_specifics, &i) {
+        (ProcessingM2MethodSpecifics::StatStat { .. }, InitiatorIdentity::StatStat { i }) => {
             i_verify_message_2_statstat(state, crypto, valid_cred_r, i)
         } // ProcessingM2MethodSpecifics::Psk { .. } =>
+        _ => Err(EDHOCError::MissingIdentity), // or UnsupportedMethod
     }
 }
 
@@ -192,12 +196,10 @@ pub fn i_prepare_message_3(
     cred_transfer: CredentialTransfer,
     ead_3: &EadItems,
 ) -> Result<(WaitM4, BufferMessage3, BytesHashLen), EDHOCError> {
-    match state.method {
-        EDHOCMethod::StatStat => {
+    match state.method_specifics {
+        ProcessedM2MethodSpecifics::StatStat { .. } => {
             i_prepare_message_3_statstat(state, crypto, cred_i, cred_transfer, ead_3)
-        }
-        // EDHOCMethod::PSK => i_prepare_message_3_psk()
-        _ => Err(EDHOCError::UnsupportedMethod),
+        } // ProcessedM2MethodSpecifics::Psk { .. } => i_prepare_message_3_psk()
     }
 }
 

@@ -565,7 +565,6 @@ pub enum ProcessedM2MethodSpecifics {
 #[derive(Debug)]
 #[repr(C)]
 pub struct ProcessedM2 {
-    pub method: EDHOCMethod,
     pub method_specifics: ProcessedM2MethodSpecifics,
     pub prk_3e2m: BytesHashLen,
     pub prk_4e3m: BytesHashLen,
