@@ -7,8 +7,14 @@ include = ["examples/*"]
 
 [project]
 name = "lakers-python"
-dynamic = ["version"]
+dynamic = [
+    "description",
+    "license",
+    "readme",
+    "requires-python",
+    "urls",
+    "version",
+]
 
-[project.urls]
-"Source Code" = "https://github.com/lake-rs/lakers/tree/main/lakers-python"
-Documentation = "https://lakers.readthedocs.io/"
+[project.optional-dependencies]
+docs = ["sphinx", "myst-parser"]

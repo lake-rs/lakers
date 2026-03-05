@@ -579,7 +579,7 @@ pub struct Completed {
 }
 
 /// An enum describing options how to send credentials.
-#[cfg_attr(feature = "python-bindings", pyclass(eq, eq_int))]
+#[cfg_attr(feature = "python-bindings", pyclass(eq, eq_int, from_py_object))]
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(C)]
 pub enum CredentialTransfer {
@@ -603,7 +603,7 @@ pub type MessageBufferError = buffer::EdhocBufferError;
 pub type EdhocMessageBuffer = EdhocBuffer<MAX_MESSAGE_SIZE_LEN>;
 
 /// An owned EAD item.
-#[cfg_attr(feature = "python-bindings", pyclass)]
+#[cfg_attr(feature = "python-bindings", pyclass(from_py_object))]
 #[derive(Clone, Debug)]
 pub struct EADItem {
     /// EAD label of the item
