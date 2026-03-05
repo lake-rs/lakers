@@ -681,8 +681,13 @@ fn encrypt_message_3(
 
     let (k_3, iv_3) = compute_k_3_iv_3(crypto, prk_3e2m, th_3);
 
-    let ciphertext_3: BufferCiphertext3 =
-        crypto.aes_ccm_encrypt_tag_8(&k_3, &iv_3, &enc_structure[..], plaintext_3.as_slice());
+    let ciphertext_3: BufferCiphertext3 = crypto
+        .aes_ccm_encrypt::<MAX_MESSAGE_SIZE_LEN, CcmTagLen8>(
+            &k_3,
+            &iv_3,
+            &enc_structure[..],
+            plaintext_3.as_slice(),
+        );
 
     output.extend_from_slice(ciphertext_3.as_slice()).unwrap();
 
@@ -724,7 +729,12 @@ fn decrypt_message_3(
 
     let enc_structure = encode_enc_structure(th_3);
 
-    crypto.aes_ccm_decrypt_tag_8(&k_3, &iv_3, &enc_structure, ciphertext_3.as_slice())
+    crypto.aes_ccm_decrypt::<MAX_MESSAGE_SIZE_LEN, CcmTagLen8>(
+        &k_3,
+        &iv_3,
+        &enc_structure,
+        ciphertext_3.as_slice(),
+    )
 }
 
 fn encrypt_message_4(
@@ -751,8 +761,13 @@ fn encrypt_message_4(
 
     let (k_4, iv_4) = compute_k_4_iv_4(crypto, prk_4e3m, th_4);
 
-    let ciphertext_4: BufferCiphertext4 =
-        crypto.aes_ccm_encrypt_tag_8(&k_4, &iv_4, &enc_structure[..], plaintext_4.as_slice());
+    let ciphertext_4: BufferCiphertext4 = crypto
+        .aes_ccm_encrypt::<MAX_MESSAGE_SIZE_LEN, CcmTagLen8>(
+            &k_4,
+            &iv_4,
+            &enc_structure[..],
+            plaintext_4.as_slice(),
+        );
 
     output.extend_from_slice(ciphertext_4.as_slice()).unwrap();
 
@@ -794,7 +809,12 @@ fn decrypt_message_4(
 
     let enc_structure = encode_enc_structure(th_4);
 
-    crypto.aes_ccm_decrypt_tag_8(&k_4, &iv_4, &enc_structure, ciphertext_4.as_slice())
+    crypto.aes_ccm_decrypt::<MAX_MESSAGE_SIZE_LEN, CcmTagLen8>(
+        &k_4,
+        &iv_4,
+        &enc_structure,
+        ciphertext_4.as_slice(),
+    )
 }
 
 // output must hold id_cred.len() + cred.len()

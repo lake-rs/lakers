@@ -80,7 +80,7 @@ impl CryptoTrait for Crypto {
         output
     }
 
-    fn aes_ccm_encrypt_tag_8<const N: usize>(
+    fn aes_ccm_encrypt<const N: usize, Tag: CcmTagLen>(
         &mut self,
         key: &BytesCcmKeyLen,
         iv: &BytesCcmIvLen,
@@ -114,18 +114,18 @@ impl CryptoTrait for Crypto {
                     reason = "hax won't allow creating a .as_mut_slice() method"
                 )]
                 output.content.as_mut_ptr(),
-                AES_CCM_TAG_LEN as u8, // authentication tag length
+                Tag::LEN as u8,
                 tag.as_mut_ptr(),
                 0 as u32, // CCM
             )
         };
 
-        output.extend_from_slice(&tag[..AES_CCM_TAG_LEN]).unwrap();
+        output.extend_from_slice(&tag[..Tag::LEN]).unwrap();
 
         output
     }
 
-    fn aes_ccm_decrypt_tag_8<const N: usize>(
+    fn aes_ccm_decrypt<const N: usize, Tag: CcmTagLen>(
         &mut self,
         key: &BytesCcmKeyLen,
         iv: &BytesCcmIvLen,
@@ -133,14 +133,12 @@ impl CryptoTrait for Crypto {
         ciphertext: &[u8],
     ) -> Result<EdhocBuffer<N>, EDHOCError> {
         let mut output = EdhocBuffer::new();
-        output
-            .extend_reserve(ciphertext.len() - AES_CCM_TAG_LEN)
-            .unwrap();
+        output.extend_reserve(ciphertext.len() - Tag::LEN).unwrap();
         let mut aesccm_key: CRYS_AESCCM_Key_t = Default::default();
 
-        aesccm_key[0..AES_CCM_KEY_LEN].copy_from_slice(&key[..]);
+        aesccm_key[0..Tag::LEN].copy_from_slice(&key[..]);
 
-        assert!(ciphertext.len() - AES_CCM_TAG_LEN <= N);
+        assert!(ciphertext.len() - Tag::LEN <= N);
 
         #[allow(deprecated, reason = "using extend_reserve")]
         unsafe {
@@ -154,11 +152,11 @@ impl CryptoTrait for Crypto {
                 ad.len() as u32,
                 // CC_AESCCM does not really write there, it's just missing a `const`
                 ciphertext.as_ptr() as *mut _,
-                (ciphertext.len() - AES_CCM_TAG_LEN) as u32,
+                (ciphertext.len() - Tag::LEN) as u32,
                 output.content.as_mut_ptr(),
-                AES_CCM_TAG_LEN as u8, // authentication tag length
+                Tag::LEN as u8,
                 // as before
-                ciphertext[ciphertext.len() - AES_CCM_TAG_LEN..].as_ptr() as *mut _,
+                ciphertext[ciphertext.len() - Tag::LEN..].as_ptr() as *mut _,
                 0 as u32, // CCM
             ) {
                 CRYS_OK => Ok(output),
@@ -368,3 +366,20 @@ impl digest::OutputSizeUser for HashInProcessSha256 {
     type OutputSize = digest::typenum::U32;
 }
 impl digest::HashMarker for HashInProcessSha256 {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use lakers_shared::test_helper::{
+        test_aes_ccm_roundtrip, test_aes_ccm_tag_16, test_aes_ccm_tag_8,
+    };
+
+    #[test]
+    fn test_cryptocell_aes_ccm() {
+        test_aes_ccm_roundtrip::<Crypto, CcmTagLen8>(&mut Crypto);
+        test_aes_ccm_roundtrip::<Crypto, CcmTagLen16>(&mut Crypto);
+
+        test_aes_ccm_tag_8::<Crypto>(&mut Crypto);
+        test_aes_ccm_tag_16::<Crypto>(&mut Crypto);
+    }
+}
