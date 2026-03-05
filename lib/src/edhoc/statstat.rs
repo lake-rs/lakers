@@ -1,4 +1,14 @@
-use super::*;
+use super::{
+    compute_mac_2, compute_mac_3, compute_prk_2e, compute_prk_3e2m, compute_prk_4e3m,
+    compute_salt_3e2m, compute_salt_4e3m, compute_th_2, compute_th_3, compute_th_4,
+    decode_plaintext_2, decode_plaintext_3, decrypt_message_3, edhoc_kdf, encode_message_2,
+    encode_plaintext_2, encode_plaintext_3, encrypt_decrypt_ciphertext_2, encrypt_message_3,
+    parse_message_2, BufferCiphertext2, BufferMessage2, BufferMessage3, BytesHashLen, BytesMac3,
+    BytesP256ElemLen, ConnId, Credential, CredentialKey, CredentialTransfer, EDHOCError, EadItems,
+    IdCred, ParsedMessage2Details, ProcessedM2, ProcessedM2MethodSpecifics, ProcessedM3,
+    ProcessingM1, ProcessingM2, ProcessingM2MethodSpecifics, ProcessingM3,
+    ProcessingM3MethodSpecifics, WaitM2, WaitM3, WaitM3MethodSpecifics, WaitM4,
+};
 use lakers_shared::Crypto as CryptoTrait;
 pub(crate) fn r_prepare_message_2_statstat(
     state: &ProcessingM1,
@@ -253,7 +263,6 @@ pub(crate) fn i_verify_message_2_statstat(
         let state = ProcessedM2 {
             // We need the method for next step. Since we are in the branch of StatStat,
             // we can add EDHOCMethod::StatStat
-            method: EDHOCMethod::StatStat,
             method_specifics: ProcessedM2MethodSpecifics::StatStat {},
             prk_3e2m: prk_3e2m,
             prk_4e3m: prk_4e3m,

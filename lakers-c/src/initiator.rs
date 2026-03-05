@@ -143,7 +143,12 @@ pub unsafe extern "C" fn initiator_verify_message_2(
 
     let state = core::ptr::read(&(*initiator_c).processing_m2).to_rust();
 
-    match i_verify_message_2(&state, crypto, (*valid_cred_r).to_rust(), Some(&(*i))) {
+    match i_verify_message_2(
+        &state,
+        crypto,
+        (*valid_cred_r).to_rust(),
+        InitiatorIdentity::StatStat { i: *i },
+    ) {
         Ok(state) => {
             ProcessedM2C::copy_into_c(state, &mut (*initiator_c).processed_m2);
             (*initiator_c).cred_i = cred_i;

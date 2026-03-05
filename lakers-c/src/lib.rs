@@ -235,7 +235,6 @@ pub struct ProcessedM2MethodSpecificsC {
 #[derive(Debug)]
 #[repr(C)]
 pub struct ProcessedM2C {
-    pub method: EDHOCMethod,
     pub method_specifics: ProcessedM2MethodSpecificsC,
     pub prk_3e2m: BytesHashLen,
     pub prk_4e3m: BytesHashLen,
@@ -245,7 +244,6 @@ pub struct ProcessedM2C {
 impl Default for ProcessedM2C {
     fn default() -> Self {
         Self {
-            method: EDHOCMethod::StatStat,
             method_specifics: ProcessedM2MethodSpecificsC {
                 kind: ProcessedM2MethodSpecificsKindC::Prm2StatStat,
             },
@@ -265,7 +263,6 @@ impl ProcessedM2C {
         };
 
         ProcessedM2 {
-            method: self.method,
             method_specifics,
             prk_3e2m: self.prk_3e2m,
             prk_4e3m: self.prk_4e3m,
@@ -278,7 +275,6 @@ impl ProcessedM2C {
             panic!("processed_m2_c is null");
         }
 
-        (*processed_m2_c).method = processed_m2.method;
         (*processed_m2_c).prk_3e2m = processed_m2.prk_3e2m;
         (*processed_m2_c).prk_4e3m = processed_m2.prk_4e3m;
         (*processed_m2_c).th_3 = processed_m2.th_3;

@@ -24,8 +24,8 @@ pub use edhoc::*;
 /// Starting point for performing EDHOC in the role of the Initiator.
 #[derive(Debug)]
 pub struct EdhocInitiator<Crypto: CryptoTrait> {
-    state: InitiatorStart,       // opaque state
-    i: Option<BytesP256ElemLen>, // static public key of myself
+    state: InitiatorStart,        // opaque state
+    i: Option<InitiatorIdentity>, // static authentication identity of I when required by method
     cred_i: Option<Credential>,
     crypto: Crypto,
 }
@@ -33,7 +33,7 @@ pub struct EdhocInitiator<Crypto: CryptoTrait> {
 #[derive(Debug)]
 pub struct EdhocInitiatorWaitM2<Crypto: CryptoTrait> {
     state: WaitM2, // opaque state
-    i: Option<BytesP256ElemLen>,
+    i: Option<InitiatorIdentity>,
     cred_i: Option<Credential>,
     crypto: Crypto,
 }
@@ -41,7 +41,7 @@ pub struct EdhocInitiatorWaitM2<Crypto: CryptoTrait> {
 #[derive(Debug)]
 pub struct EdhocInitiatorProcessingM2<Crypto: CryptoTrait> {
     state: ProcessingM2, // opaque state
-    i: Option<BytesP256ElemLen>,
+    i: Option<InitiatorIdentity>,
     cred_i: Option<Credential>,
     crypto: Crypto,
 }
@@ -171,6 +171,7 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM1<Crypto> {
             // (EDHOCMethod::Psk, ResponderIdentity::Psk) => {
             // PrepareMessage2Details::Psk
             // }
+            // FIXME: Distinguish `MissingIdentity` from `MethodIdentityMismatch` here;
             _ => return Err(EDHOCError::MissingIdentity), // or UnsupportedMethod
         };
 
@@ -293,7 +294,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiator<Crypto> {
     }
 
     pub fn set_identity(&mut self, i: BytesP256ElemLen, cred_i: Credential) {
-        self.i = Some(i);
+        self.i = Some(InitiatorIdentity::StatStat { i });
         self.cred_i = Some(cred_i);
     }
 
@@ -363,7 +364,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorWaitM2<Crypto> {
 }
 
 impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessingM2<Crypto> {
-    pub fn set_identity_with_details(
+    pub fn set_identity(
         &mut self,
         identity: InitiatorIdentity,
         cred_i: Credential,
@@ -371,20 +372,9 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessingM2<Crypto> {
         if self.i.is_some() || self.cred_i.is_some() {
             return Err(EDHOCError::IdentityAlreadySet);
         }
-        self.i = match identity {
-            InitiatorIdentity::StatStat { i } => Some(i),
-            InitiatorIdentity::Psk => None,
-        };
+        self.i = Some(identity);
         self.cred_i = Some(cred_i);
         Ok(())
-    }
-
-    pub fn set_identity(
-        &mut self,
-        i: BytesP256ElemLen,
-        cred_i: Credential,
-    ) -> Result<(), EDHOCError> {
-        self.set_identity_with_details(InitiatorIdentity::StatStat { i }, cred_i)
     }
 
     pub fn verify_message_2(
@@ -392,11 +382,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessingM2<Crypto> {
         valid_cred_r: Credential,
     ) -> Result<EdhocInitiatorProcessedM2<Crypto>, EDHOCError> {
         trace!("Enter verify_message_2");
-        let i = match self.state.method_specifics {
-            ProcessingM2MethodSpecifics::StatStat { .. } => {
-                Some(self.i.as_ref().ok_or(EDHOCError::MissingIdentity)?)
-            } // ProcessingM2MethodSpecifics::Psk { .. } => None,
-        };
+        let i = self.i.ok_or(EDHOCError::MissingIdentity)?;
         match i_verify_message_2(&self.state, &mut self.crypto, valid_cred_r, i) {
             Ok(state) => Ok(EdhocInitiatorProcessedM2 {
                 state,
@@ -695,7 +681,9 @@ mod test {
         let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r).unwrap();
         initiator
             .set_identity(
-                I.try_into().expect("Wrong length of initiator private key"),
+                InitiatorIdentity::StatStat {
+                    i: I.try_into().expect("Wrong length of initiator private key"),
+                },
                 cred_i.clone(),
             )
             .unwrap(); // exposing own identity only after validating cred_r
@@ -857,7 +845,9 @@ mod test_authz {
         assert!(result.is_ok());
         initiator
             .set_identity(
-                I.try_into().expect("Wrong length of initiator private key"),
+                InitiatorIdentity::StatStat {
+                    i: I.try_into().expect("Wrong length of initiator private key"),
+                },
                 cred_i.clone(),
             )
             .unwrap();

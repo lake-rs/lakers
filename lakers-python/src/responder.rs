@@ -105,7 +105,8 @@ impl PyEdhocResponder {
         let ead_2 = ead_2.try_into()?;
         let mut r = BytesP256ElemLen::default();
         r.copy_from_slice(self.r.as_slice());
-        let method_details = match self.as_ref_processing_m1()?.method {
+        let processing_m1 = self.as_ref_processing_m1()?;
+        let method_details = match processing_m1.method {
             EDHOCMethod::StatStat => PrepareMessage2Details::StatStat {
                 r: &r,
                 cred_transfer,
@@ -115,7 +116,7 @@ impl PyEdhocResponder {
         };
 
         let (state, message_2) = r_prepare_message_2(
-            self.as_ref_processing_m1()?,
+            processing_m1,
             &mut default_crypto(),
             // FIXME: take as reference rather than cloning
             self.cred_r.clone(),

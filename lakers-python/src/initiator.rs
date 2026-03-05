@@ -147,11 +147,11 @@ impl PyEdhocInitiator {
             &self.take_processing_m2()?,
             &mut default_crypto(),
             valid_cred_r,
-            Some(
-                i.as_slice()
+            InitiatorIdentity::StatStat {
+                i: i.as_slice()
                     .try_into()
                     .expect("Wrong length of initiator private key"),
-            ),
+            },
         )?;
         self.processed_m2 = Some(state);
         self.cred_i = Some(cred_i);
