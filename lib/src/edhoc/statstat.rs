@@ -1,6 +1,6 @@
 use super::*;
 use lakers_shared::Crypto as CryptoTrait;
-pub fn r_prepare_message_2_statstat(
+pub(crate) fn r_prepare_message_2_statstat(
     state: &ProcessingM1,
     crypto: &mut impl CryptoTrait,
     cred_r: Credential,
@@ -60,7 +60,7 @@ pub fn r_prepare_message_2_statstat(
     ))
 }
 
-pub fn r_parse_message_3_statstat(
+pub(crate) fn r_parse_message_3_statstat(
     state: &mut WaitM3,
     crypto: &mut impl CryptoTrait,
     message_3: &BufferMessage3,
@@ -95,10 +95,12 @@ pub fn r_parse_message_3_statstat(
     }
 }
 
-pub fn r_verify_message_3_statstat(
+pub(crate) fn r_verify_message_3_statstat(
     state: &ProcessingM3,
     crypto: &mut impl CryptoTrait,
     valid_cred_i: Credential,
+    mac_3: BytesMac3,
+    id_cred_i: &IdCred,
 ) -> Result<(ProcessedM3, BytesHashLen), EDHOCError> {
     // compute salt_4e3m
     let salt_4e3m = compute_salt_4e3m(crypto, &state.prk_3e2m, &state.th_3);
@@ -110,10 +112,6 @@ pub fn r_verify_message_3_statstat(
         CredentialKey::Symmetric(_psk) => todo!("PSK not implemented"),
     };
 
-    let id_cred_i = match &state.method_specifics {
-        ProcessingM3MethodSpecifics::StatStat { id_cred_i, .. } => id_cred_i,
-    };
-
     // compute mac_3
     let expected_mac_3 = compute_mac_3(
         crypto,
@@ -123,10 +121,6 @@ pub fn r_verify_message_3_statstat(
         valid_cred_i.bytes.as_slice(),
         &state.ead_3,
     );
-
-    let mac_3 = match &state.method_specifics {
-        ProcessingM3MethodSpecifics::StatStat { mac_3, .. } => *mac_3,
-    };
 
     // verify mac_3
     if mac_3 == expected_mac_3 {
@@ -161,11 +155,11 @@ pub fn r_verify_message_3_statstat(
     }
 }
 
-pub fn i_parse_message_2_statstat<'a>(
+pub(crate) fn i_parse_message_2_statstat<'a>(
     state: &WaitM2,
     crypto: &mut impl CryptoTrait,
     message_2: &BufferMessage2,
-) -> Result<(ProcessingM2, ConnId, ParsedMessage2Details), EDHOCError> {
+) -> Result<(ProcessingM2, ConnId, ParsedMessage2Details, EadItems), EDHOCError> {
     let res = parse_message_2(message_2);
     if let Ok((g_y, ciphertext_2)) = res {
         let th_2 = compute_th_2(crypto, &g_y, &state.h_message_1);
@@ -196,7 +190,8 @@ pub fn i_parse_message_2_statstat<'a>(
             Ok((
                 state,
                 c_r_2,
-                ParsedMessage2Details::StatStat { id_cred_r, ead_2 },
+                ParsedMessage2Details::StatStat { id_cred_r },
+                ead_2,
             ))
         } else {
             Err(EDHOCError::ParsingError)
@@ -206,7 +201,7 @@ pub fn i_parse_message_2_statstat<'a>(
     }
 }
 
-pub fn i_verify_message_2_statstat(
+pub(crate) fn i_verify_message_2_statstat(
     state: &ProcessingM2,
     crypto: &mut impl CryptoTrait,
     valid_cred_r: Credential,
@@ -271,7 +266,7 @@ pub fn i_verify_message_2_statstat(
     }
 }
 
-pub fn i_prepare_message_3_statstat(
+pub(crate) fn i_prepare_message_3_statstat(
     state: &ProcessedM2,
     crypto: &mut impl CryptoTrait,
     cred_i: Credential,

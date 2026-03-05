@@ -110,10 +110,10 @@ impl PyEdhocInitiator {
         let message_2 = EdhocMessageBuffer::new_from_slice(message_2.as_slice())
             .with_cause(py, "Message 2 too long")?;
 
-        let (state, c_r, details) =
+        let (state, c_r, details, ead_2) =
             i_parse_message_2(&self.take_wait_m2()?, &mut default_crypto(), &message_2)?;
-        let (id_cred_r, ead_2) = match details {
-            ParsedMessage2Details::StatStat { id_cred_r, ead_2 } => (id_cred_r, ead_2),
+        let id_cred_r = match details {
+            ParsedMessage2Details::StatStat { id_cred_r } => id_cred_r,
             // ParsedMessage2Details::Psk { ead_2 } => (IdCred::new(), ead_2),
         };
         self.processing_m2 = Some(state);

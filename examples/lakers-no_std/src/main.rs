@@ -121,11 +121,8 @@ fn main() -> ! {
             .prepare_message_2(CredentialTransfer::ByReference, None, &EadItems::new())
             .unwrap();
 
-        let (mut initiator, _c_r, details) = initiator.parse_message_2(&message_2).unwrap();
-        let ParsedMessage2Details::StatStat {
-            id_cred_r,
-            ead_2: _ead_2,
-        } = details;
+        let (mut initiator, _c_r, details, _ead_2) = initiator.parse_message_2(&message_2).unwrap();
+        let ParsedMessage2Details::StatStat { id_cred_r } = details;
         let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r).unwrap();
         initiator
             .set_identity(
