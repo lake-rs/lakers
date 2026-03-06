@@ -93,21 +93,29 @@ impl EadItemsC {
     }
 }
 
-#[derive(Debug)]
 #[repr(C)]
 pub enum ProcessingM2MethodSpecificsKindC {
     Pm2StatStat,
+    // Pm2Psk
 }
 
-#[derive(Debug)]
 #[repr(C)]
-pub struct ProcessingM2MethodSpecificsC {
-    pub kind: ProcessingM2MethodSpecificsKindC,
+pub struct ProcessingM2StatStatC {
     pub mac_2: BytesMac2,
     pub id_cred_r: IdCred,
 }
 
-#[derive(Debug)]
+#[repr(C)]
+pub union ProcessingM2MethodSpecificsDataC {
+    pub statstat: core::mem::ManuallyDrop<ProcessingM2StatStatC>,
+}
+
+#[repr(C)]
+pub struct ProcessingM2MethodSpecificsC {
+    pub kind: ProcessingM2MethodSpecificsKindC,
+    pub data: ProcessingM2MethodSpecificsDataC,
+}
+
 #[repr(C)]
 pub struct ProcessingM2C {
     pub method_specifics: ProcessingM2MethodSpecificsC,
@@ -125,8 +133,12 @@ impl Default for ProcessingM2C {
         ProcessingM2C {
             method_specifics: ProcessingM2MethodSpecificsC {
                 kind: ProcessingM2MethodSpecificsKindC::Pm2StatStat,
-                mac_2: Default::default(),
-                id_cred_r: Default::default(),
+                data: ProcessingM2MethodSpecificsDataC {
+                    statstat: core::mem::ManuallyDrop::new(ProcessingM2StatStatC {
+                        mac_2: Default::default(),
+                        id_cred_r: Default::default(),
+                    }),
+                },
             },
             prk_2e: Default::default(),
             th_2: Default::default(),
@@ -143,9 +155,10 @@ impl ProcessingM2C {
     pub fn to_rust(&self) -> ProcessingM2 {
         let method_specifics = match self.method_specifics.kind {
             ProcessingM2MethodSpecificsKindC::Pm2StatStat => {
+                let stat = unsafe { &self.method_specifics.data.statstat };
                 ProcessingM2MethodSpecifics::StatStat {
-                    mac_2: self.method_specifics.mac_2,
-                    id_cred_r: self.method_specifics.id_cred_r.clone(),
+                    mac_2: stat.mac_2,
+                    id_cred_r: stat.id_cred_r.clone(),
                 }
             }
         };
@@ -182,8 +195,12 @@ impl ProcessingM2C {
             ProcessingM2MethodSpecifics::StatStat { mac_2, id_cred_r } => {
                 (*processing_m2_c).method_specifics = ProcessingM2MethodSpecificsC {
                     kind: ProcessingM2MethodSpecificsKindC::Pm2StatStat,
-                    mac_2,
-                    id_cred_r,
+                    data: ProcessingM2MethodSpecificsDataC {
+                        statstat: core::mem::ManuallyDrop::new(ProcessingM2StatStatC {
+                            mac_2: mac_2,
+                            id_cred_r: id_cred_r,
+                        }),
+                    },
                 };
             }
         }
@@ -220,19 +237,25 @@ impl CredentialC {
     }
 }
 
-#[derive(Debug)]
 #[repr(C)]
 pub enum ProcessedM2MethodSpecificsKindC {
     Prm2StatStat,
+    // Pm2Psk,
+}
+#[repr(C)]
+pub struct ProcessedM2StatStatC {}
+
+#[repr(C)]
+pub union ProcessedM2MethodSpecificsDataC {
+    pub statstat: core::mem::ManuallyDrop<ProcessedM2StatStatC>,
 }
 
-#[derive(Debug)]
 #[repr(C)]
 pub struct ProcessedM2MethodSpecificsC {
     pub kind: ProcessedM2MethodSpecificsKindC,
+    pub data: ProcessedM2MethodSpecificsDataC,
 }
 
-#[derive(Debug)]
 #[repr(C)]
 pub struct ProcessedM2C {
     pub method_specifics: ProcessedM2MethodSpecificsC,
@@ -246,6 +269,9 @@ impl Default for ProcessedM2C {
         Self {
             method_specifics: ProcessedM2MethodSpecificsC {
                 kind: ProcessedM2MethodSpecificsKindC::Prm2StatStat,
+                data: ProcessedM2MethodSpecificsDataC {
+                    statstat: core::mem::ManuallyDrop::new(ProcessedM2StatStatC {}),
+                },
             },
             prk_3e2m: Default::default(),
             prk_4e3m: Default::default(),
@@ -259,7 +285,10 @@ impl ProcessedM2C {
         let method_specifics = match self.method_specifics.kind {
             ProcessedM2MethodSpecificsKindC::Prm2StatStat => {
                 ProcessedM2MethodSpecifics::StatStat {}
-            }
+            } // ProcessedM2MethodSpecificsKindC::Prm2Psk => {
+              //     let psk = unsafe { &self.method_specifics.data.psk };
+              //     ProcessedM2MethodSpecifics::Psk { ...from psk... }
+              // }
         };
 
         ProcessedM2 {
@@ -283,6 +312,9 @@ impl ProcessedM2C {
             ProcessedM2MethodSpecifics::StatStat {} => {
                 (*processed_m2_c).method_specifics = ProcessedM2MethodSpecificsC {
                     kind: ProcessedM2MethodSpecificsKindC::Prm2StatStat,
+                    data: ProcessedM2MethodSpecificsDataC {
+                        statstat: core::mem::ManuallyDrop::new(ProcessedM2StatStatC {}),
+                    },
                 };
             }
         }
