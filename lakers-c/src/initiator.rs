@@ -8,7 +8,6 @@ use crate::*;
 
 /// structs compatible with the C FFI
 
-#[derive(Debug)]
 #[repr(C)]
 pub struct EdhocInitiator {
     pub start: InitiatorStart,
