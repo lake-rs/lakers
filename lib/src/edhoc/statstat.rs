@@ -119,7 +119,8 @@ pub(crate) fn r_verify_message_3_statstat(
         CredentialKey::EC2Compact(public_key) => {
             compute_prk_4e3m(crypto, &salt_4e3m, &state.y, &public_key)
         }
-        CredentialKey::Symmetric(_psk) => todo!("PSK not implemented"),
+        // FIXME: the error is not accurate. It is a lack of agreement between peers.
+        _ => return Err(EDHOCError::UnsupportedMethod),
     };
 
     // compute mac_3
@@ -224,11 +225,12 @@ pub(crate) fn i_verify_message_2_statstat(
         CredentialKey::EC2Compact(public_key) => {
             compute_prk_3e2m(crypto, &salt_3e2m, &state.x, &public_key)
         }
-        CredentialKey::Symmetric(_psk) => todo!("PSK not implemented"),
+        // FIXME: the error is not accurate. It is a lack of agreement between peers.
+        _ => return Err(EDHOCError::UnsupportedMethod),
     };
 
-    let id_cred_r = match &state.method_specifics {
-        ProcessingM2MethodSpecifics::StatStat { id_cred_r, .. } => id_cred_r,
+    let (id_cred_r, mac_2) = match &state.method_specifics {
+        ProcessingM2MethodSpecifics::StatStat { id_cred_r, mac_2 } => (id_cred_r, *mac_2),
     };
 
     let expected_mac_2 = compute_mac_2(
@@ -240,10 +242,6 @@ pub(crate) fn i_verify_message_2_statstat(
         &state.th_2,
         &state.ead_2,
     );
-
-    let mac_2 = match state.method_specifics {
-        ProcessingM2MethodSpecifics::StatStat { mac_2, .. } => mac_2,
-    };
 
     if mac_2 == expected_mac_2 {
         // step is actually from processing of message_3
