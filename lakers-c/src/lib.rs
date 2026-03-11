@@ -155,6 +155,9 @@ impl ProcessingM2C {
     pub fn to_rust(&self) -> ProcessingM2 {
         let method_specifics = match self.method_specifics.kind {
             ProcessingM2MethodSpecificsKindC::Pm2StatStat => {
+                // SAFETY: Accessing a union field is unsafe. We just matched on
+                // `self.method_specifics.kind == ProcessingM2MethodSpecificsKindC::Pm2StatStat`,
+                // so `data.statstat` is the active variant.
                 let stat = unsafe { &self.method_specifics.data.statstat };
                 ProcessingM2MethodSpecifics::StatStat {
                     mac_2: stat.mac_2,
