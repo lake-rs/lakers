@@ -951,17 +951,19 @@ mod edhoc_parser {
         let label = label.abs();
 
         let position_after_label = decoder.position();
-
-        let ead_value = if let Ok(_slice) = decoder.bytes() {
+        let (ead_value, position) = if let Ok(_slice) = decoder.bytes() {
             // It's not just from `slice`, because EADItem::value is an *encoded* value. (FIXME: It
             // shouldn't be).
-            EdhocBuffer::new_from_slice(&input[position_after_label..decoder.position()])
-                .map_err(|_| EDHOCError::ParsingError)?
+            (
+                EdhocBuffer::new_from_slice(&input[position_after_label..decoder.position()])
+                    .map_err(|_| EDHOCError::ParsingError)?,
+                decoder.position(),
+            )
         } else {
             // If it's not just at the end but a different type, that's an error, but that error is
             // not for us to raise: Instead, the next item being parsed will trip over its label
             // not being an integer.
-            EdhocBuffer::new()
+            (EdhocBuffer::new(), position_after_label)
         };
 
         let item = EADItem {
@@ -974,7 +976,7 @@ mod edhoc_parser {
             value: ead_value,
         };
 
-        Ok((item, decoder.position()))
+        Ok((item, position))
     }
 
     pub fn parse_suites_i(
