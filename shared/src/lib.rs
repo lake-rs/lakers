@@ -1160,7 +1160,7 @@ mod edhoc_parser {
 }
 
 mod cbor_decoder {
-    /// Decoder inspired by the [minicbor](https://crates.io/crates/minicbor) crate.
+    //! Decoder inspired by the [minicbor](https://crates.io/crates/minicbor) crate.
     use super::*;
 
     #[derive(Debug)]
