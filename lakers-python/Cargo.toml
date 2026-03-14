@@ -13,7 +13,7 @@ documentation = "https://lakers.readthedocs.io/"
 pyo3 = { version = "0.28", features = ["extension-module"] }
 lakers = { package = "lakers", path = "../lib", default-features = false, features = [ "log" ] }
 lakers-ead-authz = { path = "../ead/lakers-ead-authz", features = [ "log" ] }
-lakers-shared = { path = "../shared", features = ["python-bindings", "large_buffers"] }
+lakers-shared = { path = "../shared", features = ["python-bindings", "large_buffers", "log"] }
 lakers-crypto = { path = "../crypto", default-features = false, features = ["rustcrypto"] }
 log = "0.4"
 pyo3-log = "0.13.0"
