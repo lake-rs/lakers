@@ -1176,7 +1176,11 @@ mod cbor_decoder {
         }
     }
 
-    #[derive(Debug)]
+    /// Decoder of a slice of CBOR.
+    ///
+    /// Currently, this advances itself when decoding erroneous data. This means that any tentative
+    /// decoding needs to fall back to a previously cloned version.
+    #[derive(Debug, Clone)]
     pub struct CBORDecoder<'a> {
         buf: &'a [u8],
         pos: usize,
