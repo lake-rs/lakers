@@ -18,11 +18,11 @@ pub fn r_prepare_message_2_psk(
     let prk_3e2m = prk_2e;
 
     // compute ciphertext_2
-    let plaintext_2 = encode_plaintext_2_psk(c_r, &ead_2)?;
+    let plaintext_2 = encode_plaintext_2(c_r, None, &ead_2)?;
 
     // step is actually from processing of message_3
     // but we do it here to avoid storing plaintext_2 in State
-    let th_3 = compute_th_3_psk(crypto, &th_2, &plaintext_2);
+    let th_3 = compute_th_3(crypto, &th_2, &plaintext_2, None);
 
     let mut ct: BufferCiphertext2 = BufferCiphertext2::new();
     ct.fill_with_slice(plaintext_2.as_slice()).unwrap(); // TODO(hax): can we prove with hax that this won't panic since they use the same underlying buffer length?
@@ -78,14 +78,16 @@ where
     let mut ciphertext_3b = BufferCiphertext3::new();
     let _ = ciphertext_3b.fill_with_slice(&plaintext_3a.as_slice()[1..]);
 
-    let plaintext_3b = decrypt_message_3_psk(
+    let plaintext_3b = decrypt_message_3(
         crypto,
         &state.prk_3e2m,
         &state.th_3,
         &ciphertext_3b,
-        id_cred_psk.as_encoded_value(),
-        cred_i.bytes.as_slice(),
-        cred_r.bytes.as_slice(),
+        Some((
+            id_cred_psk.as_encoded_value(),
+            cred_i.bytes.as_slice(),
+            cred_r.bytes.as_slice(),
+        )),
     )?;
 
     let decoded_p3_res = decode_plaintext_3_psk(&plaintext_3b);
@@ -126,13 +128,15 @@ pub fn r_verify_message_3_psk(
         _ => return Err(EDHOCError::UnsupportedMethod),
     };
 
-    let th_4 = compute_th_4_psk(
+    let th_4 = compute_th_4(
         crypto,
         &state.th_3,
-        id_cred_psk.as_encoded_value(),
-        &state.ead_3,
         valid_cred_i.bytes.as_slice(),
-        cred_r.bytes.as_slice(),
+        Th4Input::Psk {
+            id_cred: id_cred_psk.as_encoded_value(),
+            cred_r: cred_r.bytes.as_slice(),
+            ead_3: &state.ead_3,
+        },
     );
     // compute prk_out
     // PRK_out = EDHOC-KDF( PRK_4e3m, 7, TH_4, hash_length )
@@ -203,7 +207,7 @@ pub fn i_verify_message_2_psk(
 
     let prk_3e2m = state.prk_2e;
 
-    let th_3 = compute_th_3_psk(crypto, &state.th_2, &state.plaintext_2);
+    let th_3 = compute_th_3(crypto, &state.th_2, &state.plaintext_2, None);
     // message 3 processing
     let salt_4e3m = compute_salt_4e3m(crypto, &prk_3e2m, &th_3);
 
@@ -247,15 +251,17 @@ pub fn i_prepare_message_3_psk(
 
     let mut message_3: BufferMessage3 = BufferMessage3::new();
 
-    let plaintext_3 = encode_plaintext_3_psk(&ead_3)?;
-    let ciphertext_3b = encrypt_message_3_psk(
+    let plaintext_3 = encode_plaintext_3(None, &ead_3)?;
+    let ciphertext_3b = encrypt_message_3(
         crypto,
         &state.prk_3e2m,
         &state.th_3,
         &plaintext_3,
-        id_cred_psk.as_encoded_value(),
-        cred_i.bytes.as_slice(),
-        cred_r.bytes.as_slice(),
+        Some((
+            id_cred_psk.as_encoded_value(),
+            cred_i.bytes.as_slice(),
+            cred_r.bytes.as_slice(),
+        )),
     );
     // compute ciphertext_3a
     let pt_3a = id_cred_psk.as_encoded_value();
@@ -269,13 +275,15 @@ pub fn i_prepare_message_3_psk(
     message_3
         .extend_from_slice(encoded_ciphertext_3a.as_slice())
         .unwrap();
-    let th_4 = compute_th_4_psk(
+    let th_4 = compute_th_4(
         crypto,
         &state.th_3,
-        id_cred_psk.as_encoded_value(),
-        ead_3,
         cred_i.bytes.as_slice(),
-        cred_r.bytes.as_slice(),
+        Th4Input::Psk {
+            id_cred: id_cred_psk.as_encoded_value(),
+            cred_r: cred_r.bytes.as_slice(),
+            ead_3: ead_3,
+        },
     );
     // compute prk_out
     // PRK_out = EDHOC-KDF( PRK_4e3m, 7, TH_4, hash_length )
