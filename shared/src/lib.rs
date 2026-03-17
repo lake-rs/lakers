@@ -951,17 +951,19 @@ mod edhoc_parser {
         let label = label.abs();
 
         let position_after_label = decoder.position();
-
-        let ead_value = if let Ok(_slice) = decoder.bytes() {
+        let (ead_value, position) = if let Ok(_slice) = decoder.bytes() {
             // It's not just from `slice`, because EADItem::value is an *encoded* value. (FIXME: It
             // shouldn't be).
-            EdhocBuffer::new_from_slice(&input[position_after_label..decoder.position()])
-                .map_err(|_| EDHOCError::ParsingError)?
+            (
+                EdhocBuffer::new_from_slice(&input[position_after_label..decoder.position()])
+                    .map_err(|_| EDHOCError::ParsingError)?,
+                decoder.position(),
+            )
         } else {
             // If it's not just at the end but a different type, that's an error, but that error is
             // not for us to raise: Instead, the next item being parsed will trip over its label
             // not being an integer.
-            EdhocBuffer::new()
+            (EdhocBuffer::new(), position_after_label)
         };
 
         let item = EADItem {
@@ -974,7 +976,7 @@ mod edhoc_parser {
             value: ead_value,
         };
 
-        Ok((item, decoder.position()))
+        Ok((item, position))
     }
 
     pub fn parse_suites_i(
@@ -1160,7 +1162,7 @@ mod edhoc_parser {
 }
 
 mod cbor_decoder {
-    /// Decoder inspired by the [minicbor](https://crates.io/crates/minicbor) crate.
+    //! Decoder inspired by the [minicbor](https://crates.io/crates/minicbor) crate.
     use super::*;
 
     #[derive(Debug)]
@@ -1176,7 +1178,11 @@ mod cbor_decoder {
         }
     }
 
-    #[derive(Debug)]
+    /// Decoder of a slice of CBOR.
+    ///
+    /// Currently, this advances itself when decoding erroneous data. This means that any tentative
+    /// decoding needs to fall back to a previously cloned version.
+    #[derive(Debug, Clone)]
     pub struct CBORDecoder<'a> {
         buf: &'a [u8],
         pos: usize,
@@ -1531,6 +1537,14 @@ mod test_ead_items {
 
         assert_eq!(items.len(), MAX_EAD_ITEMS);
 
+        // Check round-tripping
+        let decoded = edhoc_parser::parse_eads(output_buffer.as_slice()).unwrap();
+        assert_eq!(
+            make_comparable(&decoded),
+            make_comparable(&items),
+            "EAD items did not round-trip through encoding"
+        );
+
         // This *should* be an error: the first item is critical.
         items.processed_critical_items().unwrap_err();
 
@@ -1538,5 +1552,16 @@ mod test_ead_items {
         assert_eq!(ead1.label, 1);
 
         items.processed_critical_items().unwrap();
+    }
+
+    // Not introducing PartialEq/Eq just for this test, but if it's introduced later for other
+    // reasons, this could all be way easier.
+    fn make_comparable(items: &EadItems) -> impl core::fmt::Debug + PartialEq {
+        extern crate alloc;
+        use alloc::vec::Vec;
+        items
+            .iter()
+            .map(|i| (i.label(), i.is_critical(), Vec::from(i.value.as_slice())))
+            .collect::<Vec<_>>()
     }
 }
