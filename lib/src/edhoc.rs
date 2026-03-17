@@ -12,6 +12,47 @@ use statstat::{
     i_parse_message_2_statstat, i_prepare_message_3_statstat, i_verify_message_2_statstat,
     r_parse_message_3_statstat, r_prepare_message_2_statstat, r_verify_message_3_statstat,
 };
+//FIXME: maybe not the best place to put it. shared/src/lib?
+// Temporary result used by method-specific message_2 preparation before the
+// shared code encrypts ciphertext_2 and constructs WaitM3.
+#[derive(Debug)]
+struct PreparedMessage2 {
+    plaintext_2: BufferPlaintext2,
+    prk_3e2m: BytesHashLen,
+    th_3: BytesHashLen,
+    method_specifics: WaitM3MethodSpecifics,
+}
+#[derive(Debug)]
+struct ParsedMessage3 {
+    method_specifics: ProcessingM3MethodSpecifics,
+    plaintext_3: BufferPlaintext3,
+    id_cred: IdCred,
+    ead_3: EadItems,
+}
+#[derive(Debug)]
+struct DecodedMessage2 {
+    method_specifics: ProcessingM2MethodSpecifics,
+    c_r: ConnId,
+    parsed_details: ParsedMessage2Details,
+    ead_2: EadItems,
+}
+#[derive(Debug)]
+struct VerifiedMessage2 {
+    method_specifics: ProcessedM2MethodSpecifics,
+    prk_3e2m: BytesHashLen,
+    prk_4e3m: BytesHashLen,
+    th_3: BytesHashLen,
+}
+#[derive(Debug)]
+struct PreparedMessage3 {
+    message_3: BufferMessage3,
+    th_4: BytesHashLen,
+}
+#[derive(Debug)]
+struct VerifiedMessage3 {
+    prk_4e3m: BytesHashLen,
+    th_4: BytesHashLen,
+}
 
 pub fn edhoc_exporter(
     state: &Completed,
@@ -86,16 +127,47 @@ pub fn r_prepare_message_2(
     c_r: ConnId,
     ead_2: &EadItems,
 ) -> Result<(WaitM3, BufferMessage2), EDHOCError> {
-    match (state.method, method_details) {
+    let th_2 = compute_th_2(crypto, &state.g_y, &state.h_message_1);
+    let prk_2e = compute_prk_2e(crypto, &state.y, &state.g_x, &th_2);
+
+    let prepared = match (state.method, method_details) {
         (EDHOCMethod::StatStat, PrepareMessage2Details::StatStat { r, cred_transfer }) => {
-            r_prepare_message_2_statstat(state, crypto, cred_r, r, c_r, cred_transfer, ead_2)
+            r_prepare_message_2_statstat(
+                state,
+                crypto,
+                cred_r,
+                r,
+                c_r,
+                cred_transfer,
+                ead_2,
+                &th_2,
+                &prk_2e,
+            )?
         }
         (EDHOCMethod::PSK, PrepareMessage2Details::Psk) => {
-            r_prepare_message_2_psk(state, crypto, cred_r, c_r, ead_2)
+            r_prepare_message_2_psk(crypto, cred_r, c_r, ead_2, &th_2, &prk_2e)?
         }
-        // FIXME: it is not an error, but more a lack of agreement between peers.
-        _ => Err(EDHOCError::UnsupportedMethod),
-    }
+        _ => return Err(EDHOCError::UnsupportedMethod),
+    };
+
+    let mut ct: BufferCiphertext2 = BufferCiphertext2::new();
+    ct.fill_with_slice(prepared.plaintext_2.as_slice()).unwrap(); // TODO(hax): can we prove with hax that this won't panic since they use the same underlying buffer length?
+
+    let ciphertext_2 = encrypt_decrypt_ciphertext_2(crypto, &prk_2e, &th_2, &ct);
+
+    ct.fill_with_slice(ciphertext_2.as_slice()).unwrap(); // TODO(hax): same as just above.
+
+    let message_2 = encode_message_2(&state.g_y, &ct);
+
+    Ok((
+        WaitM3 {
+            method_specifics: prepared.method_specifics,
+            y: state.y,
+            prk_3e2m: prepared.prk_3e2m,
+            th_3: prepared.th_3,
+        },
+        message_2,
+    ))
 }
 
 pub fn r_parse_message_3(
@@ -103,14 +175,27 @@ pub fn r_parse_message_3(
     crypto: &mut impl CryptoTrait,
     message_3: &BufferMessage3,
 ) -> Result<(ProcessingM3, IdCred, EadItems), EDHOCError> {
-    match &state.method_specifics {
+    let parsed = match &state.method_specifics {
         WaitM3MethodSpecifics::StatStat { .. } => {
-            r_parse_message_3_statstat(state, crypto, message_3)
+            r_parse_message_3_statstat(state, crypto, message_3)?
         }
         WaitM3MethodSpecifics::Psk { cred_r } => {
-            r_parse_message_3_psk(state, crypto, message_3, cred_r)
+            r_parse_message_3_psk(state, crypto, message_3, cred_r)?
         }
-    }
+    };
+
+    Ok((
+        ProcessingM3 {
+            method_specifics: parsed.method_specifics,
+            y: state.y,
+            prk_3e2m: state.prk_3e2m,
+            th_3: state.th_3,
+            plaintext_3: parsed.plaintext_3,
+            ead_3: parsed.ead_3.clone(),
+        },
+        parsed.id_cred,
+        parsed.ead_3,
+    ))
 }
 
 pub fn r_parse_message_3_with_cred_resolver<F>(
@@ -122,9 +207,9 @@ pub fn r_parse_message_3_with_cred_resolver<F>(
 where
     F: Fn(&IdCred) -> Result<Credential, EDHOCError>,
 {
-    match &state.method_specifics {
+    let parsed = match &state.method_specifics {
         WaitM3MethodSpecifics::StatStat { .. } => {
-            r_parse_message_3_statstat(state, crypto, message_3)
+            r_parse_message_3_statstat(state, crypto, message_3)?
         }
         WaitM3MethodSpecifics::Psk { cred_r } => r_parse_message_3_psk_with_cred_resolver(
             state,
@@ -132,8 +217,21 @@ where
             message_3,
             cred_r,
             resolve_cred_i,
-        ),
-    }
+        )?,
+    };
+
+    Ok((
+        ProcessingM3 {
+            method_specifics: parsed.method_specifics,
+            y: state.y,
+            prk_3e2m: state.prk_3e2m,
+            th_3: state.th_3,
+            plaintext_3: parsed.plaintext_3,
+            ead_3: parsed.ead_3.clone(),
+        },
+        parsed.id_cred,
+        parsed.ead_3,
+    ))
 }
 
 pub fn r_verify_message_3(
@@ -141,15 +239,39 @@ pub fn r_verify_message_3(
     crypto: &mut impl CryptoTrait,
     valid_cred_i: Credential,
 ) -> Result<(ProcessedM3, BytesHashLen), EDHOCError> {
-    match &state.method_specifics {
+    let salt_4e3m = compute_salt_4e3m(crypto, &state.prk_3e2m, &state.th_3);
+
+    let verified = match &state.method_specifics {
         ProcessingM3MethodSpecifics::StatStat { mac_3, id_cred_i } => {
-            r_verify_message_3_statstat(state, crypto, valid_cred_i, *mac_3, id_cred_i)
+            r_verify_message_3_statstat(state, crypto, valid_cred_i, *mac_3, id_cred_i, &salt_4e3m)?
         }
         ProcessingM3MethodSpecifics::Psk {
             id_cred_psk,
             cred_r,
-        } => r_verify_message_3_psk(state, crypto, valid_cred_i, id_cred_psk, cred_r),
-    }
+        } => r_verify_message_3_psk(state, crypto, valid_cred_i, id_cred_psk, cred_r, &salt_4e3m)?,
+    };
+
+    let mut prk_out: BytesHashLen = Default::default();
+    edhoc_kdf(
+        crypto,
+        &verified.prk_4e3m,
+        7u8,
+        &verified.th_4,
+        &mut prk_out,
+    );
+
+    let mut prk_exporter = BytesHashLen::default();
+    edhoc_kdf(crypto, &prk_out, 10u8, &[], &mut prk_exporter);
+
+    Ok((
+        ProcessedM3 {
+            prk_4e3m: verified.prk_4e3m,
+            th_4: verified.th_4,
+            prk_out,
+            prk_exporter,
+        },
+        prk_out,
+    ))
 }
 
 pub fn r_prepare_message_4(
@@ -204,11 +326,32 @@ pub fn i_parse_message_2<'a>(
     crypto: &mut impl CryptoTrait,
     message_2: &BufferMessage2,
 ) -> Result<(ProcessingM2, ConnId, ParsedMessage2Details, EadItems), EDHOCError> {
-    match state.method {
-        EDHOCMethod::StatStat => i_parse_message_2_statstat(state, crypto, message_2),
-        EDHOCMethod::PSK => i_parse_message_2_psk(state, crypto, message_2),
+    let (g_y, ciphertext_2) = parse_message_2(message_2)?;
+    let th_2 = compute_th_2(crypto, &g_y, &state.h_message_1);
+    let prk_2e = compute_prk_2e(crypto, &state.x, &g_y, &th_2);
+    let plaintext_2 = encrypt_decrypt_ciphertext_2(crypto, &prk_2e, &th_2, &ciphertext_2);
+
+    let decoded = match state.method {
+        EDHOCMethod::StatStat => i_parse_message_2_statstat(&plaintext_2),
+        EDHOCMethod::PSK => i_parse_message_2_psk(&plaintext_2),
         _ => Err(EDHOCError::UnsupportedMethod),
-    }
+    }?;
+
+    Ok((
+        ProcessingM2 {
+            method_specifics: decoded.method_specifics,
+            prk_2e,
+            th_2,
+            x: state.x,
+            g_y,
+            plaintext_2,
+            c_r: decoded.c_r,
+            ead_2: decoded.ead_2.clone(),
+        },
+        decoded.c_r,
+        decoded.parsed_details,
+        decoded.ead_2,
+    ))
 }
 
 pub fn i_verify_message_2(
@@ -217,16 +360,27 @@ pub fn i_verify_message_2(
     valid_cred_r: Credential,
     i: InitiatorIdentity, // I's static private DH key when required by method
 ) -> Result<ProcessedM2, EDHOCError> {
-    match (&state.method_specifics, &i) {
+    // The overall verification flow is shared across methods, but `prk_3e2m`,
+    // `th_3`, and `prk_4e3m` still depend on the EDHOC method, so the match keeps
+    // the method-specific derivation in the child modules and only shares the final
+    // `ProcessedM2` assembly here.
+    let verified = match (&state.method_specifics, &i) {
         (ProcessingM2MethodSpecifics::StatStat { .. }, InitiatorIdentity::StatStat { i }) => {
-            i_verify_message_2_statstat(state, crypto, valid_cred_r, i)
+            i_verify_message_2_statstat(state, crypto, valid_cred_r, i)?
         }
         (ProcessingM2MethodSpecifics::Psk { .. }, InitiatorIdentity::Psk {}) => {
-            i_verify_message_2_psk(state, crypto, valid_cred_r)
+            i_verify_message_2_psk(state, crypto, valid_cred_r)?
         }
         // FIXME: it is not an error, but more a lack of agreement between peers.
-        _ => Err(EDHOCError::MissingIdentity), // or UnsupportedMethod
-    }
+        _ => return Err(EDHOCError::MissingIdentity), // or UnsupportedMethod
+    };
+
+    Ok(ProcessedM2 {
+        method_specifics: verified.method_specifics,
+        prk_3e2m: verified.prk_3e2m,
+        prk_4e3m: verified.prk_4e3m,
+        th_3: verified.th_3,
+    })
 }
 
 pub fn i_prepare_message_3(
@@ -236,14 +390,31 @@ pub fn i_prepare_message_3(
     cred_transfer: CredentialTransfer,
     ead_3: &EadItems,
 ) -> Result<(WaitM4, BufferMessage3, BytesHashLen), EDHOCError> {
-    match state.method_specifics {
+    let prepared = match state.method_specifics {
         ProcessedM2MethodSpecifics::StatStat { .. } => {
-            i_prepare_message_3_statstat(state, crypto, cred_i, cred_transfer, ead_3)
+            i_prepare_message_3_statstat(state, crypto, cred_i, cred_transfer, ead_3)?
         }
         ProcessedM2MethodSpecifics::Psk { .. } => {
-            i_prepare_message_3_psk(state, crypto, cred_i, cred_transfer, ead_3)
+            i_prepare_message_3_psk(state, crypto, cred_i, cred_transfer, ead_3)?
         }
-    }
+    };
+
+    let mut prk_out: BytesHashLen = Default::default();
+    edhoc_kdf(crypto, &state.prk_4e3m, 7u8, &prepared.th_4, &mut prk_out);
+
+    let mut prk_exporter: BytesHashLen = Default::default();
+    edhoc_kdf(crypto, &prk_out, 10u8, &[], &mut prk_exporter);
+
+    Ok((
+        WaitM4 {
+            prk_4e3m: state.prk_4e3m,
+            th_4: prepared.th_4,
+            prk_out,
+            prk_exporter,
+        },
+        prepared.message_3,
+        prk_out,
+    ))
 }
 
 pub fn i_process_message_4(
