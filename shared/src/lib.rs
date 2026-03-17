@@ -1537,6 +1537,14 @@ mod test_ead_items {
 
         assert_eq!(items.len(), MAX_EAD_ITEMS);
 
+        // Check round-tripping
+        let decoded = edhoc_parser::parse_eads(output_buffer.as_slice()).unwrap();
+        assert_eq!(
+            make_comparable(&decoded),
+            make_comparable(&items),
+            "EAD items did not round-trip through encoding"
+        );
+
         // This *should* be an error: the first item is critical.
         items.processed_critical_items().unwrap_err();
 
@@ -1544,5 +1552,16 @@ mod test_ead_items {
         assert_eq!(ead1.label, 1);
 
         items.processed_critical_items().unwrap();
+    }
+
+    // Not introducing PartialEq/Eq just for this test, but if it's introduced later for other
+    // reasons, this could all be way easier.
+    fn make_comparable(items: &EadItems) -> impl core::fmt::Debug + PartialEq {
+        extern crate alloc;
+        use alloc::vec::Vec;
+        items
+            .iter()
+            .map(|i| (i.label(), i.is_critical(), Vec::from(i.value.as_slice())))
+            .collect::<Vec<_>>()
     }
 }
