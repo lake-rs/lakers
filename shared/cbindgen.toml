@@ -137,6 +137,6 @@ include = [
     "EdhocBuffer", "BufferKid", "BufferCred", "BufferIdCred",
     "CredentialKey", "CredentialType", "IdCred",
     "CredentialTransfer",
-    "InitiatorStart", "WaitM2", "Completed", "ProcessedM2", "WaitM4",
+    "InitiatorStart", "WaitM2", "Completed", "WaitM4",
     "EdhocInitiatorC", "EdhocInitiatorWaitM2C", "EdhocInitiatorProcessingM2C", "EdhocInitiatorProcessedM2C", "EdhocInitiatorDoneC",
 ]
