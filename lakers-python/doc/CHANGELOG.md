@@ -2,6 +2,13 @@
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## lakers-python-v0.6.2
+
+### Changed
+
+* EAD parsing was fixed: it previously misrepresented EAD items after value-less EAD items.
+* Log messages from the lakers-shared crate are now available in Python.
+
 ## lakers-python-v0.6.1
 
 ### Added
