@@ -13,11 +13,20 @@ use lakers_crypto::{default_crypto, CryptoTrait};
 pub mod ead_authz;
 pub mod initiator;
 
+#[cfg(test)]
+extern crate std;
+
 // crate type staticlib requires a panic handler and an allocator
+#[cfg(not(test))]
 use embedded_alloc::Heap;
 use panic_semihosting as _;
+#[cfg(not(test))]
 #[global_allocator]
 static HEAP: Heap = Heap::empty();
+
+#[cfg(test)]
+#[global_allocator]
+static ALLOC: std::alloc::System = std::alloc::System;
 
 /// Note that while the Rust version supports optional value to indicate an empty value,
 /// in the C version we use an empty buffer for that case.

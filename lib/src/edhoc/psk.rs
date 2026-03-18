@@ -10,9 +10,9 @@ use super::{
     ProcessingM3MethodSpecifics, Th4Input, VerifiedMessage2, VerifiedMessage3, WaitM3,
     WaitM3MethodSpecifics,
 };
-use lakers_shared::Crypto as CryptoTrait;
+use lakers_shared::{CBORDecoder, Crypto as CryptoTrait};
 
-pub fn r_prepare_message_2_psk(
+pub(crate) fn r_prepare_message_2_psk(
     crypto: &mut impl CryptoTrait,
     cred_r: Credential,
     c_r: ConnId,
@@ -35,7 +35,7 @@ pub fn r_prepare_message_2_psk(
     })
 }
 
-pub fn r_parse_message_3_psk(
+pub(crate) fn r_parse_message_3_psk(
     state: &WaitM3,
     crypto: &mut impl CryptoTrait,
     message_3: &BufferMessage3,
@@ -50,7 +50,7 @@ pub fn r_parse_message_3_psk(
     )
 }
 
-pub fn r_parse_message_3_psk_with_cred_resolver<F>(
+pub(crate) fn r_parse_message_3_psk_with_cred_resolver<F>(
     state: &WaitM3,
     crypto: &mut impl CryptoTrait,
     message_3: &BufferMessage3,
@@ -62,12 +62,21 @@ where
 {
     let res = parse_message_3(message_3)?;
     let plaintext_3a = encrypt_decrypt_ciphertext_3a(crypto, &state.prk_3e2m, &state.th_3, &res);
-    let id_cred_psk = IdCred::from_encoded_value(&[plaintext_3a.as_slice()[0]])?;
+    let mut decoder = CBORDecoder::new(plaintext_3a.as_slice());
+    let id_cred_psk_encoded = decoder
+        .any_as_encoded()
+        .map_err(|_| EDHOCError::ParsingError)?;
+    let id_cred_psk = IdCred::from_encoded_value(id_cred_psk_encoded)?;
+    let ciphertext_3b_bytes = decoder
+        .remaining_buffer()
+        .map_err(|_| EDHOCError::ParsingError)?;
 
     let cred_i = resolve_cred_i(&id_cred_psk)?;
 
     let mut ciphertext_3b = BufferCiphertext3::new();
-    let _ = ciphertext_3b.fill_with_slice(&plaintext_3a.as_slice()[1..]);
+    ciphertext_3b
+        .fill_with_slice(ciphertext_3b_bytes)
+        .map_err(|_| EDHOCError::ParsingError)?;
 
     let plaintext_3b = decrypt_message_3(
         crypto,
@@ -97,7 +106,7 @@ where
     }
 }
 
-pub fn r_verify_message_3_psk(
+pub(crate) fn r_verify_message_3_psk(
     state: &ProcessingM3,
     crypto: &mut impl CryptoTrait,
     valid_cred_i: Credential,
@@ -124,7 +133,7 @@ pub fn r_verify_message_3_psk(
     Ok(VerifiedMessage3 { prk_4e3m, th_4 })
 }
 
-pub fn i_parse_message_2_psk(
+pub(crate) fn i_parse_message_2_psk(
     plaintext_2: &BufferPlaintext2,
 ) -> Result<DecodedMessage2, EDHOCError> {
     let (c_r, ead_2) = decode_plaintext_2_psk(plaintext_2)?;
@@ -137,7 +146,7 @@ pub fn i_parse_message_2_psk(
     })
 }
 
-pub fn i_verify_message_2_psk(
+pub(crate) fn i_verify_message_2_psk(
     state: &ProcessingM2,
     crypto: &mut impl CryptoTrait,
     valid_cred_r: Credential,
@@ -166,7 +175,7 @@ pub fn i_verify_message_2_psk(
     })
 }
 
-pub fn i_prepare_message_3_psk(
+pub(crate) fn i_prepare_message_3_psk(
     state: &ProcessedM2,
     crypto: &mut impl CryptoTrait,
     cred_i: Credential,
@@ -197,19 +206,23 @@ pub fn i_prepare_message_3_psk(
             cred_i.bytes.as_slice(),
             cred_r.bytes.as_slice(),
         )),
-    );
+    )?;
     // compute ciphertext_3a
     let pt_3a = id_cred_psk.as_encoded_value();
     let mut ct_3a: BufferCiphertext3 = BufferCiphertext3::new();
-    ct_3a.extend_from_slice(pt_3a).unwrap();
-    ct_3a.extend_from_slice(ciphertext_3b.as_slice()).unwrap();
+    ct_3a
+        .extend_from_slice(pt_3a)
+        .map_err(|_| EDHOCError::EncodingError)?;
+    ct_3a
+        .extend_from_slice(ciphertext_3b.as_slice())
+        .map_err(|_| EDHOCError::EncodingError)?;
     let ciphertext_3a = encrypt_decrypt_ciphertext_3a(crypto, &state.prk_3e2m, &state.th_3, &ct_3a);
     // CBOR encoding of ct_3a
     let encoded_ciphertext_3a = encode_ciphertext_3a(ciphertext_3a)?;
     //compute message_3
     message_3
         .extend_from_slice(encoded_ciphertext_3a.as_slice())
-        .unwrap();
+        .map_err(|_| EDHOCError::EncodingError)?;
     let th_4 = compute_th_4(
         crypto,
         &state.th_3,

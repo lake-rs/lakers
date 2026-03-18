@@ -1128,6 +1128,10 @@ mod edhoc_parser {
         trace!("Enter parse_message_3");
         let message_slice = rcvd_message_3.as_slice();
 
+        if message_slice.is_empty() {
+            return Err(EDHOCError::ParsingError);
+        }
+
         // Get the first byte and convert it to length
         let first_byte = message_slice[0];
         let (ciphertext_3a_len, header_len) = decode_cbor_length(first_byte)?;
@@ -1137,8 +1141,9 @@ mod edhoc_parser {
         if message_slice.len() < header_len + ciphertext_3a_len {
             return Err(EDHOCError::ParsingError);
         }
-        let _ = ciphertext_3a
-            .fill_with_slice(&message_slice[header_len..header_len + ciphertext_3a_len]);
+        ciphertext_3a
+            .fill_with_slice(&message_slice[header_len..header_len + ciphertext_3a_len])
+            .map_err(|_| EDHOCError::ParsingError)?;
 
         Ok(ciphertext_3a)
     }

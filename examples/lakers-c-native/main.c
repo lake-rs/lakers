@@ -117,7 +117,7 @@ int main(void)
     credential_new(&cred_r, CRED_R, 84);
     puts("creating edhoc initiator.");
     EdhocInitiator initiator = {0};
-    initiator_new(&initiator);
+    initiator_new(&initiator, StatStat);
 #ifdef LAKERS_EAD_AUTHZ
     puts("creating ead-authz device.");
     EadAuthzDevice device = {0};
@@ -155,16 +155,21 @@ int main(void)
     memcpy(message_2.content, coap_response_payload, coap_response_payload_len);
     EadItemsC ead_2 = {0};
     uint8_t c_r;
+    bool has_id_cred_r = false;
     IdCred id_cred_r = {0};
 #ifdef LAKERS_EAD_AUTHZ
     // res = initiator_parse_message_2(&initiator, &message_2, &cred_r, &c_r, &id_cred_r, &ead_2);
-    res = initiator_parse_message_2(&initiator, &message_2, &c_r, &id_cred_r, &ead_2);
+    res = initiator_parse_message_2(&initiator, &message_2, &c_r, &has_id_cred_r, &id_cred_r, &ead_2);
 #else
     // res = initiator_parse_message_2(&initiator, &message_2, &cred_r, &c_r, &id_cred_r, &ead_2);
-    res = initiator_parse_message_2(&initiator, &message_2, &c_r, &id_cred_r, &ead_2);
+    res = initiator_parse_message_2(&initiator, &message_2, &c_r, &has_id_cred_r, &id_cred_r, &ead_2);
 #endif
     if (res != 0) {
         printf("Error parse msg2: %d\n", res);
+        return 1;
+    }
+    if (!has_id_cred_r) {
+        puts("Responder did not provide ID_CRED_R.");
         return 1;
     }
     // FIXME: failing on native when cred_expected is NULL (memory allocation of 48 bytes failed)

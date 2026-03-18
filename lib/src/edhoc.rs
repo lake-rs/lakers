@@ -281,7 +281,7 @@ pub fn r_prepare_message_4(
 ) -> Result<(Completed, BufferMessage4), EDHOCError> {
     // compute ciphertext_4
     let plaintext_4 = encode_plaintext_4(&ead_4)?;
-    let message_4 = encrypt_message_4(crypto, &state.prk_4e3m, &state.th_4, &plaintext_4);
+    let message_4 = encrypt_message_4(crypto, &state.prk_4e3m, &state.th_4, &plaintext_4)?;
 
     Ok((
         Completed {
@@ -652,54 +652,82 @@ fn encode_plaintext_4(ead_4: &EadItems) -> Result<BufferPlaintext4, EDHOCError> 
 fn build_external_aad(
     th_3: &[u8],
     psk_fields: Option<(&[u8], &[u8], &[u8])>,
-) -> EdhocBuffer<MAX_BUFFER_LEN> {
+) -> Result<EdhocBuffer<MAX_BUFFER_LEN>, EDHOCError> {
     match psk_fields {
         None => {
             let mut buf = EdhocBuffer::<MAX_BUFFER_LEN>::new();
-            buf.extend_from_slice(th_3).unwrap();
-            buf
+            buf.extend_from_slice(th_3)
+                .map_err(|_| EDHOCError::EncodingError)?;
+            Ok(buf)
         }
         Some((id_cred, cred_i, cred_r)) => {
             let mut buf = EdhocBuffer::<MAX_BUFFER_LEN>::new();
 
-            buf.extend_from_slice(id_cred).unwrap();
+            buf.extend_from_slice(id_cred)
+                .map_err(|_| EDHOCError::EncodingError)?;
 
-            buf.push(CBOR_BYTE_STRING).unwrap();
-            buf.push(th_3.len() as u8).unwrap();
-            buf.extend_from_slice(th_3).unwrap();
+            encode_bstr_header(&mut buf, th_3.len())?;
+            buf.extend_from_slice(th_3)
+                .map_err(|_| EDHOCError::EncodingError)?;
 
-            buf.extend_from_slice(cred_i).unwrap();
-            buf.extend_from_slice(cred_r).unwrap();
+            buf.extend_from_slice(cred_i)
+                .map_err(|_| EDHOCError::EncodingError)?;
+            buf.extend_from_slice(cred_r)
+                .map_err(|_| EDHOCError::EncodingError)?;
 
-            buf
+            Ok(buf)
         }
     }
 }
 
 // FIXME: The encoded Enc_structure is no longer a fixed-size array because the
 // external_aad depends on the EDHOC method, so we return an `EdhocBuffer`.
-fn encode_enc_structure(external_aad: &[u8]) -> EdhocBuffer<MAX_BUFFER_LEN> {
+fn encode_enc_structure(external_aad: &[u8]) -> Result<EdhocBuffer<MAX_BUFFER_LEN>, EDHOCError> {
     let encrypt0 = b"Encrypt0";
     let mut enc_structure = EdhocBuffer::<MAX_BUFFER_LEN>::new();
 
     // CBOR array of 3 elements
-    enc_structure.push(CBOR_MAJOR_ARRAY | 3).unwrap();
+    enc_structure
+        .push(CBOR_MAJOR_ARRAY | 3)
+        .map_err(|_| EDHOCError::EncodingError)?;
 
     // "Encrypt0" text string
     enc_structure
         .push(CBOR_MAJOR_TEXT_STRING | encrypt0.len() as u8)
-        .unwrap();
-    enc_structure.extend_from_slice(encrypt0).unwrap();
+        .map_err(|_| EDHOCError::EncodingError)?;
+    enc_structure
+        .extend_from_slice(encrypt0)
+        .map_err(|_| EDHOCError::EncodingError)?;
 
     // protected field: zero-length byte string
-    enc_structure.push(CBOR_MAJOR_BYTE_STRING | 0).unwrap();
+    enc_structure
+        .push(CBOR_MAJOR_BYTE_STRING | 0)
+        .map_err(|_| EDHOCError::EncodingError)?;
 
     // external_aad field
-    enc_structure.push(CBOR_BYTE_STRING).unwrap();
-    enc_structure.push(external_aad.len() as u8).unwrap();
-    enc_structure.extend_from_slice(external_aad).unwrap();
-
+    encode_bstr_header(&mut enc_structure, external_aad.len())?;
     enc_structure
+        .extend_from_slice(external_aad)
+        .map_err(|_| EDHOCError::EncodingError)?;
+
+    Ok(enc_structure)
+}
+
+fn encode_bstr_header(buf: &mut EdhocBuffer<MAX_BUFFER_LEN>, len: usize) -> Result<(), EDHOCError> {
+    if len <= 23 {
+        buf.push(CBOR_MAJOR_BYTE_STRING | len as u8)
+            .map_err(|_| EDHOCError::EncodingError)?;
+    } else if len <= u8::MAX as usize {
+        buf.push(0x58).map_err(|_| EDHOCError::EncodingError)?;
+        buf.push(len as u8).map_err(|_| EDHOCError::EncodingError)?;
+    } else if len <= u16::MAX as usize {
+        buf.push(0x59).map_err(|_| EDHOCError::EncodingError)?;
+        buf.extend_from_slice(&(len as u16).to_be_bytes())
+            .map_err(|_| EDHOCError::EncodingError)?;
+    } else {
+        return Err(EDHOCError::EncodingError);
+    }
+    Ok(())
 }
 
 fn compute_k_3_iv_3(
@@ -740,18 +768,22 @@ fn encrypt_message_3(
     th_3: &BytesHashLen,
     plaintext_3: &BufferPlaintext3,
     psk_fields: Option<(&[u8], &[u8], &[u8])>,
-) -> BufferMessage3 {
+) -> Result<BufferMessage3, EDHOCError> {
     let mut output: BufferMessage3 = BufferMessage3::new();
     let bytestring_length = plaintext_3.len() + AES_CCM_TAG_LEN;
     // FIXME: Reuse CBOR encoder
     if bytestring_length < 24 {
         output
             .push(CBOR_MAJOR_BYTE_STRING | (bytestring_length) as u8)
-            .unwrap();
+            .map_err(|_| EDHOCError::EncodingError)?;
     } else {
         // FIXME: Assumes we don't exceed 256 bytes which is the current buffer size
-        output.push(CBOR_MAJOR_BYTE_STRING | 24).unwrap();
-        output.push(bytestring_length as _).unwrap();
+        output
+            .push(CBOR_MAJOR_BYTE_STRING | 24)
+            .map_err(|_| EDHOCError::EncodingError)?;
+        output
+            .push(bytestring_length as _)
+            .map_err(|_| EDHOCError::EncodingError)?;
     };
 
     // FIXME: Make the function fallible, especially with the prospect of algorithm agility
@@ -760,8 +792,8 @@ fn encrypt_message_3(
         "Tried to encode a message that is too large."
     );
 
-    let external_aad = build_external_aad(th_3, psk_fields);
-    let enc_structure = encode_enc_structure(external_aad.as_slice());
+    let external_aad = build_external_aad(th_3, psk_fields)?;
+    let enc_structure = encode_enc_structure(external_aad.as_slice())?;
     let (k_3, iv_3) = compute_k_3_iv_3(crypto, prk_3e2m, th_3);
 
     let ciphertext_3: BufferCiphertext3 = crypto
@@ -772,9 +804,11 @@ fn encrypt_message_3(
             plaintext_3.as_slice(),
         );
 
-    output.extend_from_slice(ciphertext_3.as_slice()).unwrap();
-
     output
+        .extend_from_slice(ciphertext_3.as_slice())
+        .map_err(|_| EDHOCError::EncodingError)?;
+
+    Ok(output)
 }
 
 fn decrypt_message_3(
@@ -810,8 +844,8 @@ fn decrypt_message_3(
     .unwrap();
 
     let (k_3, iv_3) = compute_k_3_iv_3(crypto, prk_3e2m, th_3);
-    let external_aad = build_external_aad(th_3, psk_fields);
-    let enc_structure = encode_enc_structure(external_aad.as_slice());
+    let external_aad = build_external_aad(th_3, psk_fields)?;
+    let enc_structure = encode_enc_structure(external_aad.as_slice())?;
 
     crypto.aes_ccm_decrypt::<MAX_MESSAGE_SIZE_LEN, CcmTagLen8>(
         &k_3,
@@ -826,22 +860,26 @@ fn encrypt_message_4(
     prk_4e3m: &BytesHashLen,
     th_4: &BytesHashLen,
     plaintext_4: &BufferPlaintext4,
-) -> BufferMessage4 {
+) -> Result<BufferMessage4, EDHOCError> {
     let mut output: BufferMessage4 = BufferMessage4::new();
     let bytestring_length = plaintext_4.len() + AES_CCM_TAG_LEN;
     // FIXME: Reuse CBOR encoder
     if bytestring_length < 24 {
         output
             .push(CBOR_MAJOR_BYTE_STRING | (bytestring_length) as u8)
-            .unwrap();
+            .map_err(|_| EDHOCError::EncodingError)?;
     } else {
         // FIXME: Assumes we don't exceed 256 bytes which is the current buffer size
-        output.push(CBOR_MAJOR_BYTE_STRING | 24).unwrap();
-        output.push(bytestring_length as _).unwrap();
+        output
+            .push(CBOR_MAJOR_BYTE_STRING | 24)
+            .map_err(|_| EDHOCError::EncodingError)?;
+        output
+            .push(bytestring_length as _)
+            .map_err(|_| EDHOCError::EncodingError)?;
     };
     // FIXME: Make the function fallible, especially with the prospect of algorithm agility
 
-    let enc_structure = encode_enc_structure(th_4);
+    let enc_structure = encode_enc_structure(th_4)?;
 
     let (k_4, iv_4) = compute_k_4_iv_4(crypto, prk_4e3m, th_4);
 
@@ -853,9 +891,11 @@ fn encrypt_message_4(
             plaintext_4.as_slice(),
         );
 
-    output.extend_from_slice(ciphertext_4.as_slice()).unwrap();
-
     output
+        .extend_from_slice(ciphertext_4.as_slice())
+        .map_err(|_| EDHOCError::EncodingError)?;
+
+    Ok(output)
 }
 
 fn decrypt_message_4(
@@ -891,7 +931,7 @@ fn decrypt_message_4(
 
     let (k_4, iv_4) = compute_k_4_iv_4(crypto, prk_4e3m, th_4);
 
-    let enc_structure = encode_enc_structure(th_4);
+    let enc_structure = encode_enc_structure(th_4)?;
 
     crypto.aes_ccm_decrypt::<MAX_MESSAGE_SIZE_LEN, CcmTagLen8>(
         &k_4,
@@ -1080,7 +1120,7 @@ fn compute_prk_4e3m(
 fn compute_prk_4e3m_psk(
     crypto: &mut impl CryptoTrait,
     salt_4e3m: &BytesHashLen,
-    cred: &BytesKeyAES128, //TODO: what is the psk type? len?
+    cred: &BytesElemLenPSK,
 ) -> BytesHashLen {
     crypto.hkdf_extract_psk(salt_4e3m, &cred)
 }
@@ -1651,7 +1691,7 @@ mod tests {
             &PLAINTEXT_3_TV,
             None,
         );
-        assert_eq!(message_3, MESSAGE_3_TV);
+        assert_eq!(message_3, Ok(MESSAGE_3_TV));
     }
 
     #[test]
@@ -1663,7 +1703,7 @@ mod tests {
             &PLAINTEXT_3B_PSK_TV,
             Some((&ID_CRED_PSK_TV, &CRED_I_PSK_TV, &CRED_R_PSK_TV)),
         );
-        assert_eq!(ciphertext_3b, CIPHERTEXT_3B_PSK_TV);
+        assert_eq!(ciphertext_3b, Ok(CIPHERTEXT_3B_PSK_TV));
     }
 
     #[test]
@@ -1842,7 +1882,7 @@ mod tests {
             &TH_4_TV,
             &PLAINTEXT_4_TV,
         );
-        assert_eq!(message_4, MESSAGE_4_TV);
+        assert_eq!(message_4, Ok(MESSAGE_4_TV));
     }
 
     #[test]
@@ -1853,7 +1893,7 @@ mod tests {
             &TH_4_PSK_TV,
             &PLAINTEXT_4_PSK_TV,
         );
-        assert_eq!(message_4, MESSAGE_4_PSK_TV);
+        assert_eq!(message_4, Ok(MESSAGE_4_PSK_TV));
     }
 
     #[test]

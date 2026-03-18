@@ -74,7 +74,14 @@ async fn main(spawner: Spawner) {
         EDHOCMethod::StatStat,
         EDHOCSuite::CipherSuite2,
     );
-    initiator.set_identity(common::I.try_into().unwrap(), cred_i);
+    initiator
+        .set_identity(
+            InitiatorIdentity::StatStat {
+                i: common::I.try_into().unwrap(),
+            },
+            cred_i,
+        )
+        .unwrap();
 
     // Send Message 1 over raw BLE and convert the response to byte
     let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());

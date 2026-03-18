@@ -121,11 +121,7 @@ fn main() -> ! {
             .prepare_message_2(CredentialTransfer::ByReference, None, &EadItems::new())
             .unwrap();
 
-        let (mut initiator, _c_r, details, _ead_2) = initiator.parse_message_2(&message_2).unwrap();
-        let ParsedMessage2Details::StatStat { id_cred_r } = details else {
-            panic!("Expected StatStat details");
-        };
-        let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r).unwrap();
+        let (mut initiator, _c_r, _ead_2) = initiator.parse_message_2(&message_2).unwrap();
         initiator
             .set_identity(
                 InitiatorIdentity::StatStat {
@@ -134,7 +130,7 @@ fn main() -> ! {
                 cred_i.clone(),
             )
             .unwrap(); // exposing own identity only after validating cred_r
-        let initiator = initiator.verify_message_2(valid_cred_r).unwrap();
+        let initiator = initiator.verify_message_2(Some(cred_r)).unwrap();
 
         let (initiator, message_3, i_prk_out) = initiator
             .prepare_message_3(CredentialTransfer::ByReference, &EadItems::new())

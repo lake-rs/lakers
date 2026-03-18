@@ -222,7 +222,7 @@ pub(crate) fn i_prepare_message_3_statstat(
     );
 
     let plaintext_3 = encode_plaintext_3(Some((id_cred_i.as_encoded_value(), &mac_3)), &ead_3)?;
-    let message_3 = encrypt_message_3(crypto, &state.prk_3e2m, &state.th_3, &plaintext_3, None);
+    let message_3 = encrypt_message_3(crypto, &state.prk_3e2m, &state.th_3, &plaintext_3, None)?;
 
     let th_4 = compute_th_4(
         crypto,
