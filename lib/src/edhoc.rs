@@ -368,7 +368,7 @@ pub fn i_verify_message_2(
         (ProcessingM2MethodSpecifics::StatStat { .. }, InitiatorIdentity::StatStat { i }) => {
             i_verify_message_2_statstat(state, crypto, valid_cred_r, i)?
         }
-        (ProcessingM2MethodSpecifics::Psk { .. }, InitiatorIdentity::Psk {}) => {
+        (ProcessingM2MethodSpecifics::Psk { .. }, InitiatorIdentity::Psk) => {
             i_verify_message_2_psk(state, crypto, valid_cred_r)?
         }
         // FIXME: it is not an error, but more a lack of agreement between peers.

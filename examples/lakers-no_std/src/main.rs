@@ -57,6 +57,11 @@ fn main() -> ! {
     const CRED_R: &[u8] = &hex!("A2026008A101A5010202410A2001215820BBC34960526EA4D32E940CAD2A234148DDC21791A12AFBCBAC93622046DD44F02258204519E257236B2A0CE2023F0931F1F386CA7AFDA64FCDE0108C224C51EABF6072");
     const _G_R: &[u8] = &hex!("bbc34960526ea4d32e940cad2a234148ddc21791a12afbcbac93622046dd44f0");
     const _C_R_TV: [u8; 1] = hex!("27");
+    const _ID_CRED_PSK: &[u8] = &hex!("a1044120");
+    const CRED_I_PSK: &[u8] =
+        &hex!("A20269696E69746961746F7208A101A30104024110205050930FF462A77A3540CF546325DEA214");
+    const CRED_R_PSK: &[u8] =
+        &hex!("A20269726573706F6E64657208A101A30104024110205050930FF462A77A3540CF546325DEA214");
 
     fn test_new_initiator() {
         let _initiator = EdhocInitiator::new(
@@ -161,8 +166,72 @@ fn main() -> ! {
         assert_eq!(i_oscore_salt, r_oscore_salt);
     }
 
+    fn test_handshake_psk() {
+        let cred_i = Credential::parse_ccs_symmetric(CRED_I_PSK.try_into().unwrap()).unwrap();
+        let cred_r = Credential::parse_ccs_symmetric(CRED_R_PSK.try_into().unwrap()).unwrap();
+
+        let initiator = EdhocInitiator::new(
+            lakers_crypto::default_crypto(),
+            EDHOCMethod::PSK,
+            EDHOCSuite::CipherSuite2,
+        );
+        let responder = EdhocResponder::new(
+            lakers_crypto::default_crypto(),
+            ResponderIdentity::Psk,
+            cred_r.clone(),
+        );
+
+        let (initiator, message_1) = initiator.prepare_message_1(None, &EadItems::new()).unwrap();
+
+        let (responder, _c_i, _ead_1) = responder.process_message_1(&message_1).unwrap();
+        let (responder, message_2) = responder
+            .prepare_message_2(CredentialTransfer::ByReference, None, &EadItems::new())
+            .unwrap();
+
+        let (mut initiator, _c_r, _ead_2) = initiator.parse_message_2(&message_2).unwrap();
+        initiator
+            .set_identity(InitiatorIdentity::Psk, cred_i.clone())
+            .unwrap(); // exposing own identity only after validating cred_r
+        let initiator = initiator.verify_message_2(Some(cred_r)).unwrap();
+
+        let (initiator, message_3, i_prk_out) = initiator
+            .prepare_message_3(CredentialTransfer::ByReference, &EadItems::new())
+            .unwrap();
+
+        let (responder, id_cred_i, _ead_3) = responder
+            .parse_message_3_with_credential_lookup(&message_3, |id| {
+                credential_check_or_fetch(Some(cred_i.clone()), id.clone())
+            })
+            .unwrap();
+        let valid_cred_i = credential_check_or_fetch(Some(cred_i), id_cred_i).unwrap();
+        let (responder, r_prk_out) = responder.verify_message_3(valid_cred_i).unwrap();
+
+        let mut initiator = initiator.completed_without_message_4().unwrap();
+        let mut responder = responder.completed_without_message_4().unwrap();
+
+        // check that prk_out is equal at initiator and responder side
+        assert_eq!(i_prk_out, r_prk_out);
+
+        // derive OSCORE secret and salt at both sides and compare
+        let mut i_oscore_secret = [0; 16];
+        initiator.edhoc_exporter(0u8, &[], &mut i_oscore_secret); // label is 0
+        let mut i_oscore_salt = [0; 8];
+        initiator.edhoc_exporter(1u8, &[], &mut i_oscore_salt); // label is 1
+
+        let mut r_oscore_secret = [0; 16];
+        responder.edhoc_exporter(0u8, &[], &mut r_oscore_secret); // label is 0
+        let mut r_oscore_salt = [0; 8];
+        responder.edhoc_exporter(1u8, &[], &mut r_oscore_salt); // label is 1
+
+        assert_eq!(i_oscore_secret, r_oscore_secret);
+        assert_eq!(i_oscore_salt, r_oscore_salt);
+    }
+
     test_handshake();
     info!("Test test_handshake passed.");
+
+    test_handshake_psk();
+    info!("Test test_handshake_psk passed.");
     info!("All tests passed.");
 
     // exit via semihosting call
