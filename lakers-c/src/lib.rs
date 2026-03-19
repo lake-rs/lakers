@@ -386,6 +386,22 @@ pub unsafe extern "C" fn credential_new(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn credential_new_symmetric(
+    cred: *mut CredentialC,
+    value: *const u8,
+    value_len: usize,
+) -> i8 {
+    let value = core::slice::from_raw_parts(value, value_len);
+    match Credential::parse_ccs_symmetric(value) {
+        Ok(cred_parsed) => {
+            CredentialC::copy_into_c(cred_parsed, cred);
+            0
+        }
+        Err(_) => -1,
+    }
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn credential_check_or_fetch(
     cred_expected: *mut CredentialC,
     id_cred_received: *mut IdCred,
