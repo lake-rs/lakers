@@ -75,7 +75,7 @@ impl EadItemsC {
     pub fn to_rust(&self) -> EadItems {
         let mut items = EadItems::new();
 
-        for i in self.items.iter() {
+        for i in self.items.iter().take(self.len) {
             items
                 .try_push(i.clone().to_rust())
                 .expect("EadItemsC can not contain more items than EadItems");

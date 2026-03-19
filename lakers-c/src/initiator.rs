@@ -566,10 +566,6 @@ mod tests {
             )
         };
 
-        // This synthetic setup does not build a full stat/stat transcript that reaches
-        // successful verification, but getting a MAC verification failure here shows that
-        // the wrapper resolved the responder credential internally and progressed past the
-        // old MissingIdentity / caller-must-validate stage.
-        assert_eq!(verify_rc, EDHOCError::MacVerificationFailed as i8);
+        assert_eq!(verify_rc, 0);
     }
 }
