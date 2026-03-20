@@ -20,7 +20,7 @@ def test_initiator():
 
 
 def test_responder():
-    r = repr(lakers.EdhocResponder(R, CRED_R))
+    r = repr(lakers.EdhocResponder(CRED_R, R))
     assert " in state Start" in r
 
 

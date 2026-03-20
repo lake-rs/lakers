@@ -28,7 +28,7 @@ def test_initiator():
     assert type(message_1) == bytes
 
 def test_responder():
-    responder = EdhocResponder(R, CRED_R)
+    responder = EdhocResponder(CRED_R, R)
 
 def test_ccs_consruction():
     # The main crednetials we use can be parsed as they are:
@@ -44,12 +44,12 @@ def test_ccs_consruction():
     assert repr(cred_r_manual) == repr(cred_r)
 
     # Both forms are accepted for constructing equivalent responders
-    _ = EdhocResponder(R, CRED_R)
-    _ = EdhocResponder(R, cred_r_manual)
+    _ = EdhocResponder(CRED_R, R)
+    _ = EdhocResponder(cred_r_manual, R)
 
 def _test_handshake(cred_r_transfer, cred_i_transfer):
     initiator = EdhocInitiator()
-    responder = EdhocResponder(R, CRED_R)
+    responder = EdhocResponder(CRED_R, R)
 
     # initiator
     message_1 = initiator.prepare_message_1(c_i=None)
@@ -100,7 +100,7 @@ def _test_handshake(cred_r_transfer, cred_i_transfer):
     assert i_prk_out_new == r_prk_out_new
 
 def test_edhoc_error():
-    responder = EdhocResponder(R, CRED_R)
+    responder = EdhocResponder(CRED_R, R)
     with pytest.raises(ValueError) as err:
         _ = responder.process_message_1([1, 2, 3])
     assert str(err.value) == "EDHOCError::ParsingError"
@@ -122,7 +122,7 @@ def test_state_no_going_back():
     initiator = EdhocInitiator()
     message_1 = initiator.prepare_message_1(c_i=None)
 
-    responder = EdhocResponder(R, CRED_R)
+    responder = EdhocResponder(CRED_R, R)
     assert "Start" in repr(responder), f"Expected state to be reported in repr, found {responder!r}"
     responder.process_message_1(message_1)
     assert "ProcessingM1" in repr(responder), f"Expected state to be reported in repr, found {responder!r}"

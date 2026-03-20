@@ -39,13 +39,21 @@ pub(crate) enum PyEdhocResponderSummary {
 #[pymethods]
 impl PyEdhocResponder {
     #[new]
-    fn new(r: Vec<u8>, py: Python<'_>, cred_r: super::AutoCredential) -> PyResult<Self> {
+    #[pyo3(signature = (cred_r, r=None))]
+    fn new(py: Python<'_>, cred_r: super::AutoCredential, r: Option<Vec<u8>>) -> PyResult<Self> {
         trace!("Initializing EdhocResponder");
         let (y, g_y) = default_crypto().p256_generate_key_pair();
+        // Mirror the Rust API: PSK has no static responder DH key, so `r=None` selects PSK.
+        let r = r.unwrap_or_default();
 
-        let cred_r = cred_r
-            .to_credential()
-            .with_cause(py, "Failed to ingest CRED_R")?;
+        let cred_r = match parse_responder_identity(&r) {
+            Ok(ResponderIdentity::StatStat { .. }) => {
+                super::parse_credential(EDHOCMethod::StatStat, cred_r)
+            }
+            Ok(ResponderIdentity::Psk) => super::parse_credential(EDHOCMethod::PSK, cred_r),
+            Err(err) => Err(err),
+        }
+        .with_cause(py, "Failed to ingest CRED_R")?;
 
         Ok(Self {
             r,
@@ -156,8 +164,13 @@ impl PyEdhocResponder {
         py: Python<'a>,
         valid_cred_i: super::AutoCredential,
     ) -> PyResult<Bound<'a, PyBytes>> {
-        let valid_cred_i = valid_cred_i
-            .to_credential()
+        // Message 3 parsing has already established which method is in use, so reuse that to
+        // parse the initiator credential with the correct CCS vs symmetric-CCS parser.
+        let method = match &self.as_ref_processing_m3()?.method_specifics {
+            ProcessingM3MethodSpecifics::StatStat { .. } => EDHOCMethod::StatStat,
+            ProcessingM3MethodSpecifics::Psk { .. } => EDHOCMethod::PSK,
+        };
+        let valid_cred_i = super::parse_credential(method, valid_cred_i)
             .with_cause(py, "Failed to ingest CRED_I")?;
         let (state, prk_out) = r_verify_message_3(
             &mut self.take_processing_m3()?,
@@ -305,6 +318,22 @@ impl PyEdhocResponder {
         }
     }
 
+    fn as_ref_processing_m3(
+        &self,
+    ) -> Result<&ProcessingM3, StateMismatch<PyEdhocResponderSummary>> {
+        // This is needed alongside `take_processing_m3()`: some callers must inspect the
+        // negotiated method in `processing_m3` to choose how to parse credentials before the
+        // state is consumed by the actual verification step.
+        let summary = self.summarize();
+        match self.processing_m3.as_ref() {
+            Some(o) => Ok(o),
+            None => Err(StateMismatch::new(
+                PyEdhocResponderSummary::ProcessingM3,
+                summary,
+            )),
+        }
+    }
+
     fn take_processed_m3(&mut self) -> Result<ProcessedM3, StateMismatch<PyEdhocResponderSummary>> {
         let summary = self.summarize();
         match self.processed_m3.take() {
@@ -327,5 +356,16 @@ impl PyEdhocResponder {
                 summary,
             )),
         }
+    }
+}
+
+fn parse_responder_identity(r: &[u8]) -> Result<ResponderIdentity, EDHOCError> {
+    if r.is_empty() {
+        Ok(ResponderIdentity::Psk)
+    } else {
+        // A present `r` means the Python caller wants the stat-stat responder identity.
+        let mut identity = BytesP256ElemLen::default();
+        identity.copy_from_slice(r);
+        Ok(ResponderIdentity::StatStat { r: identity })
     }
 }
