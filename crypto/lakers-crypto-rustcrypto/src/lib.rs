@@ -2,8 +2,8 @@
 
 use lakers_shared::CcmTagLen;
 use lakers_shared::{
-    BytesCcmIvLen, BytesCcmKeyLen, BytesHashLen, BytesP256ElemLen, Crypto as CryptoTrait,
-    EDHOCError, EDHOCSuite, EdhocBuffer, MAX_SUITES_LEN,
+    BytesCcmIvLen, BytesCcmKeyLen, BytesElemLenPSK, BytesHashLen, BytesP256ElemLen,
+    Crypto as CryptoTrait, EDHOCError, EDHOCSuite, EdhocBuffer, MAX_SUITES_LEN,
 };
 
 use ccm::AeadInPlace;
@@ -67,6 +67,14 @@ impl<Rng: rand_core::RngCore + rand_core::CryptoRng> CryptoTrait for Crypto<Rng>
     }
 
     fn hkdf_extract(&mut self, salt: &BytesHashLen, ikm: &BytesP256ElemLen) -> BytesHashLen {
+        // While it'd be nice to just pass around an Hkdf, the extract output is not a type generic
+        // of this trait (yet?).
+        let mut extracted = hkdf::HkdfExtract::<sha2::Sha256>::new(Some(salt));
+        extracted.input_ikm(ikm);
+        extracted.finalize().0.into()
+    }
+
+    fn hkdf_extract_psk(&mut self, salt: &BytesHashLen, ikm: &BytesElemLenPSK) -> BytesHashLen {
         // While it'd be nice to just pass around an Hkdf, the extract output is not a type generic
         // of this trait (yet?).
         let mut extracted = hkdf::HkdfExtract::<sha2::Sha256>::new(Some(salt));

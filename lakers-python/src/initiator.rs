@@ -1,9 +1,11 @@
 use lakers::*;
 use lakers_crypto::{default_crypto, CryptoTrait};
 use log::trace;
+use pyo3::exceptions::PyValueError;
 use pyo3::{prelude::*, types::PyBytes};
 
 use super::{ErrExt as _, StateMismatch};
+use crate::parse_credential;
 
 /// An implementation of the EDHOC protocol for the initiator side.
 #[pyclass(name = "EdhocInitiator")]
@@ -41,19 +43,21 @@ pub(crate) enum PyEdhocInitiatorSummary {
 #[pymethods]
 impl PyEdhocInitiator {
     #[new]
-    fn new() -> Self {
+    #[pyo3(signature = (method="statstat"))]
+    fn new(method: &str) -> PyResult<Self> {
         trace!("Initializing EdhocInitiator");
         let mut crypto = default_crypto();
         let suites_i =
             prepare_suites_i(&crypto.supported_suites(), EDHOCSuite::CipherSuite2.into()).unwrap();
         let (x, g_x) = crypto.p256_generate_key_pair();
+        let method = parse_method(method)?;
 
-        Self {
+        Ok(Self {
             cred_i: None,
             start: InitiatorStart {
                 x,
                 g_x,
-                method: EDHOCMethod::StatStat,
+                method,
                 suites_i,
             },
             wait_m2: None,
@@ -61,7 +65,7 @@ impl PyEdhocInitiator {
             processed_m2: None,
             wait_m4: None,
             completed: None,
-        }
+        })
     }
 
     fn __repr__(&self) -> String {
@@ -110,8 +114,12 @@ impl PyEdhocInitiator {
         let message_2 = EdhocMessageBuffer::new_from_slice(message_2.as_slice())
             .with_cause(py, "Message 2 too long")?;
 
-        let (state, c_r, id_cred_r, ead_2) =
+        let (state, c_r, details, ead_2) =
             i_parse_message_2(&self.take_wait_m2()?, &mut default_crypto(), &message_2)?;
+        let id_cred_r = match details {
+            ParsedMessage2Details::StatStat { id_cred_r } => id_cred_r,
+            ParsedMessage2Details::Psk {} => IdCred::new(),
+        };
         self.processing_m2 = Some(state);
         Ok((
             PyBytes::new(py, c_r.as_slice()),
@@ -128,24 +136,37 @@ impl PyEdhocInitiator {
     pub fn verify_message_2(
         &mut self,
         py: Python<'_>,
-        i: Vec<u8>,
+        i: Option<Vec<u8>>,
         cred_i: super::AutoCredential,
         valid_cred_r: super::AutoCredential,
     ) -> PyResult<()> {
-        let cred_i = cred_i
-            .to_credential()
+        let cred_i = parse_credential(self.start.method, cred_i)
             .with_cause(py, "Failed to ingest CRED_I")?;
-        let valid_cred_r = valid_cred_r
-            .to_credential()
+        let valid_cred_r = parse_credential(self.start.method, valid_cred_r)
             .with_cause(py, "Failed to ingest CRED_R")?;
+
+        // The initiator identity format depends on the negotiated method:
+        // stat-stat needs the static DH private key, PSK does not.
+        let identity = match self.start.method {
+            EDHOCMethod::StatStat => {
+                let i = i.ok_or_else(|| {
+                    PyValueError::new_err("StatStat requires initiator private key I")
+                })?;
+                InitiatorIdentity::StatStat {
+                    i: i.as_slice()
+                        .try_into()
+                        .expect("Wrong length of initiator private key"),
+                }
+            }
+            EDHOCMethod::PSK => InitiatorIdentity::Psk,
+            _ => return Err(EDHOCError::UnsupportedMethod.into()),
+        };
 
         let state = i_verify_message_2(
             &self.take_processing_m2()?,
             &mut default_crypto(),
             valid_cred_r,
-            i.as_slice()
-                .try_into()
-                .expect("Wrong length of initiator private key"),
+            identity,
         )?;
         self.processed_m2 = Some(state);
         self.cred_i = Some(cred_i);
@@ -258,6 +279,16 @@ impl PyEdhocInitiator {
     /// The cipher suite that is agreed on by the exchange.
     pub fn selected_cipher_suite(&self) -> PyResult<u8> {
         Ok(self.start.suites_i[self.start.suites_i.len() - 1])
+    }
+}
+
+fn parse_method(method: &str) -> PyResult<EDHOCMethod> {
+    match method {
+        "statstat" => Ok(EDHOCMethod::StatStat),
+        "psk" => Ok(EDHOCMethod::PSK),
+        _ => Err(PyValueError::new_err(
+            "Unsupported method, expected 'statstat' or 'psk'",
+        )),
     }
 }
 

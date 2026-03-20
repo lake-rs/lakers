@@ -88,6 +88,15 @@ impl CryptoTrait for Crypto {
         output
     }
 
+    // added for PSK
+    fn hkdf_extract_psk(&mut self, salt: &BytesHashLen, ikm: &BytesElemLenPSK) -> BytesHashLen {
+        // TODO
+        // TODO generalize if salt is not provided
+        let output = self.hmac_sha256(ikm, salt);
+
+        output
+    }
+
     fn aes_ccm_encrypt<const N: usize, Tag: CcmTagLen>(
         &mut self,
         key: &BytesCcmKeyLen,
@@ -208,7 +217,9 @@ impl CryptoTrait for Crypto {
 
         key_agreement::raw_key_agreement(alg, my_key, &peer_public_key, &mut output_buffer)
             .unwrap();
-
+        // SAFETY: The function demands that the Id is not used while destroyed.
+        // We did not hand out the Id `my_key` in the last few lines, so we can destroy it.
+        unsafe { key_management::destroy(my_key).unwrap() };
         output_buffer
     }
 

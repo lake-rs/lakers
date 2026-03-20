@@ -131,6 +131,24 @@ impl AutoCredential {
     }
 }
 
+pub(crate) fn parse_credential(
+    method: EDHOCMethod,
+    credential: AutoCredential,
+) -> Result<Credential, EDHOCError> {
+    use AutoCredential::{Existing, Parse};
+
+    Ok(match credential {
+        Existing(existing) => existing,
+        // The same Python API accepts both stat-stat CCS credentials and PSK CCS credentials.
+        // Parse according to the negotiated EDHOC method so callers don't need separate types.
+        Parse(v) => match method {
+            EDHOCMethod::StatStat => Credential::parse_ccs(v.as_slice())?,
+            EDHOCMethod::PSK => Credential::parse_ccs_symmetric(v.as_slice())?,
+            _ => return Err(EDHOCError::UnsupportedMethod),
+        },
+    })
+}
+
 /// The :class:`EdhocInitiator` and :class:`EdhocResponder` are entry points to this module. Both
 /// provided classes that represent one side of the EDHOC exchange, and are updated with and
 /// produce messages and information through a series of method calls on the object.
