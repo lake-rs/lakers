@@ -155,7 +155,7 @@ impl PyEdhocInitiator {
                 InitiatorIdentity::StatStat {
                     i: i.as_slice()
                         .try_into()
-                        .expect("Wrong length of initiator private key"),
+                        .map_err(|_| EDHOCError::ParsingError)?,
                 }
             }
             EDHOCMethod::PSK => InitiatorIdentity::Psk,

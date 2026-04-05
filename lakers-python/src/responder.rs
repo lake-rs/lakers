@@ -111,27 +111,38 @@ impl PyEdhocResponder {
             None => generate_connection_identifier_cbor(&mut default_crypto()),
         };
         let ead_2 = ead_2.try_into()?;
-        let mut r = BytesP256ElemLen::default();
-        r.copy_from_slice(self.r.as_slice());
         let processing_m1 = self.as_ref_processing_m1()?;
-        let method_details = match processing_m1.method {
-            EDHOCMethod::StatStat => PrepareMessage2Details::StatStat {
-                r: &r,
-                cred_transfer,
-            },
-            EDHOCMethod::PSK => PrepareMessage2Details::Psk,
+        let (state, message_2) = match processing_m1.method {
+            EDHOCMethod::StatStat => {
+                let r: BytesP256ElemLen = self
+                    .r
+                    .as_slice()
+                    .try_into()
+                    .map_err(|_| EDHOCError::ParsingError)?;
+                r_prepare_message_2(
+                    processing_m1,
+                    &mut default_crypto(),
+                    // FIXME: take as reference rather than cloning
+                    self.cred_r.clone(),
+                    PrepareMessage2Details::StatStat {
+                        r: &r,
+                        cred_transfer,
+                    },
+                    c_r,
+                    &ead_2,
+                )?
+            }
+            EDHOCMethod::PSK => r_prepare_message_2(
+                processing_m1,
+                &mut default_crypto(),
+                // FIXME: take as reference rather than cloning
+                self.cred_r.clone(),
+                PrepareMessage2Details::Psk,
+                c_r,
+                &ead_2,
+            )?,
             _ => return Err(EDHOCError::UnsupportedMethod.into()),
         };
-
-        let (state, message_2) = r_prepare_message_2(
-            processing_m1,
-            &mut default_crypto(),
-            // FIXME: take as reference rather than cloning
-            self.cred_r.clone(),
-            method_details,
-            c_r,
-            &ead_2,
-        )?;
         self.wait_m3 = Some(state);
         Ok(PyBytes::new(py, message_2.as_slice()))
     }
@@ -364,8 +375,7 @@ fn parse_responder_identity(r: &[u8]) -> Result<ResponderIdentity, EDHOCError> {
         Ok(ResponderIdentity::Psk)
     } else {
         // A present `r` means the Python caller wants the stat-stat responder identity.
-        let mut identity = BytesP256ElemLen::default();
-        identity.copy_from_slice(r);
+        let identity: BytesP256ElemLen = r.try_into().map_err(|_| EDHOCError::ParsingError)?;
         Ok(ResponderIdentity::StatStat { r: identity })
     }
 }

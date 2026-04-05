@@ -713,7 +713,10 @@ fn encode_enc_structure(external_aad: &[u8]) -> Result<EdhocBuffer<MAX_BUFFER_LE
     Ok(enc_structure)
 }
 
-fn encode_bstr_header(buf: &mut EdhocBuffer<MAX_BUFFER_LEN>, len: usize) -> Result<(), EDHOCError> {
+fn encode_bstr_header<const N: usize>(
+    buf: &mut EdhocBuffer<N>,
+    len: usize,
+) -> Result<(), EDHOCError> {
     if len <= 23 {
         buf.push(CBOR_MAJOR_BYTE_STRING | len as u8)
             .map_err(|_| EDHOCError::EncodingError)?;
@@ -822,20 +825,9 @@ fn decrypt_message_3(
     // FIXME: Reuse CBOR decoder
     let (bytestring_length, prefix_length) =
         if (0..=23).contains(&(message_3[0] ^ CBOR_MAJOR_BYTE_STRING)) {
-            (
-                // buffer_length =
-                (message_3[0] ^ CBOR_MAJOR_BYTE_STRING).into(),
-                // prefix_length =
-                1,
-            )
+            ((message_3[0] ^ CBOR_MAJOR_BYTE_STRING).into(), 1)
         } else {
-            // FIXME: Assumes we don't exceed 256 bytes which is the current buffer size
-            (
-                // buffer_length =
-                message_3[1].into(),
-                // prefix_length =
-                2,
-            )
+            (message_3[1].into(), 2)
         };
 
     let ciphertext_3: BufferCiphertext3 = BufferCiphertext3::new_from_slice(
@@ -908,20 +900,9 @@ fn decrypt_message_4(
     // FIXME: Reuse CBOR decoder
     let (bytestring_length, prefix_length) =
         if (0..=23).contains(&(message_4[0] ^ CBOR_MAJOR_BYTE_STRING)) {
-            (
-                // buffer_length =
-                (message_4[0] ^ CBOR_MAJOR_BYTE_STRING).into(),
-                // prefix_length =
-                1,
-            )
+            ((message_4[0] ^ CBOR_MAJOR_BYTE_STRING).into(), 1)
         } else {
-            // FIXME: Assumes we don't exceed 256 bytes which is the current buffer size
-            (
-                // buffer_length =
-                message_4[1].into(),
-                // prefix_length =
-                2,
-            )
+            (message_4[1].into(), 2)
         };
 
     let ciphertext_4 = BufferCiphertext4::new_from_slice(
@@ -1036,10 +1017,10 @@ fn encode_plaintext_2(
 fn encode_ciphertext_3a(ciphertext: EdhocMessageBuffer) -> Result<BufferCiphertext3, EDHOCError> {
     let mut ciphertext_3a: BufferCiphertext3 = BufferCiphertext3::new();
     // plaintext_3a: P = ( ID_CRED_PSK / bstr / int )
+    encode_bstr_header(&mut ciphertext_3a, ciphertext.len())?;
     ciphertext_3a
-        .push(CBOR_MAJOR_BYTE_STRING | ciphertext.len() as u8)
-        .or(Err(EDHOCError::EncodingError))?;
-    let _ = ciphertext_3a.extend_from_slice(ciphertext.as_slice());
+        .extend_from_slice(ciphertext.as_slice())
+        .map_err(|_| EDHOCError::EncodingError)?;
 
     Ok(ciphertext_3a)
 }
@@ -1073,10 +1054,6 @@ fn encrypt_decrypt_ciphertext_3a(
     th_3: &BytesHashLen,
     ciphertext_3a: &BufferCiphertext2,
 ) -> BufferCiphertext2 {
-    // convert the transcript hash th_2 to BytesMaxContextBuffer type
-    // let mut th_3_context: BytesMaxContextBuffer = [0x00; MAX_KDF_CONTEXT_LEN];
-    // th_3_context[..th_3.len()].copy_from_slice(&th_3[..]);
-
     // KEYSTREAM_3 = EDHOC-KDF( PRK_2e,   0, TH_2,      plaintext_length )
     let mut keystream_3 = BufferCiphertext3::new();
     let range = keystream_3.extend_reserve(ciphertext_3a.len()).unwrap();
@@ -1914,6 +1891,17 @@ mod tests {
         );
         assert!(plaintext_4.is_ok());
         assert_eq!(plaintext_4.unwrap(), PLAINTEXT_4_PSK_TV);
+    }
+
+    #[test]
+    fn test_encode_parse_ciphertext_3a_extended_bstr_len() {
+        let ciphertext = EdhocMessageBuffer::new_from_slice(&[0xAA; 24]).unwrap();
+
+        let encoded = encode_ciphertext_3a(ciphertext).unwrap();
+
+        assert_eq!(encoded[0], 0x58);
+        assert_eq!(encoded[1], 24);
+        assert_eq!(parse_message_3(&encoded).unwrap().as_slice(), &[0xAA; 24]);
     }
 
     #[test]

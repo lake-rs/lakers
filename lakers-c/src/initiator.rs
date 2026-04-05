@@ -10,7 +10,6 @@ use crate::*;
 
 #[repr(C)]
 pub struct EdhocInitiator {
-    pub method: EDHOCMethod,
     pub start: InitiatorStart,
     pub wait_m2: WaitM2,
     pub processing_m2: ProcessingM2C,
@@ -34,7 +33,6 @@ pub unsafe extern "C" fn initiator_new(initiator: *mut EdhocInitiator, method: E
         method,
     };
 
-    (*initiator).method = method;
     core::ptr::write(&mut (*initiator).start, start);
 
     0

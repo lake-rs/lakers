@@ -1126,23 +1126,15 @@ mod edhoc_parser {
         rcvd_message_3: &BufferMessage3,
     ) -> Result<BufferCiphertext3, EDHOCError> {
         trace!("Enter parse_message_3");
-        let message_slice = rcvd_message_3.as_slice();
-
-        if message_slice.is_empty() {
+        let mut decoder = CBORDecoder::new(rcvd_message_3.as_slice());
+        let ciphertext_3a_slice = decoder.bytes()?;
+        if !decoder.finished() {
             return Err(EDHOCError::ParsingError);
         }
 
-        // Get the first byte and convert it to length
-        let first_byte = message_slice[0];
-        let (ciphertext_3a_len, header_len) = decode_cbor_length(first_byte)?;
         let mut ciphertext_3a = BufferCiphertext3::new();
-
-        // Ensure we have enough data
-        if message_slice.len() < header_len + ciphertext_3a_len {
-            return Err(EDHOCError::ParsingError);
-        }
         ciphertext_3a
-            .fill_with_slice(&message_slice[header_len..header_len + ciphertext_3a_len])
+            .fill_with_slice(ciphertext_3a_slice)
             .map_err(|_| EDHOCError::ParsingError)?;
 
         Ok(ciphertext_3a)
@@ -1274,14 +1266,6 @@ mod edhoc_parser {
     }
 }
 
-fn decode_cbor_length(first_byte: u8) -> Result<(usize, usize), EDHOCError> {
-    match first_byte & 0x1F {
-        n if n < 24 => Ok((n as usize, 1)),
-        24 => Ok((24, 2)),                  // Next byte is the length
-        25 => Ok((25, 3)),                  // Next 2 bytes are the length
-        _ => Err(EDHOCError::ParsingError), // Unsupported length encoding
-    }
-}
 mod cbor_decoder {
     /// Decoder inspired by the [minicbor](https://crates.io/crates/minicbor) crate.
     use super::*;

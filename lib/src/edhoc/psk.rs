@@ -35,6 +35,11 @@ pub(crate) fn r_prepare_message_2_psk(
     })
 }
 
+/// Parse PSK message 3 without external credential lookup.
+///
+/// This succeeds when `ID_CRED_I` is sent by value.
+/// If the peer sends `ID_CRED_I` by reference, use
+/// `r_parse_message_3_psk_with_cred_resolver`.
 pub(crate) fn r_parse_message_3_psk(
     state: &WaitM3,
     crypto: &mut impl CryptoTrait,
@@ -236,6 +241,12 @@ pub(crate) fn i_prepare_message_3_psk(
     Ok(PreparedMessage3 { message_3, th_4 })
 }
 
+/// Recover `CRED_I` directly from `ID_CRED_I` in PSK mode.
+///
+/// This only works when `ID_CRED_I` carries the credential by value.
+/// If `ID_CRED_I` is sent by reference (for example `kid`), callers need an
+/// external credential resolver and should use
+/// `r_parse_message_3_psk_with_cred_resolver`.
 fn recover_cred_i_from_id_cred_psk(id_cred_psk: &IdCred) -> Result<Credential, EDHOCError> {
     if let Some(cred_i) = id_cred_psk.get_ccs() {
         Ok(cred_i)

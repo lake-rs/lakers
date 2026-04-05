@@ -112,6 +112,26 @@ def test_buffer_error():
         _ = initiator.parse_message_2(cbor2.dumps(bytes([1] * 10000)))
     assert str(err.value) == "Message 2 too long (EdhocBufferError::SliceTooLong)"
 
+def test_responder_rejects_invalid_r_length():
+    with pytest.raises(ValueError) as err:
+        _ = EdhocResponder(CRED_R, b"\x01")
+    assert str(err.value) == "Failed to ingest CRED_R (EDHOCError::ParsingError)"
+
+def test_initiator_rejects_invalid_i_length():
+    initiator = EdhocInitiator()
+    responder = EdhocResponder(CRED_R, R)
+
+    message_1 = initiator.prepare_message_1(c_i=None)
+    _c_i, _ead_1 = responder.process_message_1(message_1)
+    message_2 = responder.prepare_message_2(CredentialTransfer.ByReference, None, [])
+
+    _c_r, id_cred_r, _ead_2 = initiator.parse_message_2(message_2)
+    valid_cred_r = lakers.credential_check_or_fetch(id_cred_r, CRED_R)
+
+    with pytest.raises(ValueError) as err:
+        initiator.verify_message_2(b"\x01", CRED_I, valid_cred_r)
+    assert str(err.value) == "EDHOCError::ParsingError"
+
 def test_state_missing_step():
     initiator = EdhocInitiator()
     with pytest.raises(RuntimeError) as err:
