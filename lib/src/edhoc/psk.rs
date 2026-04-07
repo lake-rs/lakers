@@ -83,9 +83,15 @@ where
         .fill_with_slice(ciphertext_3b_bytes)
         .map_err(|_| EDHOCError::ParsingError)?;
 
+    let salt_4e3m = compute_salt_4e3m(crypto, &state.prk_3e2m, &state.th_3);
+    let prk_4e3m = match &cred_i.key {
+        CredentialKey::Symmetric(psk) => compute_prk_4e3m_psk(crypto, &salt_4e3m, psk),
+        _ => return Err(EDHOCError::UnsupportedMethod),
+    };
+
     let plaintext_3b = decrypt_message_3(
         crypto,
-        &state.prk_3e2m,
+        &prk_4e3m,
         &state.th_3,
         &ciphertext_3b,
         Some((
@@ -203,7 +209,7 @@ pub(crate) fn i_prepare_message_3_psk(
     let plaintext_3 = encode_plaintext_3(None, &ead_3)?;
     let ciphertext_3b = encrypt_message_3(
         crypto,
-        &state.prk_3e2m,
+        &state.prk_4e3m,
         &state.th_3,
         &plaintext_3,
         Some((
