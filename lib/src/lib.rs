@@ -544,7 +544,7 @@ pub fn credential_check_or_fetch(
         // 1. Does ID_CRED_X point to a stored authentication credential? YES
         // IMPL: compare cred_i_expected with id_cred
         //   IMPL: assume cred_i_expected is well formed
-        let credentials_match = if id_cred_received.reference_only() {
+        let credentials_match = if id_cred_received.reference_only()? {
             id_cred_received.as_full_value() == cred_expected.by_kid()?.as_full_value()
         } else {
             id_cred_received.as_full_value() == cred_expected.by_value()?.as_full_value()
@@ -1005,7 +1005,7 @@ mod test_authz {
             .unwrap();
         let _initiator = initiator.completed_without_message_4();
         let (responder, id_cred_i, _ead_3) = responder.parse_message_3(&message_3).unwrap();
-        let valid_cred_i = if id_cred_i.reference_only() {
+        let valid_cred_i = if id_cred_i.reference_only().unwrap() {
             mock_fetch_cred_i(id_cred_i).unwrap()
         } else {
             id_cred_i.get_ccs().unwrap()
