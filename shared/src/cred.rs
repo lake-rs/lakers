@@ -1,8 +1,12 @@
 use super::*;
 
-pub type BufferCred = EdhocBuffer<192>; // arbitrary size
-pub type BufferKid = EdhocBuffer<16>; // variable size, up to 16 bytes
-pub type BufferIdCred = EdhocBuffer<192>; // variable size, can contain either the contents of a BufferCred or a BufferKid
+pub const BUFFER_CRED_LEN: usize = 192; // arbitrary size
+pub const BUFFER_ID_CRED_LEN: usize = 192; // variable size, can contain either the contents of a BufferCred or a BufferKid
+pub const BUFFER_KID_LEN: usize = 16; // variable size, up to 16 bytes
+
+pub type BufferCred = EdhocBuffer<BUFFER_CRED_LEN>;
+pub type BufferKid = EdhocBuffer<BUFFER_KID_LEN>;
+pub type BufferIdCred = EdhocBuffer<BUFFER_ID_CRED_LEN>;
 pub type BytesKeyAES128 = [u8; 16];
 pub type BytesKeyEC2 = [u8; 32];
 
@@ -158,7 +162,7 @@ impl IdCred {
     }
 
     fn bstr_representable_as_int(value: u8) -> bool {
-        (0x0..=0x17).contains(&value) || (0x20..=0x37).contains(&value)
+        value <= 0x17 || (value >= 0x20 && value <= 0x37)
     }
 }
 
