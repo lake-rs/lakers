@@ -96,8 +96,8 @@ jobs:
     - name: Install hax and F* (Fstar)
       uses: hacspec/hax-actions@main
       with:
-        # pin hax to known-working
-        hax_reference: "87ba96831ecfeb7dbb54efcf97036fbc5f25bc71"
+        # pin hax to known-working (0.3.7)
+        hax_reference: "d8b5b3d3b666fee8943a351445d2b680105e8ea3"
         fstar: v2025.10.06
 
     - name: Hax extract from lakers and lakers-shared into F* (Fstar)
