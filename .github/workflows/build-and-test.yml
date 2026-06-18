@@ -173,7 +173,7 @@ jobs:
     - name: Install libcoap
       run: |
         cd libcoap && ./autogen.sh
-        ./configure --disable-doxygen --disable-manpages --disable-dtls --disable-oscore
+        ./configure --disable-doxygen --disable-manpages --disable-dtls --disable-oscore --disable-examples
         make && sudo make install
 
     - name: Install arm targets for Rust
