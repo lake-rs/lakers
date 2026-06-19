@@ -7,6 +7,7 @@ use super::*;
 /// The SUITES_I list will contain:
 /// - the selected suite at the last position
 /// - an ordered list of preferred suites in the first positions
+#[hax_lib::requires(supported_suites.len() <= MAX_SUITES_LEN)]
 pub fn prepare_suites_i(
     supported_suites: &EdhocBuffer<MAX_SUITES_LEN>,
     selected_suite: u8,
@@ -54,10 +55,12 @@ pub trait Crypto: core::fmt::Debug {
     /// hash.finalize().into()
     /// ```
     fn sha256_digest(&mut self, message: &[u8]) -> BytesHashLen;
+    #[cfg(not(hax))] // excluded from hax: digest + crypto_common has no F* model
     type HashInProcess<'a>: digest::Digest
         + digest::OutputSizeUser<OutputSize = digest::typenum::U32>
     where
         Self: 'a;
+    #[cfg(not(hax))] // excluded from hax: returns HashInProcess which depends on digest::Digest
     fn sha256_start<'a>(&'a mut self) -> Self::HashInProcess<'a>;
     fn hkdf_expand(&mut self, prk: &BytesHashLen, info: &[u8], result: &mut [u8]);
     fn hkdf_extract(&mut self, salt: &BytesHashLen, ikm: &BytesP256ElemLen) -> BytesHashLen;
@@ -100,6 +103,7 @@ impl CcmTagLen for CcmTagLen16 {
     const LEN: usize = 16;
 }
 
+#[hax_lib::exclude] // test-only code
 pub mod test_helper {
     use super::*;
 
