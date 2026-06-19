@@ -707,6 +707,8 @@ mod helpers {
     use super::*;
 
     #[track_caller]
+    #[hax_lib::requires(context.len() <= MAX_KDF_CONTEXT_LEN && length < 256)]
+    #[hax_lib::ensures(|result| result.len() <= MAX_INFO_LEN)]
     pub fn encode_info(label: u8, context: &[u8], length: usize) -> BufferInfo {
         let mut info = BufferInfo::new();
 
