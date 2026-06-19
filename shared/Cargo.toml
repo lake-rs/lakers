@@ -91,3 +91,6 @@ max_ead_len_1024 = []
 ## If this is not set, the minimum sensible default (8 bytes) is used.
 
 max_connid_encoded_len_24 = []
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(hax)'] }
