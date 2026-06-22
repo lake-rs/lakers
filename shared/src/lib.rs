@@ -183,6 +183,9 @@ impl ConnId {
         let len = ConnIdType::classify(decoder.current()?)
             .ok_or(CBORError::DecodingError)?
             .length();
+        if len > MAX_CONNID_ENCODED_LEN {
+            return Err(CBORError::DecodingError);
+        }
         s[..len].copy_from_slice(decoder.read_slice(len)?);
         Ok(Self(s))
     }
