@@ -621,16 +621,29 @@ pub struct EadItems {
     items: [Option<EADItem>; MAX_EAD_ITEMS],
 }
 
-impl<'a> IntoIterator for &'a EadItems {
+pub struct EadItemsIter<'a> {
+    items: &'a [Option<EADItem>; MAX_EAD_ITEMS],
+    pos: usize,
+}
+
+impl<'a> Iterator for EadItemsIter<'a> {
     type Item = &'a EADItem;
-
-    type IntoIter = core::iter::FilterMap<
-        core::slice::Iter<'a, Option<EADItem>>,
-        fn(&Option<EADItem>) -> Option<&EADItem>,
-    >;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.items.iter().filter_map(Option::as_ref)
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut result: Option<&'a EADItem> = None;
+        // Cannot use self.pos.min(MAX_EAD_ITEMS): hax does not support f_min (Core_models.Cmp).
+        let mut i = if self.pos > MAX_EAD_ITEMS {
+            MAX_EAD_ITEMS
+        } else {
+            self.pos
+        };
+        while i < MAX_EAD_ITEMS && result.is_none() {
+            hax_lib::loop_decreases!(MAX_EAD_ITEMS - i);
+            hax_lib::loop_invariant!(i <= MAX_EAD_ITEMS);
+            result = self.items[i].as_ref();
+            i += 1;
+        }
+        self.pos = i;
+        result
     }
 }
 
@@ -652,8 +665,11 @@ impl EadItems {
         Err(item)
     }
 
-    pub fn iter(&self) -> <&Self as IntoIterator>::IntoIter {
-        self.into_iter()
+    pub fn iter(&self) -> EadItemsIter<'_> {
+        EadItemsIter {
+            items: &self.items,
+            pos: 0,
+        }
     }
 
     /// Checks whether there are critical items remaining; if so, it returns the corresponding
@@ -693,7 +709,7 @@ impl EadItems {
     ///
     /// If this errs, some EADs may already have been encoded.
     pub fn encode<const N: usize>(&self, output: &mut EdhocBuffer<N>) -> Result<(), EDHOCError> {
-        for ead_item in self {
+        for ead_item in self.iter() {
             let encoded = ead_item.encode()?;
             output
                 .extend_from_slice(encoded.as_slice())
