@@ -815,18 +815,36 @@ mod edhoc_parser {
         let mut cursor = 0;
         let mut eads = EadItems::new();
 
-        for _ in 0..MAX_EAD_ITEMS {
+        let mut i = 0;
+        // Accumulate parse errors without `?` so the loop has no early return, which forces
+        // hax to generate `while_loop` (not `while_loop_return`). Only `while_loop` passes the
+        // invariant to the body, which is needed to prove `cursor <= buffer.len()`.
+        let mut parse_error: Option<EDHOCError> = None;
+
+        while i < MAX_EAD_ITEMS && parse_error.is_none() {
+            hax_lib::loop_decreases!(MAX_EAD_ITEMS - i);
+            hax_lib::loop_invariant!(count <= i && i <= MAX_EAD_ITEMS && cursor <= buffer.len());
             if !buffer[cursor..].is_empty() {
-                let (item, consumed) = parse_single_ead(&buffer[cursor..])?;
-                eads.items[count] = Some(item);
-                count += 1;
-                cursor += consumed;
+                match parse_single_ead(&buffer[cursor..]) {
+                    Ok((item, consumed)) => {
+                        eads.items[count] = Some(item);
+                        count += 1;
+                        cursor += consumed;
+                    }
+                    Err(e) => parse_error = Some(e),
+                }
             }
+            i += 1;
+        }
+
+        if let Some(e) = parse_error {
+            return Err(e);
         }
 
         Ok(eads)
     }
 
+    #[hax_lib::ensures(|result| result.as_ref().map_or(true, |(_, consumed)| *consumed <= input.len()))]
     fn parse_single_ead(input: &[u8]) -> Result<(EADItem, usize), EDHOCError> {
         let mut decoder = CBORDecoder::new(input);
         let label = decoder
@@ -860,12 +878,16 @@ mod edhoc_parser {
             (EdhocBuffer::new(), position_after_label)
         };
 
+        // TryInto<u16> for i32 has no F* model in hax's proof-libs;
+        // Core_models.Convert.t_TryInto Rust_primitives.Integers.i32 Rust_primitives.Integers.u16
+        // use an explicit range check instead.
+        // The guard ensures label is in [0, 65535], so `label as u16` is a lossless truncation
+        if label < 0 || label > u16::MAX as i32 {
+            return Err(EDHOCError::ParsingError);
+        }
+
         let item = EADItem {
-            label: label
-                .try_into()
-                // That's really only for 0xffff; we could accommodate that if we handled padding
-                // differently and stored the (positive label-1) value
-                .map_err(|_| EDHOCError::ParsingError)?,
+            label: label as u16,
             is_critical,
             value: ead_value,
         };
@@ -873,6 +895,7 @@ mod edhoc_parser {
         Ok((item, position))
     }
 
+    #[hax_lib::ensures(|result| result.as_ref().map_or(true, |(suites, _)| suites.len() <= MAX_SUITES_LEN))]
     pub fn parse_suites_i(
         mut decoder: CBORDecoder,
     ) -> Result<(EdhocBuffer<MAX_SUITES_LEN>, CBORDecoder), EDHOCError> {
@@ -892,9 +915,28 @@ mod edhoc_parser {
                 let write_range = suites_i
                     .extend_reserve(received_suites_i_len)
                     .or(Err(EDHOCError::ParsingError))?;
+                let mut i = write_range.start;
+                let mut parse_error: Option<EDHOCError> = None;
                 #[allow(deprecated, reason = "hax complains about mutable references in loops")]
-                for i in write_range {
-                    suites_i.content[i] = decoder.u8()?;
+                while i < write_range.end && parse_error.is_none() {
+                    hax_lib::loop_decreases!(write_range.end - i);
+                    hax_lib::loop_invariant!(
+                        i <= write_range.end
+                            && write_range.end <= MAX_SUITES_LEN
+                            && suites_i.len() <= MAX_SUITES_LEN
+                    );
+                    match decoder.u8() {
+                        Ok(byte) => {
+                            suites_i.content[i] = byte;
+                        }
+                        Err(_) => {
+                            parse_error = Some(EDHOCError::ParsingError);
+                        }
+                    }
+                    i += 1;
+                }
+                if let Some(e) = parse_error {
+                    return Err(e);
                 }
                 Ok((suites_i, decoder))
             } else {
@@ -905,6 +947,7 @@ mod edhoc_parser {
         }
     }
 
+    #[hax_lib::requires(rcvd_message_1.len() <= MAX_MESSAGE_SIZE_LEN)]
     pub fn parse_message_1(
         rcvd_message_1: &BufferMessage1,
     ) -> Result<
@@ -946,6 +989,7 @@ mod edhoc_parser {
         }
     }
 
+    #[hax_lib::requires(rcvd_message_2.len() <= MAX_MESSAGE_SIZE_LEN)]
     pub fn parse_message_2(
         rcvd_message_2: &BufferMessage2,
     ) -> Result<(BytesP256ElemLen, BufferCiphertext2), EDHOCError> {
@@ -978,6 +1022,7 @@ mod edhoc_parser {
         }
     }
 
+    #[hax_lib::requires(plaintext_2.len() <= MAX_MESSAGE_SIZE_LEN)]
     pub fn decode_plaintext_2(
         plaintext_2: &BufferCiphertext2,
     ) -> Result<(ConnId, IdCred, BytesMac2, EadItems), EDHOCError> {
@@ -1008,6 +1053,7 @@ mod edhoc_parser {
         }
     }
 
+    #[hax_lib::requires(plaintext_3.len() <= MAX_MESSAGE_SIZE_LEN)]
     pub fn decode_plaintext_3(
         plaintext_3: &BufferPlaintext3,
     ) -> Result<(IdCred, BytesMac3, EadItems), EDHOCError> {
@@ -1036,6 +1082,7 @@ mod edhoc_parser {
         }
     }
 
+    #[hax_lib::requires(plaintext_4.len() <= MAX_MESSAGE_SIZE_LEN)]
     pub fn decode_plaintext_4(plaintext_4: &BufferPlaintext4) -> Result<EadItems, EDHOCError> {
         trace!("Enter decode_plaintext_4");
         let decoder = CBORDecoder::new(plaintext_4.as_slice());
