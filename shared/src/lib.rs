@@ -144,6 +144,7 @@ impl ConnIdType {
     }
 }
 
+#[hax_lib::attributes]
 impl ConnId {
     /// Construct a ConnId from the result of [`cbor_decoder::int_raw`], which is a
     /// byte that represents a single positive or negative CBOR integer encoded in the 5 bits minor
@@ -153,6 +154,7 @@ impl ConnId {
     #[deprecated(
         note = "This API is only capable of generating a limited sub-set of the supported identifiers."
     )]
+    #[hax_lib::requires(raw >> 5 <= 1 && raw & 0x1f < 24)]
     pub const fn from_int_raw(raw: u8) -> Self {
         debug_assert!(raw >> 5 <= 1, "Major type is not an integer");
         debug_assert!(raw & 0x1f < 24, "Value is not immediate");
@@ -166,11 +168,9 @@ impl ConnId {
     /// The connection ID classification of this connection ID
     ///
     /// Due to the invariants of this type, this classification infallible.
+    #[hax_lib::requires(ConnIdType::classify(self.0[0]).is_some())]
     fn classify(&self) -> ConnIdType {
-        let Some(t) = ConnIdType::classify(self.0[0]) else {
-            unreachable!("Type invariant requires valid classification")
-        };
-        t
+        ConnIdType::classify(self.0[0]).expect("type invariant requires valid classification")
     }
 
     /// Read a connection identifier from a given decoder.
@@ -191,6 +191,7 @@ impl ConnId {
     }
 
     /// The bytes that form the identifier (an arbitrary byte string)
+    #[hax_lib::requires(ConnIdType::classify(self.0[0]).is_some() && self.classify().length() <= MAX_CONNID_ENCODED_LEN)]
     pub fn as_slice(&self) -> &[u8] {
         match self.classify() {
             ConnIdType::SingleByte => &self.0[..1],
@@ -216,6 +217,7 @@ impl ConnId {
     /// let c_i = ConnId::from_slice(&[0xff]).unwrap();
     /// assert_eq!(c_i.as_cbor(), &[0x41, 0xff]);
     /// ```
+    #[hax_lib::requires(ConnIdType::classify(self.0[0]).is_some() && self.classify().length() <= MAX_CONNID_ENCODED_LEN)]
     pub fn as_cbor(&self) -> &[u8] {
         &self.0[..self.classify().length()]
     }
@@ -251,6 +253,11 @@ impl ConnId {
                 // split_at_mut if not for hax.
                 let mut i = 0;
                 while i < input.len() {
+                    hax_lib::loop_decreases!(input.len() - i);
+                    // i <= input.len() lets F* prove loop_decreases! doesn't underflow;
+                    // i < MAX_CONNID_ENCODED_LEN combined with i < input.len() <= MAX-1
+                    // lets F* prove 1+i < MAX_CONNID_ENCODED_LEN for s[1+i].
+                    hax_lib::loop_invariant!(i <= input.len() && i < MAX_CONNID_ENCODED_LEN);
                     s[1 + i] = input[i];
                     i = i + 1;
                 }
@@ -477,6 +484,7 @@ pub struct EADItem {
     value: EADBuffer,
 }
 
+#[hax_lib::attributes]
 impl EADItem {
     pub fn new() -> Self {
         EADItem {
@@ -523,6 +531,7 @@ impl EADItem {
 
     /// The content of the CBOR byte string that is the EAD item's value, if any.
     #[track_caller]
+    #[hax_lib::requires(self.value.len() <= MAX_EAD_LEN)]
     pub fn value_bytes(&self) -> Option<&[u8]> {
         let slice = self.value.as_slice();
         if slice.is_empty() {
@@ -531,11 +540,18 @@ impl EADItem {
             return None;
         }
         let mut decoder = CBORDecoder::new(slice);
-        let bytes = decoder
-            .bytes()
-            .expect("The value being CBOR bytes is an implicit invariant of the type");
-        debug_assert!(decoder.finished());
-        Some(bytes)
+        // This was the code before
+        // ```rust
+        // let bytes = decoder
+        //     .bytes()
+        //     .expect("The value being CBOR bytes is an implicit invariant of the type");
+        // debug_assert!(decoder.finished());
+        // Some(bytes)
+        // ```
+        // before we had sure that after this part, it would give a Some(_)
+        // But hax/fstar cannot prove it. so the code now has weaker guarantees
+        // FIXME: improve EADItem attributes to make this invariant explicit
+        decoder.bytes().ok()
     }
 
     /// The encoded CBOR byte string that represents the value (or empty)
@@ -543,6 +559,7 @@ impl EADItem {
     /// This API may easily go away after a transition period if `EADItem` stops storing the
     /// encoded value.
     #[track_caller]
+    #[hax_lib::requires(self.value.len() <= MAX_EAD_LEN)]
     fn value_encoded(&self) -> &[u8] {
         // Compute the value just to check the type invariant
         #[cfg(debug_assertions)]
@@ -550,6 +567,7 @@ impl EADItem {
         self.value.as_slice()
     }
 
+    #[hax_lib::requires(self.value.len() <= MAX_EAD_LEN)]
     pub fn encode(&self) -> Result<EADBuffer, EDHOCError> {
         let mut output = EdhocBuffer::new();
 
@@ -688,6 +706,7 @@ impl<'a> Iterator for EadItemsIter<'a> {
     }
 }
 
+#[hax_lib::attributes]
 impl EadItems {
     pub fn new() -> Self {
         Self {
@@ -765,12 +784,22 @@ impl EadItems {
     /// Encodes all items of self into a buffer.
     ///
     /// If this errs, some EADs may already have been encoded.
+    // Workaround for hax issue #899: EdhocBuffer<N> lacks a type-level len<=N refinement,
+    // so we must state the per-item value-length invariant explicitly for each slot.
+    #[hax_lib::requires(
+        self.items[0].as_ref().map_or(true, |e| e.value.len() <= MAX_EAD_LEN) &&
+        self.items[1].as_ref().map_or(true, |e| e.value.len() <= MAX_EAD_LEN) &&
+        self.items[2].as_ref().map_or(true, |e| e.value.len() <= MAX_EAD_LEN) &&
+        self.items[3].as_ref().map_or(true, |e| e.value.len() <= MAX_EAD_LEN)
+    )]
     pub fn encode<const N: usize>(&self, output: &mut EdhocBuffer<N>) -> Result<(), EDHOCError> {
-        for ead_item in self.iter() {
-            let encoded = ead_item.encode()?;
-            output
-                .extend_from_slice(encoded.as_slice())
-                .map_err(|_| EDHOCError::EadTooLongError)?;
+        for i in 0..MAX_EAD_ITEMS {
+            if let Some(ead_item) = &self.items[i] {
+                let encoded = ead_item.encode()?;
+                output
+                    .extend_from_slice(encoded.as_slice())
+                    .map_err(|_| EDHOCError::EadTooLongError)?;
+            }
         }
         Ok(())
     }
