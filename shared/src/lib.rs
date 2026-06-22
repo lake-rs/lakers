@@ -872,7 +872,15 @@ mod edhoc_parser {
             .map_err(|_| EDHOCError::ParsingError)?;
 
         let is_critical = label < 0;
-        let label = label.abs();
+
+        // label.abs() panics/overflow on i32::MIN
+        let label = if label >= 0 {
+            label
+        } else if label > i32::MIN {
+            -label // label in (-2^31, 0), so -label in (0, 2^31-1]: fits in i32
+        } else {
+            return Err(EDHOCError::ParsingError);
+        };
 
         let position_after_label = decoder.position();
         let (ead_value, position) = if let Ok(_slice) = decoder.bytes() {
