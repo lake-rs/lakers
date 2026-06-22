@@ -123,7 +123,7 @@ jobs:
       working-directory: ./shared/proofs/fstar/extraction
       run: |
         curl -o Makefile https://gist.githubusercontent.com/W95Psp/4c304132a1f85c5af4e4959dd6b356c3/raw/Makefile
-        ROOTS="Lakers_shared.Buffer.fst Lakers_shared.Error.fst Lakers_shared.Consts.fst Lakers_shared.Cbor_decoder.fst Lakers_shared.Cred.fst Lakers_shared.Crypto.fst Lakers_shared.Helpers.fst" make verify
+        make verify
 
   build-lakers-c:
     needs: unit-tests
