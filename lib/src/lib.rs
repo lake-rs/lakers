@@ -595,7 +595,7 @@ pub fn credential_lookup_or_fetch(
     id_cred_received: IdCred,
 ) -> Result<Credential, EDHOCError> {
     for cred in credentials {
-        let candidate = if id_cred_received.reference_only() {
+        let candidate = if id_cred_received.reference_only()? {
             cred.by_kid()
         } else {
             cred.by_value()

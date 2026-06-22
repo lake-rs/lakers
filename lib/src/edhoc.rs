@@ -1,4 +1,5 @@
 use crate::InitiatorIdentity;
+#[cfg(not(hax))]
 use digest::Digest;
 use lakers_shared::{Crypto as CryptoTrait, *};
 mod psk;
@@ -521,6 +522,7 @@ fn compute_th_2(
     crypto.sha256_digest(message.as_slice())
 }
 
+#[allow(unused_variables)]
 fn compute_th_3(
     crypto: &mut impl CryptoTrait,
     th_2: &BytesHashLen,
@@ -529,17 +531,25 @@ fn compute_th_3(
     // TH_2 || plaintext_2 || CRED_R; PSK omits it.
     cred_r: Option<&[u8]>,
 ) -> BytesHashLen {
-    let mut hash = crypto.sha256_start();
+    #[cfg(not(hax))]
+    {
+        let mut hash = crypto.sha256_start();
 
-    hash.update([CBOR_BYTE_STRING, th_2.len() as u8]);
-    hash.update(th_2);
+        hash.update([CBOR_BYTE_STRING, th_2.len() as u8]);
+        hash.update(th_2);
 
-    hash.update(plaintext_2.as_slice());
-    if let Some(cred_r) = cred_r {
-        hash.update(cred_r);
+        hash.update(plaintext_2.as_slice());
+        if let Some(cred_r) = cred_r {
+            hash.update(cred_r);
+        }
+
+        hash.finalize().into()
     }
-
-    hash.finalize().into()
+    // sha256_start relies on digest::Digest which has no F* model; stub for hax compilation
+    #[cfg(hax)]
+    {
+        [0u8; SHA256_DIGEST_LEN]
+    }
 }
 
 // TH_4 depends on the EDHOC method: STAT uses plaintext_3 directly, while
@@ -555,38 +565,48 @@ enum Th4Input<'a> {
         ead_3: &'a EadItems,
     },
 }
+
+#[allow(unused_variables)]
 fn compute_th_4(
     crypto: &mut impl CryptoTrait,
     th_3: &BytesHashLen,
     cred_i: &[u8],
     input: Th4Input<'_>,
 ) -> BytesHashLen {
-    let mut hash = crypto.sha256_start();
+    #[cfg(not(hax))]
+    {
+        let mut hash = crypto.sha256_start();
 
-    hash.update([CBOR_BYTE_STRING, th_3.len() as u8]);
-    hash.update(th_3);
+        hash.update([CBOR_BYTE_STRING, th_3.len() as u8]);
+        hash.update(th_3);
 
-    match input {
-        Th4Input::Psk {
-            id_cred,
-            cred_r,
-            ead_3,
-        } => {
-            let mut ead_buf = EdhocBuffer::<MAX_EAD_LEN>::new();
-            ead_3.encode(&mut ead_buf).unwrap();
-            // TH_3 || ID_CRED_PSK || EAD_3 || CRED_I || CRED_R
-            hash.update(id_cred);
-            hash.update(ead_buf.as_slice());
-            hash.update(cred_i);
-            hash.update(cred_r);
+        match input {
+            Th4Input::Psk {
+                id_cred,
+                cred_r,
+                ead_3,
+            } => {
+                let mut ead_buf = EdhocBuffer::<MAX_EAD_LEN>::new();
+                ead_3.encode(&mut ead_buf).unwrap();
+                // TH_3 || ID_CRED_PSK || EAD_3 || CRED_I || CRED_R
+                hash.update(id_cred);
+                hash.update(ead_buf.as_slice());
+                hash.update(cred_i);
+                hash.update(cred_r);
+            }
+            Th4Input::Stat { plaintext_3 } => {
+                hash.update(plaintext_3.as_slice());
+                hash.update(cred_i);
+            }
         }
-        Th4Input::Stat { plaintext_3 } => {
-            hash.update(plaintext_3.as_slice());
-            hash.update(cred_i);
-        }
+
+        hash.finalize().into()
     }
-
-    hash.finalize().into()
+    // sha256_start relies on digest::Digest which has no F* model; stub for hax compilation
+    #[cfg(hax)]
+    {
+        [0u8; SHA256_DIGEST_LEN]
+    }
 }
 
 // TODO: consider moving this to a new 'edhoc crypto primitives' module

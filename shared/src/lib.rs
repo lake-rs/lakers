@@ -1060,6 +1060,7 @@ mod edhoc_parser {
         }
     }
 
+    #[hax_lib::requires(rcvd_message_3.len() <= MAX_MESSAGE_SIZE_LEN)]
     pub fn parse_message_3(
         rcvd_message_3: &BufferMessage3,
     ) -> Result<BufferCiphertext3, EDHOCError> {
@@ -1109,6 +1110,7 @@ mod edhoc_parser {
         }
     }
 
+    #[hax_lib::requires(plaintext_2.len() <= MAX_MESSAGE_SIZE_LEN)]
     pub fn decode_plaintext_2_psk(
         plaintext_2: &BufferCiphertext2,
     ) -> Result<(ConnId, EadItems), EDHOCError> {
@@ -1161,6 +1163,7 @@ mod edhoc_parser {
         }
     }
 
+    #[hax_lib::requires(plaintext_3.len() <= MAX_MESSAGE_SIZE_LEN)]
     pub fn decode_plaintext_3_psk(plaintext_3: &BufferPlaintext3) -> Result<EadItems, EDHOCError> {
         trace!("Enter decode_plaintext_3");
         let decoder = CBORDecoder::new(plaintext_3.as_slice());
@@ -1179,6 +1182,8 @@ mod edhoc_parser {
             Err(EDHOCError::ParsingError)
         }
     }
+
+    #[hax_lib::requires(plaintext_3.len() <= MAX_MESSAGE_SIZE_LEN)]
     pub fn decode_plaintext_3a(plaintext_3: &BufferPlaintext3) -> Result<&[u8], EDHOCError> {
         trace!("Enter decode_plaintext_3");
         let mut decoder = CBORDecoder::new(plaintext_3.as_slice());
