@@ -138,7 +138,7 @@ impl ConnIdType {
     fn length(&self) -> usize {
         match self {
             ConnIdType::SingleByte => 1,
-            ConnIdType::ByteString(n) => (1 + n).into(),
+            ConnIdType::ByteString(n) => 1 + *n as usize,
         }
     }
 }
