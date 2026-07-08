@@ -136,7 +136,7 @@ impl CryptoTrait for Crypto {
         output.extend_reserve(ciphertext.len() - Tag::LEN).unwrap();
         let mut aesccm_key: CRYS_AESCCM_Key_t = Default::default();
 
-        aesccm_key[0..Tag::LEN].copy_from_slice(&key[..]);
+        aesccm_key[0..AES_CCM_KEY_LEN].copy_from_slice(&key[..]);
 
         assert!(ciphertext.len() - Tag::LEN <= N);
 
