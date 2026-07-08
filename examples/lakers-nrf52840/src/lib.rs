@@ -1,3 +1,5 @@
+#![no_std]
+
 use embassy_nrf::radio::ble::Radio;
 use embassy_nrf::saadc::Time;
 use embassy_nrf::{peripherals, radio};
