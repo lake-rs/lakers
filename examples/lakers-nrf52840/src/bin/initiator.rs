@@ -97,7 +97,7 @@ async fn main(spawner: Spawner) {
             let initiator = initiator.verify_message_2(valid_cred_r).unwrap();
 
             let (mut initiator, message_3, i_prk_out) = initiator
-                .prepare_message_3(CredentialTransfer::ByReference, &None)
+                .prepare_message_3(CredentialTransfer::ByReference, &EadItems::new())
                 .unwrap();
             let pckt_3 =
                 common::Packet::new_from_slice(message_3.as_slice(), Some(c_r.as_slice()[0]))

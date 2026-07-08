@@ -86,7 +86,7 @@ async fn main(spawner: Spawner) {
             c_r = Some(generate_connection_identifier_cbor(
                 &mut lakers_crypto::default_crypto(),
             ));
-            let ead_2 = None;
+            let ead_2 = EadItems::new();
 
             let (responder, message_2) = responder
                 .prepare_message_2(CredentialTransfer::ByReference, c_r, &ead_2)
@@ -129,7 +129,7 @@ async fn main(spawner: Spawner) {
                         };
 
                         info!("Prepare message_4");
-                        let ead_4 = None;
+                        let ead_4 = EadItems::new();
                         let (responder, message_4) = responder.prepare_message_4(&ead_4).unwrap();
 
                         info!("Send message_4");
