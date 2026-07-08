@@ -2,17 +2,12 @@
 #![no_main]
 
 use defmt::info;
-use defmt::unwrap;
 use embassy_executor::Spawner;
-use embassy_nrf::gpio::{Level, Output, OutputDrive};
 use embassy_nrf::radio::ble::Mode;
 use embassy_nrf::radio::ble::Radio;
 use embassy_nrf::radio::TxPower;
 use embassy_nrf::{bind_interrupts, peripherals, radio};
-use embassy_time::{Duration, Timer};
-use lakers_nrf52840::{
-    self, Packet, PacketError, ADV_ADDRESS, ADV_CRC_INIT, CRC_POLY, FREQ, MAX_PDU,
-};
+use lakers_nrf52840::{self, Packet, PacketError, ADV_ADDRESS, ADV_CRC_INIT, CRC_POLY, FREQ};
 use {defmt_rtt as _, panic_probe as _};
 
 use lakers::*;
@@ -35,7 +30,7 @@ bind_interrupts!(struct Irqs {
 });
 
 #[embassy_executor::main]
-async fn main(spawner: Spawner) {
+async fn main(_spawner: Spawner) {
     let mut config = embassy_nrf::config::Config::default();
     config.hfclk_source = embassy_nrf::config::HfclkSource::ExternalXtal;
     let peripherals: embassy_nrf::Peripherals = embassy_nrf::init(config);
@@ -63,8 +58,6 @@ async fn main(spawner: Spawner) {
     info!("Responder started, will wait for messages");
 
     loop {
-        let mut buffer: [u8; MAX_PDU] = [0x00u8; MAX_PDU];
-        let mut c_r: Option<ConnId> = None;
         let pckt = lakers_nrf52840::receive_and_filter(&mut radio, Some(0xf5)) // filter all incoming packets waiting for CBOR TRUE (0xf5)
             .await
             .unwrap();
@@ -82,8 +75,8 @@ async fn main(spawner: Spawner) {
 
         let result = responder.process_message_1(&message_1);
 
-        if let Ok((responder, _c_i, ead_1)) = result {
-            c_r = Some(generate_connection_identifier_cbor(
+        if let Ok((responder, _c_i, _ead_1)) = result {
+            let c_r = Some(generate_connection_identifier_cbor(
                 &mut lakers_crypto::default_crypto(),
             ));
             let ead_2 = EadItems::new();
@@ -131,7 +124,7 @@ async fn main(spawner: Spawner) {
 
                         info!("Prepare message_4");
                         let ead_4 = EadItems::new();
-                        let (responder, message_4) = responder.prepare_message_4(&ead_4).unwrap();
+                        let (_responder, message_4) = responder.prepare_message_4(&ead_4).unwrap();
 
                         info!("Send message_4");
                         lakers_nrf52840::transmit_without_response(
@@ -142,7 +135,8 @@ async fn main(spawner: Spawner) {
                             )
                             .unwrap(),
                         )
-                        .await;
+                        .await
+                        .unwrap();
 
                         info!("Handshake completed. prk_out = {:X}", r_prk_out);
                     } else {

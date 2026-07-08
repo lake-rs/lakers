@@ -1,14 +1,8 @@
 #![no_std]
 
 use embassy_nrf::radio::ble::Radio;
-use embassy_nrf::saadc::Time;
-use embassy_nrf::{peripherals, radio};
-use embassy_time::Duration;
 use embassy_time::TimeoutError;
-use embassy_time::WithTimeout;
 use hexlit::hex;
-
-use defmt::info;
 
 pub const MAX_PDU: usize = 258;
 pub const FREQ: u32 = 2408;
@@ -75,16 +69,11 @@ impl Packet {
     }
 
     pub fn as_bytes(&mut self) -> &[u8] {
-        let mut offset = 0;
-        let mut len: usize = 0;
-
-        if let Some(header) = self.pdu_header {
-            offset = 3;
-            len = self.len + 1;
+        let (offset, len) = if self.pdu_header.is_some() {
+            (3, self.len + 1)
         } else {
-            offset = 2;
-            len = self.len;
-        }
+            (2, self.len)
+        };
         self.pdu.copy_within(..self.len, offset);
         self.pdu[0] = 0x00;
         self.pdu[1] = len as u8;
@@ -113,16 +102,14 @@ impl TryInto<Packet> for &[u8] {
 }
 
 impl From<TimeoutError> for PacketError {
-    fn from(error: TimeoutError) -> Self {
+    fn from(_error: TimeoutError) -> Self {
         PacketError::TimeoutError
     }
 }
 
 impl From<embassy_nrf::radio::Error> for PacketError {
-    fn from(error: embassy_nrf::radio::Error) -> Self {
-        match error {
-            _ => PacketError::RadioError,
-        }
+    fn from(_error: embassy_nrf::radio::Error) -> Self {
+        PacketError::RadioError
     }
 }
 
@@ -155,9 +142,6 @@ pub async fn transmit_and_wait_response(
     mut packet: Packet,
     filter: Option<u8>,
 ) -> Result<Packet, PacketError> {
-    let mut rcvd_packet: Packet = Default::default();
-    let mut buffer: [u8; MAX_PDU] = [0x00u8; MAX_PDU];
-
     radio.transmit(packet.as_bytes()).await?;
     let resp = receive_and_filter(radio, filter).await?;
 
@@ -170,11 +154,4 @@ pub async fn transmit_without_response(
 ) -> Result<(), PacketError> {
     radio.transmit(packet.as_bytes()).await?;
     Ok(())
-}
-
-use core::ffi::{c_char, c_void};
-#[no_mangle]
-pub extern "C" fn strstr(cs: *const c_char, ct: *const c_char) -> *mut c_char {
-    panic!("strstr handler!");
-    core::ptr::null_mut()
 }

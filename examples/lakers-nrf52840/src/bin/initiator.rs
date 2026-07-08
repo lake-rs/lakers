@@ -2,19 +2,15 @@
 #![no_main]
 
 use defmt::info;
-use defmt::unwrap;
 use embassy_executor::Spawner;
 use embassy_nrf::gpio::{Level, Output, OutputDrive};
 use embassy_nrf::radio::ble::Mode;
 use embassy_nrf::radio::ble::Radio;
 use embassy_nrf::radio::TxPower;
 use embassy_nrf::{bind_interrupts, peripherals, radio};
-use embassy_time::WithTimeout;
-use embassy_time::{Duration, Timer};
 use {defmt_rtt as _, panic_probe as _};
 
 use lakers::*;
-use lakers_crypto::{default_crypto, CryptoTrait};
 use lakers_nrf52840;
 
 extern crate alloc;
@@ -35,7 +31,7 @@ bind_interrupts!(struct Irqs {
 });
 
 #[embassy_executor::main]
-async fn main(spawner: Spawner) {
+async fn main(_spawner: Spawner) {
     let mut config = embassy_nrf::config::Config::default();
     config.hfclk_source = embassy_nrf::config::HfclkSource::ExternalXtal;
     let peripherals = embassy_nrf::init(config);
@@ -90,12 +86,13 @@ async fn main(spawner: Spawner) {
             let message_2: EdhocMessageBuffer =
                 // starts in 1 to consider only the content and not the metadata
                 pckt_2.pdu[1..pckt_2.len].try_into().expect("wrong length");
-            info!("message_2 :{:?}", message_2.content);
-            let (initiator, c_r, id_cred_r, ead_2) = initiator.parse_message_2(&message_2).unwrap();
+            info!("message_2 :{:?}", message_2.as_slice());
+            let (initiator, c_r, id_cred_r, _ead_2) =
+                initiator.parse_message_2(&message_2).unwrap();
             let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r).unwrap();
             let initiator = initiator.verify_message_2(valid_cred_r).unwrap();
 
-            let (mut initiator, message_3, i_prk_out) = initiator
+            let (initiator, message_3, i_prk_out) = initiator
                 .prepare_message_3(CredentialTransfer::ByReference, &EadItems::new())
                 .unwrap();
             let pckt_3 = lakers_nrf52840::Packet::new_from_slice(
@@ -118,7 +115,7 @@ async fn main(spawner: Spawner) {
                     let message_4: EdhocMessageBuffer =
                         pckt_4.pdu[1..pckt_4.len].try_into().expect("wrong length");
 
-                    let (initiator, ead_4) = initiator.process_message_4(&message_4).unwrap();
+                    let (_initiator, _ead_4) = initiator.process_message_4(&message_4).unwrap();
 
                     info!("Handshake completed. prk_out = {:X}", i_prk_out);
                 }
