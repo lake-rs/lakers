@@ -1,16 +1,13 @@
 #![no_std]
 #![no_main]
 
-use common::{Packet, PacketError, ADV_ADDRESS, ADV_CRC_INIT, CRC_POLY, FREQ, MAX_PDU};
 use defmt::info;
-use defmt::unwrap;
 use embassy_executor::Spawner;
-use embassy_nrf::gpio::{Level, Output, OutputDrive};
 use embassy_nrf::radio::ble::Mode;
 use embassy_nrf::radio::ble::Radio;
 use embassy_nrf::radio::TxPower;
 use embassy_nrf::{bind_interrupts, peripherals, radio};
-use embassy_time::{Duration, Timer};
+use lakers_nrf52840::{self, Packet, PacketError, ADV_ADDRESS, ADV_CRC_INIT, CRC_POLY, FREQ};
 use {defmt_rtt as _, panic_probe as _};
 
 use lakers::*;
@@ -28,14 +25,12 @@ extern "C" {
     pub fn mbedtls_memory_buffer_alloc_init(buf: *mut c_char, len: usize);
 }
 
-mod common;
-
 bind_interrupts!(struct Irqs {
     RADIO => radio::InterruptHandler<peripherals::RADIO>;
 });
 
 #[embassy_executor::main]
-async fn main(spawner: Spawner) {
+async fn main(_spawner: Spawner) {
     let mut config = embassy_nrf::config::Config::default();
     config.hfclk_source = embassy_nrf::config::HfclkSource::ExternalXtal;
     let peripherals: embassy_nrf::Peripherals = embassy_nrf::init(config);
@@ -63,18 +58,16 @@ async fn main(spawner: Spawner) {
     info!("Responder started, will wait for messages");
 
     loop {
-        let mut buffer: [u8; MAX_PDU] = [0x00u8; MAX_PDU];
-        let mut c_r: Option<ConnId> = None;
-        let pckt = common::receive_and_filter(&mut radio, Some(0xf5)) // filter all incoming packets waiting for CBOR TRUE (0xf5)
+        let pckt = lakers_nrf52840::receive_and_filter(&mut radio, Some(0xf5)) // filter all incoming packets waiting for CBOR TRUE (0xf5)
             .await
             .unwrap();
 
         info!("Received message_1");
 
-        let cred_r = Credential::parse_ccs(common::CRED_R.try_into().unwrap()).unwrap();
+        let cred_r = Credential::parse_ccs(lakers_nrf52840::CRED_R.try_into().unwrap()).unwrap();
         let responder = EdhocResponder::new(
             lakers_crypto::default_crypto(),
-            common::R.try_into().unwrap(),
+            lakers_nrf52840::R.try_into().unwrap(),
             cred_r,
         );
 
@@ -82,18 +75,18 @@ async fn main(spawner: Spawner) {
 
         let result = responder.process_message_1(&message_1);
 
-        if let Ok((responder, _c_i, ead_1)) = result {
-            c_r = Some(generate_connection_identifier_cbor(
+        if let Ok((responder, _c_i, _ead_1)) = result {
+            let c_r = Some(generate_connection_identifier_cbor(
                 &mut lakers_crypto::default_crypto(),
             ));
-            let ead_2 = None;
+            let ead_2 = EadItems::new();
 
             let (responder, message_2) = responder
                 .prepare_message_2(CredentialTransfer::ByReference, c_r, &ead_2)
                 .unwrap();
 
             // prepend 0xf5 also to message_2 in order to allow the Initiator filter out from other BLE packets
-            let message_3 = common::transmit_and_wait_response(
+            let message_3 = lakers_nrf52840::transmit_and_wait_response(
                 &mut radio,
                 Packet::new_from_slice(message_2.as_slice(), Some(0xf5)).expect("wrong length"),
                 Some(c_r.unwrap().as_slice()[0]),
@@ -119,7 +112,8 @@ async fn main(spawner: Spawner) {
                             continue;
                         };
                         let cred_i: Credential =
-                            Credential::parse_ccs(common::CRED_I.try_into().unwrap()).unwrap();
+                            Credential::parse_ccs(lakers_nrf52840::CRED_I.try_into().unwrap())
+                                .unwrap();
                         let valid_cred_i =
                             credential_check_or_fetch(Some(cred_i), id_cred_i).unwrap();
                         let Ok((responder, r_prk_out)) = responder.verify_message_3(valid_cred_i)
@@ -129,19 +123,20 @@ async fn main(spawner: Spawner) {
                         };
 
                         info!("Prepare message_4");
-                        let ead_4 = None;
-                        let (responder, message_4) = responder.prepare_message_4(&ead_4).unwrap();
+                        let ead_4 = EadItems::new();
+                        let (_responder, message_4) = responder.prepare_message_4(&ead_4).unwrap();
 
                         info!("Send message_4");
-                        common::transmit_without_response(
+                        lakers_nrf52840::transmit_without_response(
                             &mut radio,
-                            common::Packet::new_from_slice(
+                            lakers_nrf52840::Packet::new_from_slice(
                                 message_4.as_slice(),
                                 Some(c_r.unwrap().as_slice()[0]),
                             )
                             .unwrap(),
                         )
-                        .await;
+                        .await
+                        .unwrap();
 
                         info!("Handshake completed. prk_out = {:X}", r_prk_out);
                     } else {
