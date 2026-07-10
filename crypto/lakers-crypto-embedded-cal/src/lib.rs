@@ -7,8 +7,10 @@
 //! available" is expressed by *which concrete `Cal` the caller constructs*, not by cfg flags here.
 #![cfg_attr(not(test), no_std)]
 
-use embedded_cal::accessor::{HashAlgorithmOf, HmacAlgorithmOf};
-use embedded_cal::{Cal, HashAlgorithm, HashProvider, HkdfProvider, HmacAlgorithm};
+use embedded_cal::accessor::{AeadAlgorithmOf, HashAlgorithmOf, HmacAlgorithmOf};
+use embedded_cal::{
+    AeadAlgorithm, AeadProvider, Cal, HashAlgorithm, HashProvider, HkdfProvider, HmacAlgorithm,
+};
 use lakers_shared::{
     BytesCcmIvLen, BytesCcmKeyLen, BytesHashLen, BytesP256ElemLen, CcmTagLen,
     Crypto as CryptoTrait, EDHOCError, EDHOCSuite, EdhocBuffer, MAX_SUITES_LEN,
@@ -88,22 +90,50 @@ impl<C: Cal + rand_core::TryCryptoRng> CryptoTrait for Crypto<C> {
 
     fn aes_ccm_encrypt<const N: usize, Tag: CcmTagLen>(
         &mut self,
-        _key: &BytesCcmKeyLen,
-        _iv: &BytesCcmIvLen,
-        _ad: &[u8],
-        _plaintext: &[u8],
+        key: &BytesCcmKeyLen,
+        iv: &BytesCcmIvLen,
+        ad: &[u8],
+        plaintext: &[u8],
     ) -> EdhocBuffer<N> {
-        unimplemented!("aes_ccm_encrypt: implemented in a later step")
+        let alg = aes_ccm_algorithm::<C, Tag>();
+        let mut outbuffer =
+            EdhocBuffer::<N>::new_from_slice(plaintext).expect("plaintext fits the output buffer");
+        let aead = self.cal.aead();
+        let key = aead.load_from_keydata(alg, key);
+
+        #[allow(
+            deprecated,
+            reason = "EdhocBuffer has no non-deprecated mutable-slice accessor"
+        )]
+        let tag = aead.encrypt_in_place(&key, iv, &mut outbuffer.content[..plaintext.len()], ad);
+        outbuffer
+            .extend_from_slice(tag.as_ref())
+            .expect("tag fits the output buffer");
+        outbuffer
     }
 
     fn aes_ccm_decrypt<const N: usize, Tag: CcmTagLen>(
         &mut self,
-        _key: &BytesCcmKeyLen,
-        _iv: &BytesCcmIvLen,
-        _ad: &[u8],
-        _ciphertext: &[u8],
+        key: &BytesCcmKeyLen,
+        iv: &BytesCcmIvLen,
+        ad: &[u8],
+        ciphertext: &[u8],
     ) -> Result<EdhocBuffer<N>, EDHOCError> {
-        unimplemented!("aes_ccm_decrypt: implemented in a later step")
+        let alg = aes_ccm_algorithm::<C, Tag>();
+        let plaintext_len = ciphertext.len() - Tag::LEN;
+        let mut buffer = EdhocBuffer::<N>::new_from_slice(&ciphertext[..plaintext_len])
+            .expect("ciphertext-without-tag fits the output buffer");
+        let tag = &ciphertext[plaintext_len..];
+        let aead = self.cal.aead();
+        let key = aead.load_from_keydata(alg, key);
+
+        #[allow(
+            deprecated,
+            reason = "EdhocBuffer has no non-deprecated mutable-slice accessor"
+        )]
+        aead.decrypt_in_place(&key, iv, &mut buffer.content[..plaintext_len], tag, ad)
+            .map_err(|_| EDHOCError::MacVerificationFailed)?;
+        Ok(buffer)
     }
 
     fn p256_ecdh(
@@ -121,4 +151,13 @@ impl<C: Cal + rand_core::TryCryptoRng> CryptoTrait for Crypto<C> {
     fn p256_generate_key_pair(&mut self) -> (BytesP256ElemLen, BytesP256ElemLen) {
         unimplemented!("p256_generate_key_pair: implemented in a later step")
     }
+}
+
+fn aes_ccm_algorithm<C: Cal, Tag: CcmTagLen>() -> AeadAlgorithmOf<C> {
+    // FIXME: update this when embedded-cal implement Tag::LEN = 16
+    let cose_number = match Tag::LEN {
+        8 => 10,
+        other => panic!("aes-ccm with a {other}-byte tag is not supported by embedded-cal"),
+    };
+    AeadAlgorithmOf::<C>::from_cose_number(cose_number).expect("cal must support aes-ccm-16-64-128")
 }
