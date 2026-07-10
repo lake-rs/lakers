@@ -1,0 +1,21 @@
+[package]
+name = "lakers-crypto-embedded-cal"
+version.workspace = true
+edition = "2021"
+license.workspace = true
+description = "EDHOC crypto library backend based on the embedded-cal crypto abstraction layer"
+repository.workspace = true
+readme.workspace = true
+
+[dependencies]
+lakers-shared.workspace = true
+embedded-cal = { git = "https://github.com/lake-rs/embedded-cal/" }
+rand_core = { version = "0.10", default-features = false }
+digest = { version = "0.10", default-features = false }
+sha2 = { version = "0.10", default-features = false }
+
+[dev-dependencies]
+embedded-cal-rustcrypto = { git = "https://github.com/lake-rs/embedded-cal/" }
+testvectors = { git = "https://github.com/lake-rs/embedded-cal/" }
+hmac = { version = "0.12", default-features = false }
+hexlit = "0.5.5"
