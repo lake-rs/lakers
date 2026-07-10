@@ -11,6 +11,7 @@ members = [
   "examples/coap",
   "examples/lakers-no_std",
   "examples/lakers-nrf52840",
+  "examples/lakers-nrf54l15",
   "lakers-c",
   "lakers-python",
 ]

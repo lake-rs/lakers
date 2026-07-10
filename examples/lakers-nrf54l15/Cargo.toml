@@ -1,0 +1,22 @@
+[package]
+name = "lakers-nrf54l15"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+lakers = { package = "lakers", path = "../../lib" }
+# The hardware-accelerated backend, selected via the lakers-crypto dispatch feature.
+lakers-crypto = { path = "../../crypto", default-features = false, features = ["nrf54l15"] }
+
+embedded-cal-nrf54l15 = { git = "https://github.com/lake-rs/embedded-cal" }
+embedded-cal-software-demo = { git = "https://github.com/lake-rs/embedded-cal" }
+
+nrf-pac = { version = "0.2.0", features = ["nrf54l15-app", "rt"] }
+
+cortex-m = { version = "0.7.6", features = ["critical-section-single-core"] }
+cortex-m-rt = "0.7.2"
+hexlit = "0.5.3"
+defmt = "1.0"
+defmt-rtt = "1.0"
+panic-probe = { version = "1.0", features = ["print-defmt"] }

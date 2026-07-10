@@ -1,0 +1,18 @@
+# Runner + target for flashing to an nRF54L15 board over a probe (mirrors
+# embedded-cal-nrf54l15's setup). `--allow-erase-all` recovers the chip if debug access is locked
+
+[target.'cfg(all(target_arch = "arm", target_os = "none"))']
+runner = ["probe-rs", "run", "--chip", "nRF54L15", "--log-format=oneline", "--allow-erase-all", "--verify"]
+
+rustflags = [
+  "-C", "linker=flip-link",
+  "-C", "link-arg=-Tlink.x",
+  "-C", "link-arg=-Tdefmt.x",
+  "-C", "link-arg=--nmagic",
+]
+
+[build]
+target = "thumbv8m.main-none-eabihf"
+
+[env]
+DEFMT_LOG = "info"
