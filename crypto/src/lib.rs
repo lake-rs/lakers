@@ -63,7 +63,7 @@ fn test_implements_crypto() {
 #[cfg(test)]
 mod tests {
     use hexlit::hex;
-    use lakers_shared::*;
+    use lakers_shared::{MAX_INFO_LEN, SHA256_DIGEST_LEN};
     use rstest::rstest;
 
     use super::*;
