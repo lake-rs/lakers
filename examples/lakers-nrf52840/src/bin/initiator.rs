@@ -69,7 +69,14 @@ async fn main(_spawner: Spawner) {
         EDHOCMethod::StatStat,
         EDHOCSuite::CipherSuite2,
     );
-    initiator.set_identity(lakers_nrf52840::I.try_into().unwrap(), cred_i);
+    initiator
+        .set_identity(
+            InitiatorIdentity::StatStat {
+                i: lakers_nrf52840::I.try_into().unwrap(),
+            },
+            cred_i,
+        )
+        .unwrap();
 
     // Send Message 1 over raw BLE and convert the response to byte
     let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
@@ -87,10 +94,8 @@ async fn main(_spawner: Spawner) {
                 // starts in 1 to consider only the content and not the metadata
                 pckt_2.pdu[1..pckt_2.len].try_into().expect("wrong length");
             info!("message_2 :{:?}", message_2.as_slice());
-            let (initiator, c_r, id_cred_r, _ead_2) =
-                initiator.parse_message_2(&message_2).unwrap();
-            let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r).unwrap();
-            let initiator = initiator.verify_message_2(valid_cred_r).unwrap();
+            let (initiator, c_r, _ead_2) = initiator.parse_message_2(&message_2).unwrap();
+            let initiator = initiator.verify_message_2(Some(cred_r)).unwrap();
 
             let (initiator, message_3, i_prk_out) = initiator
                 .prepare_message_3(CredentialTransfer::ByReference, &EadItems::new())

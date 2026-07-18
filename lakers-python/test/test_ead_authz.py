@@ -45,7 +45,7 @@ def test_authenticator_and_server():
 
 def test_handshake_with_authz():
     initiator = lakers.EdhocInitiator()
-    responder = lakers.EdhocResponder(V, CRED_V)
+    responder = lakers.EdhocResponder(CRED_V, V)
 
     device = lakers.AuthzDevice(
         ID_U,

@@ -13,11 +13,20 @@ use lakers_crypto::{default_crypto, CryptoTrait};
 pub mod ead_authz;
 pub mod initiator;
 
+#[cfg(test)]
+extern crate std;
+
 // crate type staticlib requires a panic handler and an allocator
+#[cfg(not(test))]
 use embedded_alloc::Heap;
 use panic_semihosting as _;
+#[cfg(not(test))]
 #[global_allocator]
 static HEAP: Heap = Heap::empty();
+
+#[cfg(test)]
+#[global_allocator]
+static ALLOC: std::alloc::System = std::alloc::System;
 
 /// Note that while the Rust version supports optional value to indicate an empty value,
 /// in the C version we use an empty buffer for that case.
@@ -66,7 +75,7 @@ impl EadItemsC {
     pub fn to_rust(&self) -> EadItems {
         let mut items = EadItems::new();
 
-        for i in self.items.iter() {
+        for i in self.items.iter().take(self.len) {
             items
                 .try_push(i.clone().to_rust())
                 .expect("EadItemsC can not contain more items than EadItems");
@@ -93,31 +102,63 @@ impl EadItemsC {
     }
 }
 
-#[derive(Debug)]
+#[repr(C)]
+pub enum ProcessingM2MethodSpecificsKindC {
+    Pm2StatStat,
+    Pm2Psk,
+}
+
+#[repr(C)]
+pub struct ProcessingM2StatStatC {
+    pub mac_2: BytesMac2,
+    pub id_cred_r: IdCred,
+}
+
+#[repr(C)]
+pub struct ProcessingM2PskC {}
+
+#[repr(C)]
+pub union ProcessingM2MethodSpecificsDataC {
+    pub statstat: core::mem::ManuallyDrop<ProcessingM2StatStatC>,
+    pub psk: core::mem::ManuallyDrop<ProcessingM2PskC>,
+}
+
+#[repr(C)]
+pub struct ProcessingM2MethodSpecificsC {
+    pub kind: ProcessingM2MethodSpecificsKindC,
+    pub data: ProcessingM2MethodSpecificsDataC,
+}
+
 #[repr(C)]
 pub struct ProcessingM2C {
-    pub mac_2: BytesMac2,
+    pub method_specifics: ProcessingM2MethodSpecificsC,
     pub prk_2e: BytesHashLen,
     pub th_2: BytesHashLen,
     pub x: BytesP256ElemLen,
     pub g_y: BytesP256ElemLen,
     pub plaintext_2: EdhocMessageBuffer,
     pub c_r: u8,
-    pub id_cred_r: IdCred,
     pub ead_2: *mut EadItemsC,
 }
 
 impl Default for ProcessingM2C {
     fn default() -> Self {
         ProcessingM2C {
-            mac_2: Default::default(),
+            method_specifics: ProcessingM2MethodSpecificsC {
+                kind: ProcessingM2MethodSpecificsKindC::Pm2StatStat,
+                data: ProcessingM2MethodSpecificsDataC {
+                    statstat: core::mem::ManuallyDrop::new(ProcessingM2StatStatC {
+                        mac_2: Default::default(),
+                        id_cred_r: Default::default(),
+                    }),
+                },
+            },
             prk_2e: Default::default(),
             th_2: Default::default(),
             x: Default::default(),
             g_y: Default::default(),
             plaintext_2: Default::default(),
             c_r: Default::default(),
-            id_cred_r: Default::default(),
             ead_2: core::ptr::null_mut(),
         }
     }
@@ -125,8 +166,22 @@ impl Default for ProcessingM2C {
 
 impl ProcessingM2C {
     pub fn to_rust(&self) -> ProcessingM2 {
+        let method_specifics = match self.method_specifics.kind {
+            ProcessingM2MethodSpecificsKindC::Pm2StatStat => {
+                // SAFETY: Accessing a union field is unsafe. We just matched on
+                // `self.method_specifics.kind == ProcessingM2MethodSpecificsKindC::Pm2StatStat`,
+                // so `data.statstat` is the active variant.
+                let stat = unsafe { &self.method_specifics.data.statstat };
+                ProcessingM2MethodSpecifics::StatStat {
+                    mac_2: stat.mac_2,
+                    id_cred_r: stat.id_cred_r.clone(),
+                }
+            }
+            ProcessingM2MethodSpecificsKindC::Pm2Psk => ProcessingM2MethodSpecifics::Psk {},
+        };
+
         ProcessingM2 {
-            mac_2: self.mac_2,
+            method_specifics,
             prk_2e: self.prk_2e,
             th_2: self.th_2,
             x: self.x,
@@ -134,7 +189,6 @@ impl ProcessingM2C {
             plaintext_2: self.plaintext_2.clone(),
             #[allow(deprecated)]
             c_r: ConnId::from_int_raw(self.c_r),
-            id_cred_r: self.id_cred_r.clone(),
             ead_2: unsafe { (*self.ead_2).to_rust() },
         }
     }
@@ -145,7 +199,6 @@ impl ProcessingM2C {
             panic!("processing_m2_c is null");
         }
 
-        (*processing_m2_c).mac_2 = processing_m2.mac_2;
         (*processing_m2_c).prk_2e = processing_m2.prk_2e;
         (*processing_m2_c).th_2 = processing_m2.th_2;
         (*processing_m2_c).x = processing_m2.x;
@@ -154,7 +207,28 @@ impl ProcessingM2C {
         let c_r = processing_m2.c_r.as_slice();
         assert_eq!(c_r.len(), 1, "C API only supports short C_R");
         (*processing_m2_c).c_r = c_r[0];
-        (*processing_m2_c).id_cred_r = processing_m2.id_cred_r;
+
+        match processing_m2.method_specifics {
+            ProcessingM2MethodSpecifics::StatStat { mac_2, id_cred_r } => {
+                (*processing_m2_c).method_specifics = ProcessingM2MethodSpecificsC {
+                    kind: ProcessingM2MethodSpecificsKindC::Pm2StatStat,
+                    data: ProcessingM2MethodSpecificsDataC {
+                        statstat: core::mem::ManuallyDrop::new(ProcessingM2StatStatC {
+                            mac_2: mac_2,
+                            id_cred_r: id_cred_r,
+                        }),
+                    },
+                };
+            }
+            ProcessingM2MethodSpecifics::Psk {} => {
+                (*processing_m2_c).method_specifics = ProcessingM2MethodSpecificsC {
+                    kind: ProcessingM2MethodSpecificsKindC::Pm2Psk,
+                    data: ProcessingM2MethodSpecificsDataC {
+                        psk: core::mem::ManuallyDrop::new(ProcessingM2PskC {}),
+                    },
+                };
+            }
+        }
     }
 }
 
@@ -188,6 +262,113 @@ impl CredentialC {
     }
 }
 
+#[repr(C)]
+pub enum ProcessedM2MethodSpecificsKindC {
+    Prm2StatStat,
+    Prm2Psk,
+}
+#[repr(C)]
+pub struct ProcessedM2StatStatC {}
+
+#[repr(C)]
+pub struct ProcessedM2PskC {
+    cred_r: CredentialC,
+}
+
+#[repr(C)]
+pub union ProcessedM2MethodSpecificsDataC {
+    pub statstat: core::mem::ManuallyDrop<ProcessedM2StatStatC>,
+    pub psk: core::mem::ManuallyDrop<ProcessedM2PskC>,
+}
+
+#[repr(C)]
+pub struct ProcessedM2MethodSpecificsC {
+    pub kind: ProcessedM2MethodSpecificsKindC,
+    pub data: ProcessedM2MethodSpecificsDataC,
+}
+
+#[repr(C)]
+pub struct ProcessedM2C {
+    pub method_specifics: ProcessedM2MethodSpecificsC,
+    pub prk_3e2m: BytesHashLen,
+    pub prk_4e3m: BytesHashLen,
+    pub th_3: BytesHashLen,
+}
+
+impl Default for ProcessedM2C {
+    fn default() -> Self {
+        Self {
+            method_specifics: ProcessedM2MethodSpecificsC {
+                kind: ProcessedM2MethodSpecificsKindC::Prm2StatStat,
+                data: ProcessedM2MethodSpecificsDataC {
+                    statstat: core::mem::ManuallyDrop::new(ProcessedM2StatStatC {}),
+                },
+            },
+            prk_3e2m: Default::default(),
+            prk_4e3m: Default::default(),
+            th_3: Default::default(),
+        }
+    }
+}
+
+impl ProcessedM2C {
+    pub fn to_rust(&self) -> ProcessedM2 {
+        let method_specifics = match self.method_specifics.kind {
+            ProcessedM2MethodSpecificsKindC::Prm2StatStat => {
+                ProcessedM2MethodSpecifics::StatStat {}
+            }
+            ProcessedM2MethodSpecificsKindC::Prm2Psk => {
+                // SAFETY: Accessing a union field is unsafe. We just matched on
+                // `self.method_specifics.kind == ProcessedM2MethodSpecificsKindC::Prm2Psk`,
+                // so `data.psk` is the active variant.
+                let psk = unsafe { &self.method_specifics.data.psk };
+                ProcessedM2MethodSpecifics::Psk {
+                    cred_r: psk.cred_r.to_rust(),
+                }
+            }
+        };
+
+        ProcessedM2 {
+            method_specifics,
+            prk_3e2m: self.prk_3e2m,
+            prk_4e3m: self.prk_4e3m,
+            th_3: self.th_3,
+        }
+    }
+
+    pub unsafe fn copy_into_c(processed_m2: ProcessedM2, processed_m2_c: *mut ProcessedM2C) {
+        if processed_m2_c.is_null() {
+            panic!("processed_m2_c is null");
+        }
+
+        (*processed_m2_c).prk_3e2m = processed_m2.prk_3e2m;
+        (*processed_m2_c).prk_4e3m = processed_m2.prk_4e3m;
+        (*processed_m2_c).th_3 = processed_m2.th_3;
+
+        match processed_m2.method_specifics {
+            ProcessedM2MethodSpecifics::StatStat {} => {
+                (*processed_m2_c).method_specifics = ProcessedM2MethodSpecificsC {
+                    kind: ProcessedM2MethodSpecificsKindC::Prm2StatStat,
+                    data: ProcessedM2MethodSpecificsDataC {
+                        statstat: core::mem::ManuallyDrop::new(ProcessedM2StatStatC {}),
+                    },
+                };
+            }
+            ProcessedM2MethodSpecifics::Psk { cred_r } => {
+                let mut cred_r_c = core::mem::MaybeUninit::<CredentialC>::uninit();
+                CredentialC::copy_into_c(cred_r, cred_r_c.as_mut_ptr());
+                let cred_r_c = cred_r_c.assume_init();
+                (*processed_m2_c).method_specifics = ProcessedM2MethodSpecificsC {
+                    kind: ProcessedM2MethodSpecificsKindC::Prm2Psk,
+                    data: ProcessedM2MethodSpecificsDataC {
+                        psk: core::mem::ManuallyDrop::new(ProcessedM2PskC { cred_r: cred_r_c }),
+                    },
+                };
+            }
+        }
+    }
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn credential_new(
     cred: *mut CredentialC,
@@ -196,6 +377,22 @@ pub unsafe extern "C" fn credential_new(
 ) -> i8 {
     let value = core::slice::from_raw_parts(value, value_len);
     match Credential::parse_ccs(value) {
+        Ok(cred_parsed) => {
+            CredentialC::copy_into_c(cred_parsed, cred);
+            0
+        }
+        Err(_) => -1,
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn credential_new_symmetric(
+    cred: *mut CredentialC,
+    value: *const u8,
+    value_len: usize,
+) -> i8 {
+    let value = core::slice::from_raw_parts(value, value_len);
+    match Credential::parse_ccs_symmetric(value) {
         Ok(cred_parsed) => {
             CredentialC::copy_into_c(cred_parsed, cred);
             0

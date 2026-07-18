@@ -5,16 +5,11 @@ use hexlit::hex;
 use lakers::*;
 use std::time::Duration;
 
-const _ID_CRED_I: &[u8] = &hex!("a104412b");
-const _ID_CRED_R: &[u8] = &hex!("a104410a");
-const CRED_I: &[u8] = &hex!("A2027734322D35302D33312D46462D45462D33372D33322D333908A101A5010202412B2001215820AC75E9ECE3E50BFC8ED60399889522405C47BF16DF96660A41298CB4307F7EB62258206E5DE611388A4B8A8211334AC7D37ECB52A387D257E6DB3C2A93DF21FF3AFFC8");
-const I: &[u8] = &hex!("fb13adeb6518cee5f88417660841142e830a81fe334380a953406a1305e8706b");
-const _G_I_X_COORD: &[u8] =
-    &hex!("ac75e9ece3e50bfc8ed60399889522405c47bf16df96660a41298cb4307f7eb6");
-const _G_I_Y_COORD: &[u8] =
-    &hex!("6e5de611388a4b8a8211334ac7d37ecb52a387d257e6db3c2a93df21ff3affc8");
-const CRED_R: &[u8] = &hex!("A2026008A101A5010202410A2001215820BBC34960526EA4D32E940CAD2A234148DDC21791A12AFBCBAC93622046DD44F02258204519E257236B2A0CE2023F0931F1F386CA7AFDA64FCDE0108C224C51EABF6072");
-const _G_R: &[u8] = &hex!("bbc34960526ea4d32e940cad2a234148ddc21791a12afbcbac93622046dd44f0");
+const _ID_CRED_PSK: &[u8] = &hex!("a1044120");
+const CRED_I: &[u8] =
+    &hex!("A20269696E69746961746F7208A101A30104024110205050930FF462A77A3540CF546325DEA214");
+const CRED_R: &[u8] =
+    &hex!("A20269726573706F6E64657208A101A30104024110205050930FF462A77A3540CF546325DEA214");
 
 fn main() {
     env_logger::init();
@@ -30,15 +25,16 @@ fn client_handshake() -> Result<(), EDHOCError> {
     let timeout = Duration::new(5, 0);
     println!("Client request: {}", url);
 
-    let cred_i: Credential = Credential::parse_ccs(CRED_I.try_into().unwrap()).unwrap();
-    let cred_r: Credential = Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
+    let cred_i: Credential = Credential::parse_ccs_symmetric(CRED_I.try_into().unwrap())?;
+    let cred_r: Credential = Credential::parse_ccs_symmetric(CRED_R.try_into().unwrap())?;
 
     let initiator = EdhocInitiator::new(
         lakers_crypto::default_crypto(),
-        EDHOCMethod::StatStat,
+        EDHOCMethod::PSK,
         EDHOCSuite::CipherSuite2,
     );
 
+    println!("\n---------MESSAGE_1-----------\n");
     // Send Message 1 over CoAP and convert the response to byte
     let mut msg_1_buf = Vec::from([0xf5u8]); // EDHOC message_1 when transported over CoAP is prepended with CBOR true
     let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
@@ -56,12 +52,7 @@ fn client_handshake() -> Result<(), EDHOCError> {
     let message_2 = EdhocBuffer::new_from_slice(&response.message.payload[..]).unwrap();
     let (mut initiator, c_r, ead_2) = initiator.parse_message_2(&message_2)?;
     ead_2.processed_critical_items().unwrap();
-    initiator.set_identity(
-        InitiatorIdentity::StatStat {
-            i: I.try_into().unwrap(),
-        },
-        cred_i,
-    )?;
+    initiator.set_identity(InitiatorIdentity::Psk, cred_i)?;
     let initiator = initiator.verify_message_2(Some(cred_r))?;
 
     let mut msg_3 = Vec::from(c_r.as_cbor());
