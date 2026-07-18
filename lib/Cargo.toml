@@ -30,5 +30,8 @@ test-ead-authz = [ ]
 defmt = ["dep:defmt"]
 log = ["dep:log"]
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(hax)'] }
+
 [lib]
 crate-type = ["rlib"]

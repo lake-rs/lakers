@@ -96,8 +96,8 @@ jobs:
     - name: Install hax and F* (Fstar)
       uses: hacspec/hax-actions@main
       with:
-        # pin hax to known-working
-        hax_reference: "87ba96831ecfeb7dbb54efcf97036fbc5f25bc71"
+        # pin hax to known-working (0.3.7)
+        hax_reference: "d8b5b3d3b666fee8943a351445d2b680105e8ea3"
         fstar: v2025.10.06
 
     - name: Hax extract from lakers and lakers-shared into F* (Fstar)
@@ -123,7 +123,7 @@ jobs:
       working-directory: ./shared/proofs/fstar/extraction
       run: |
         curl -o Makefile https://gist.githubusercontent.com/W95Psp/4c304132a1f85c5af4e4959dd6b356c3/raw/Makefile
-        ROOTS=Lakers_shared.Buffer.fst make verify
+        make verify
 
   build-lakers-c:
     needs: unit-tests
@@ -173,7 +173,7 @@ jobs:
     - name: Install libcoap
       run: |
         cd libcoap && ./autogen.sh
-        ./configure --disable-doxygen --disable-manpages --disable-dtls --disable-oscore
+        ./configure --disable-doxygen --disable-manpages --disable-dtls --disable-oscore --disable-examples
         make && sudo make install
 
     - name: Install arm targets for Rust

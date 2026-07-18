@@ -1,8 +1,12 @@
 use super::*;
 
-pub type BufferCred = EdhocBuffer<192>; // arbitrary size
-pub type BufferKid = EdhocBuffer<16>; // variable size, up to 16 bytes
-pub type BufferIdCred = EdhocBuffer<192>; // variable size, can contain either the contents of a BufferCred or a BufferKid
+pub const BUFFER_CRED_LEN: usize = 192; // arbitrary size
+pub const BUFFER_ID_CRED_LEN: usize = 192; // variable size, can contain either the contents of a BufferCred or a BufferKid
+pub const BUFFER_KID_LEN: usize = 16; // variable size, up to 16 bytes
+
+pub type BufferCred = EdhocBuffer<BUFFER_CRED_LEN>;
+pub type BufferKid = EdhocBuffer<BUFFER_KID_LEN>;
+pub type BufferIdCred = EdhocBuffer<BUFFER_ID_CRED_LEN>;
 pub type BytesKeyAES128 = [u8; 16];
 pub type BytesKeyEC2 = [u8; 32];
 
@@ -29,12 +33,13 @@ pub enum IdCredType {
     KCCS = 14,
 }
 
-impl From<u8> for IdCredType {
-    fn from(value: u8) -> Self {
+impl TryFrom<u8> for IdCredType {
+    type Error = EDHOCError;
+    fn try_from(value: u8) -> Result<Self, EDHOCError> {
         match value {
-            4 => IdCredType::KID,
-            14 => IdCredType::KCCS,
-            _ => panic!("Invalid IdCredType"),
+            4 => Ok(IdCredType::KID),
+            14 => Ok(IdCredType::KCCS),
+            _ => Err(EDHOCError::ParsingError),
         }
     }
 }
@@ -60,6 +65,7 @@ pub struct IdCred {
     pub bytes: BufferIdCred, // variable size, can contain either the contents of a BufferCred or a BufferKid
 }
 
+#[hax_lib::attributes]
 impl IdCred {
     pub fn new() -> Self {
         Self {
@@ -115,6 +121,7 @@ impl IdCred {
     /// View the full value of the ID_CRED_x: the CBOR encoding of a 1-element CBOR map
     ///
     /// This is the value that is used when ID_CRED_x has no impact on message size, see RFC 9528 Section 3.5.3.2.
+    #[hax_lib::requires(self.bytes.len() <= BUFFER_ID_CRED_LEN)]
     pub fn as_full_value(&self) -> &[u8] {
         self.bytes.as_slice()
     }
@@ -124,6 +131,7 @@ impl IdCred {
     /// Note that this is NOT doing CBOR encoding, it is rather performing (when applicable)
     /// the compact encoding of ID_CRED fields.
     /// This style of encoding is used when ID_CRED_x has an impact on message size.
+    #[hax_lib::requires(self.bytes.len() <= BUFFER_ID_CRED_LEN)]
     pub fn as_encoded_value(&self) -> &[u8] {
         // This would be idiomatic as a match statement.
         // Workaround-For: https://github.com/hacspec/hax/issues/804
@@ -140,16 +148,19 @@ impl IdCred {
         }
     }
 
-    pub fn reference_only(&self) -> bool {
-        [IdCredType::KID].contains(&self.item_type())
+    #[hax_lib::requires(self.bytes.len() >= 2 && self.bytes.len() <= BUFFER_ID_CRED_LEN)]
+    pub fn reference_only(&self) -> Result<bool, EDHOCError> {
+        Ok(self.item_type()? == IdCredType::KID)
     }
 
-    pub fn item_type(&self) -> IdCredType {
-        self.bytes.as_slice()[1].into()
+    #[hax_lib::requires(self.bytes.len() >= 2 && self.bytes.len() <= BUFFER_ID_CRED_LEN)]
+    fn item_type(&self) -> Result<IdCredType, EDHOCError> {
+        self.bytes[1].try_into()
     }
 
+    #[hax_lib::requires(self.bytes.len() >= 2 && self.bytes.len() <= BUFFER_ID_CRED_LEN)]
     pub fn get_ccs(&self) -> Option<Credential> {
-        if self.item_type() == IdCredType::KCCS {
+        if self.item_type() == Ok(IdCredType::KCCS) {
             Credential::parse_ccs(&self.bytes.as_slice()[2..]).ok()
         } else {
             None
@@ -157,7 +168,7 @@ impl IdCred {
     }
 
     fn bstr_representable_as_int(value: u8) -> bool {
-        (0x0..=0x17).contains(&value) || (0x20..=0x37).contains(&value)
+        value <= 0x17 || (value >= 0x20 && value <= 0x37)
     }
 }
 
@@ -180,6 +191,7 @@ pub struct Credential {
     pub cred_type: CredentialType,
 }
 
+#[hax_lib::attributes]
 impl Credential {
     /// Creates a new CCS credential with the given bytes and public key
     pub fn new_ccs(bytes: BufferCred, public_key: BytesKeyEC2) -> Self {
@@ -421,6 +433,7 @@ impl Credential {
     ///
     /// For example, if the credential is a CCS:
     ///   { /kccs/ 14: bytes }
+    #[hax_lib::requires(self.bytes.len() <= BUFFER_CRED_LEN && self.bytes.len() <= BUFFER_ID_CRED_LEN - 2)]
     pub fn by_value(&self) -> Result<IdCred, EDHOCError> {
         match self.cred_type {
             CredentialType::CCS => {
@@ -447,6 +460,7 @@ impl Credential {
     ///   { /kid/ 4: kid }
     ///
     /// TODO: accept a parameter to specify the type of reference, e.g. kid, x5t, etc.
+    #[hax_lib::requires(self.kid.as_ref().map_or(true, |k| k.len() <= BUFFER_KID_LEN && k.len() <= BUFFER_ID_CRED_LEN - 3))]
     pub fn by_kid(&self) -> Result<IdCred, EDHOCError> {
         let Some(kid) = self.kid.as_ref() else {
             return Err(EDHOCError::MissingIdentity);
@@ -489,10 +503,10 @@ mod test {
             .with_kid(KID_VALUE_TV.try_into().unwrap());
         let id_cred = cred.by_value().unwrap();
         assert_eq!(id_cred.bytes.as_slice(), ID_CRED_BY_VALUE_TV);
-        assert_eq!(id_cred.item_type(), IdCredType::KCCS);
+        assert_eq!(id_cred.item_type(), Ok(IdCredType::KCCS));
         let id_cred = cred.by_kid().unwrap();
         assert_eq!(id_cred.bytes.as_slice(), ID_CRED_BY_REF_TV);
-        assert_eq!(id_cred.item_type(), IdCredType::KID);
+        assert_eq!(id_cred.item_type(), Ok(IdCredType::KID));
     }
 
     #[test]
