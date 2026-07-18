@@ -2,19 +2,16 @@
 #![no_main]
 
 use defmt::info;
-use defmt::unwrap;
 use embassy_executor::Spawner;
 use embassy_nrf::gpio::{Level, Output, OutputDrive};
 use embassy_nrf::radio::ble::Mode;
 use embassy_nrf::radio::ble::Radio;
 use embassy_nrf::radio::TxPower;
 use embassy_nrf::{bind_interrupts, peripherals, radio};
-use embassy_time::WithTimeout;
-use embassy_time::{Duration, Timer};
 use {defmt_rtt as _, panic_probe as _};
 
 use lakers::*;
-use lakers_crypto::{default_crypto, CryptoTrait};
+use lakers_nrf52840;
 
 extern crate alloc;
 
@@ -29,14 +26,12 @@ extern "C" {
     pub fn mbedtls_memory_buffer_alloc_init(buf: *mut c_char, len: usize);
 }
 
-mod common;
-
 bind_interrupts!(struct Irqs {
     RADIO => radio::InterruptHandler<peripherals::RADIO>;
 });
 
 #[embassy_executor::main]
-async fn main(spawner: Spawner) {
+async fn main(_spawner: Spawner) {
     let mut config = embassy_nrf::config::Config::default();
     config.hfclk_source = embassy_nrf::config::HfclkSource::ExternalXtal;
     let peripherals = embassy_nrf::init(config);
@@ -49,12 +44,12 @@ async fn main(spawner: Spawner) {
 
     radio.set_mode(Mode::BLE_1MBIT);
     radio.set_tx_power(TxPower::_0D_BM);
-    radio.set_frequency(common::FREQ);
+    radio.set_frequency(lakers_nrf52840::FREQ);
 
-    radio.set_access_address(common::ADV_ADDRESS);
+    radio.set_access_address(lakers_nrf52840::ADV_ADDRESS);
     radio.set_header_expansion(false);
-    radio.set_crc_init(common::ADV_CRC_INIT);
-    radio.set_crc_poly(common::CRC_POLY);
+    radio.set_crc_init(lakers_nrf52840::ADV_CRC_INIT);
+    radio.set_crc_poly(lakers_nrf52840::CRC_POLY);
 
     info!("init_handshake");
 
@@ -66,8 +61,8 @@ async fn main(spawner: Spawner) {
         mbedtls_memory_buffer_alloc_init(buffer.as_mut_ptr(), buffer.len());
     }
 
-    let cred_i = Credential::parse_ccs(common::CRED_I.try_into().unwrap()).unwrap();
-    let cred_r = Credential::parse_ccs(common::CRED_R.try_into().unwrap()).unwrap();
+    let cred_i = Credential::parse_ccs(lakers_nrf52840::CRED_I.try_into().unwrap()).unwrap();
+    let cred_r = Credential::parse_ccs(lakers_nrf52840::CRED_R.try_into().unwrap()).unwrap();
 
     let mut initiator = EdhocInitiator::new(
         lakers_crypto::default_crypto(),
@@ -77,7 +72,7 @@ async fn main(spawner: Spawner) {
     initiator
         .set_identity(
             InitiatorIdentity::StatStat {
-                i: common::I.try_into().unwrap(),
+                i: lakers_nrf52840::I.try_into().unwrap(),
             },
             cred_i,
         )
@@ -88,9 +83,9 @@ async fn main(spawner: Spawner) {
     let (initiator, message_1) = initiator
         .prepare_message_1(Some(c_i), &EadItems::new())
         .unwrap();
-    let pckt_1 = common::Packet::new_from_slice(message_1.as_slice(), Some(0xf5))
+    let pckt_1 = lakers_nrf52840::Packet::new_from_slice(message_1.as_slice(), Some(0xf5))
         .expect("Buffer not long enough");
-    let rcvd = common::transmit_and_wait_response(&mut radio, pckt_1, Some(0xf5)).await;
+    let rcvd = lakers_nrf52840::transmit_and_wait_response(&mut radio, pckt_1, Some(0xf5)).await;
 
     match rcvd {
         Ok(pckt_2) => {
@@ -98,24 +93,25 @@ async fn main(spawner: Spawner) {
             let message_2: EdhocMessageBuffer =
                 // starts in 1 to consider only the content and not the metadata
                 pckt_2.pdu[1..pckt_2.len].try_into().expect("wrong length");
-            info!("message_2 :{:?}", message_2.content);
-            let (initiator, c_r, details) = initiator.parse_message_2(&message_2).unwrap();
-            let ParsedMessage2Details::StatStat { id_cred_r, ead_2 } = details else {
-                panic!("Expected stat-stat details");
-            };
-            let valid_cred_r = credential_check_or_fetch(Some(cred_r), id_cred_r).unwrap();
-            let initiator = initiator.verify_message_2(valid_cred_r).unwrap();
+            info!("message_2 :{:?}", message_2.as_slice());
+            let (initiator, c_r, _ead_2) = initiator.parse_message_2(&message_2).unwrap();
+            let initiator = initiator.verify_message_2(Some(cred_r)).unwrap();
 
-            let (mut initiator, message_3, i_prk_out) = initiator
-                .prepare_message_3(CredentialTransfer::ByReference, &None)
+            let (initiator, message_3, i_prk_out) = initiator
+                .prepare_message_3(CredentialTransfer::ByReference, &EadItems::new())
                 .unwrap();
-            let pckt_3 =
-                common::Packet::new_from_slice(message_3.as_slice(), Some(c_r.as_slice()[0]))
-                    .expect("Buffer not long enough");
+            let pckt_3 = lakers_nrf52840::Packet::new_from_slice(
+                message_3.as_slice(),
+                Some(c_r.as_slice()[0]),
+            )
+            .expect("Buffer not long enough");
             info!("Send message_3 and wait message_4");
-            let rcvd =
-                common::transmit_and_wait_response(&mut radio, pckt_3, Some(c_r.as_slice()[0]))
-                    .await;
+            let rcvd = lakers_nrf52840::transmit_and_wait_response(
+                &mut radio,
+                pckt_3,
+                Some(c_r.as_slice()[0]),
+            )
+            .await;
 
             info!("Sent message_3");
             match rcvd {
@@ -124,7 +120,7 @@ async fn main(spawner: Spawner) {
                     let message_4: EdhocMessageBuffer =
                         pckt_4.pdu[1..pckt_4.len].try_into().expect("wrong length");
 
-                    let (initiator, ead_4) = initiator.process_message_4(&message_4).unwrap();
+                    let (_initiator, _ead_4) = initiator.process_message_4(&message_4).unwrap();
 
                     info!("Handshake completed. prk_out = {:X}", i_prk_out);
                 }
