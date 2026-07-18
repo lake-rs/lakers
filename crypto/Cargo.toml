@@ -4,7 +4,7 @@ version.workspace = true
 edition = "2021"
 authors = ["Mališa Vučinić <malisa.vucinic@inria.fr>"]
 license.workspace = true
-description = "EDHOC crypto library dispatch crate"
+description = "EDHOC crypto library dispatch crate for development and testing"
 repository.workspace = true
 readme.workspace = true
 
