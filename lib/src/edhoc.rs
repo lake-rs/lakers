@@ -555,6 +555,9 @@ fn compute_th_3(
 // TH_4 depends on the EDHOC method: STAT uses plaintext_3 directly, while
 // PSK uses the tuple ID_CRED_PSK || EAD_3 || CRED_I || CRED_R. We model
 // these as enum variants to keep the method-specific inputs explicit.
+// message_4 is optional, so computing TH_4 is optional too: under hax
+// compute_th_4 is stubbed out and never reads these fields.
+#[cfg_attr(hax, allow(dead_code))]
 enum Th4Input<'a> {
     Stat {
         plaintext_3: &'a BufferPlaintext3,
