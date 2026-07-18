@@ -100,6 +100,74 @@ impl CcmTagLen for CcmTagLen16 {
     const LEN: usize = 16;
 }
 
+// Blanket implementation because it is never used ownedly
+impl<T: Crypto> Crypto for &mut T {
+    type HashInProcess<'a>
+        = T::HashInProcess<'a>
+    where
+        Self: 'a;
+
+    fn supported_suites(&self) -> EdhocBuffer<MAX_SUITES_LEN> {
+        T::supported_suites(self)
+    }
+
+    fn sha256_digest(&mut self, message: &[u8]) -> BytesHashLen {
+        T::sha256_digest(self, message)
+    }
+
+    fn sha256_start<'a>(&'a mut self) -> Self::HashInProcess<'a> {
+        T::sha256_start(self)
+    }
+
+    fn hkdf_expand(&mut self, prk: &BytesHashLen, info: &[u8], result: &mut [u8]) {
+        T::hkdf_expand(self, prk, info, result)
+    }
+
+    fn hkdf_extract(&mut self, salt: &BytesHashLen, ikm: &BytesP256ElemLen) -> BytesHashLen {
+        T::hkdf_extract(self, salt, ikm)
+    }
+
+    fn hkdf_extract_psk(&mut self, salt: &BytesHashLen, ikm: &BytesElemLenPSK) -> BytesHashLen {
+        T::hkdf_extract_psk(self, salt, ikm)
+    }
+
+    fn aes_ccm_encrypt<const N: usize, TagLen: CcmTagLen>(
+        &mut self,
+        key: &BytesCcmKeyLen,
+        iv: &BytesCcmIvLen,
+        ad: &[u8],
+        plaintext: &[u8],
+    ) -> EdhocBuffer<N> {
+        T::aes_ccm_encrypt::<N, TagLen>(self, key, iv, ad, plaintext)
+    }
+
+    fn aes_ccm_decrypt<const N: usize, TagLen: CcmTagLen>(
+        &mut self,
+        key: &BytesCcmKeyLen,
+        iv: &BytesCcmIvLen,
+        ad: &[u8],
+        ciphertext: &[u8],
+    ) -> Result<EdhocBuffer<N>, EDHOCError> {
+        T::aes_ccm_decrypt::<N, TagLen>(self, key, iv, ad, ciphertext)
+    }
+
+    fn p256_ecdh(
+        &mut self,
+        private_key: &BytesP256ElemLen,
+        public_key: &BytesP256ElemLen,
+    ) -> BytesP256ElemLen {
+        T::p256_ecdh(self, private_key, public_key)
+    }
+
+    fn get_random_byte(&mut self) -> u8 {
+        T::get_random_byte(self)
+    }
+
+    fn p256_generate_key_pair(&mut self) -> (BytesP256ElemLen, BytesP256ElemLen) {
+        T::p256_generate_key_pair(self)
+    }
+}
+
 pub mod test_helper {
     use super::*;
 
