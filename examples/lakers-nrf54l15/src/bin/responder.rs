@@ -23,7 +23,13 @@ fn main() -> ! {
         let cred_r = Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
         // Each handshake gets its own hardware `Crypto`; the previous one was dropped at the end of
         // the last iteration, so only one is ever alive on the single CRACEN.
-        let responder = EdhocResponder::new(hardware_crypto(), R.try_into().unwrap(), cred_r);
+        let responder = EdhocResponder::new(
+            hardware_crypto(),
+            ResponderIdentity::StatStat {
+                r: R.try_into().unwrap(),
+            },
+            cred_r,
+        );
 
         // get rid of the 0xf5 metadata byte
         let message_1: EdhocMessageBuffer = pckt.pdu[1..pckt.len].try_into().expect("wrong length");
