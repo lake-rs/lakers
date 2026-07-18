@@ -488,12 +488,14 @@ pub struct InitiatorStart {
 }
 
 #[derive(Debug)]
+#[repr(C)]
 pub struct ResponderStart {
     pub y: BytesP256ElemLen,   // ephemeral private key of myself
     pub g_y: BytesP256ElemLen, // ephemeral public key of myself
 }
 
 #[derive(Debug)]
+#[repr(C)]
 pub struct ProcessingM1 {
     pub method: EDHOCMethod,
     pub y: BytesP256ElemLen,
@@ -511,11 +513,13 @@ pub struct WaitM2 {
     pub h_message_1: BytesHashLen,
 }
 #[derive(Debug)]
+#[repr(C)]
 pub enum WaitM3MethodSpecifics {
     StatStat {},
     Psk { cred_r: Credential },
 }
 #[derive(Debug)]
+#[repr(C)]
 pub struct WaitM3 {
     pub method_specifics: WaitM3MethodSpecifics,
     pub y: BytesP256ElemLen, // ephemeral private key of the responder
@@ -574,6 +578,7 @@ pub struct ProcessedM2 {
     pub th_3: BytesHashLen,
 }
 #[derive(Debug)]
+#[repr(C)]
 pub enum ProcessingM3MethodSpecifics {
     StatStat {
         mac_3: BytesMac3,
@@ -585,6 +590,7 @@ pub enum ProcessingM3MethodSpecifics {
     },
 }
 #[derive(Debug)]
+#[repr(C)]
 pub struct ProcessingM3 {
     pub method_specifics: ProcessingM3MethodSpecifics,
     pub y: BytesP256ElemLen, // ephemeral private key of the responder
@@ -595,6 +601,7 @@ pub struct ProcessingM3 {
 }
 
 #[derive(Debug)]
+#[repr(C)]
 pub struct ProcessedM3 {
     pub prk_4e3m: BytesHashLen,
     pub th_4: BytesHashLen,

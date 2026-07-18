@@ -131,12 +131,12 @@ cpp_compat = true
 
 [export]
 include = [
-    "EdhocMessageBuffer", "BytesMac", "BytesMac2",
+    "EdhocMessageBuffer", "BytesMac", "BytesMac2", "BytesMac3",
     "EADBuffer",
     "EADItemC", "EadItemsC",
-    "EdhocBuffer", "BufferKid", "BufferCred", "BufferIdCred",
+    "EdhocBuffer", "BufferKid", "BufferCred", "BufferIdCred", "BufferPlaintext3",
     "CredentialKey", "CredentialType", "IdCred",
-    "CredentialTransfer",
-    "InitiatorStart", "WaitM2", "Completed", "WaitM4",
+    "CredentialTransfer", "ConnId",
+    "InitiatorStart", "ResponderStart", "ProcessingM1C", "WaitM2", "ProcessedM3", "Completed", "WaitM4",
     "EdhocInitiatorC", "EdhocInitiatorWaitM2C", "EdhocInitiatorProcessingM2C", "EdhocInitiatorProcessedM2C", "EdhocInitiatorDoneC",
 ]
