@@ -13,6 +13,8 @@ fn main() -> ! {
     info!("starting ble radio");
     let mut radio = Radio::new();
 
+    let mut crypto = hardware_crypto();
+
     info!("responder started, will wait for messages");
 
     loop {
@@ -24,7 +26,7 @@ fn main() -> ! {
         // Each handshake gets its own hardware `Crypto`; the previous one was dropped at the end of
         // the last iteration, so only one is ever alive on the single CRACEN.
         let responder = EdhocResponder::new(
-            hardware_crypto(),
+            &mut crypto,
             ResponderIdentity::StatStat {
                 r: R.try_into().unwrap(),
             },
