@@ -9,7 +9,10 @@ use core::sync::atomic::{compiler_fence, Ordering};
 use hexlit::hex;
 use nrf_pac::radio::vals::{Crcstatus, Endian, Len, Mode, Plen, Skipaddr, Txpower};
 
-pub const MAX_PDU: usize = 258;
+/// Longest PDU the radio will DMA, programmed into PCNF1.MAXLEN.
+const MAXLEN: usize = 255;
+/// S0 and LENGTH bytes plus the PDU.
+const MAX_PDU: usize = 2 + MAXLEN;
 pub const FREQ: u32 = 2408;
 pub const ADV_ADDRESS: u32 = 0x12345678;
 pub const ADV_CRC_INIT: u32 = 0xffff;
@@ -34,91 +37,57 @@ pub fn hardware_crypto() -> lakers_crypto::Crypto {
 
 #[derive(Debug)]
 pub enum PacketError {
-    SliceTooLong,
-    SliceTooShort,
-    ParsingError,
-    TimeoutError,
-    RadioError,
+    PayloadTooLong,
 }
+
+/// The radio DMAs straight into and out of this buffer, so it is laid out exactly as the frame
+/// goes over the air: the S0 byte, the LENGTH byte, then the PDU. The first PDU byte is the
+/// application-level header used to filter packets; the rest is the payload.
+const S0: usize = 0;
+const LENGTH: usize = 1;
+const HEADER: usize = 2;
+const PAYLOAD: usize = 3;
+
+/// The radio's MAXLEN caps the PDU, one byte of which is the header.
+pub const MAX_PAYLOAD: usize = MAXLEN - 1;
 
 pub struct Packet {
-    // total length that gets transmitted over the air, equals length of pdu + 1, for pdu_header
-    pub len: usize,
-    // 1-byte application-level header, used for filtering the packets
-    pub pdu_header: Option<u8>,
-    // application-level payload
-    pub pdu: [u8; MAX_PDU],
-}
-
-impl Default for Packet {
-    fn default() -> Self {
-        Packet {
-            len: 0,
-            pdu_header: None,
-            pdu: [0u8; MAX_PDU],
-        }
-    }
+    buf: [u8; MAX_PDU],
 }
 
 impl Packet {
-    pub fn new() -> Self {
-        Packet {
-            len: 0,
-            pdu_header: None,
-            pdu: [0u8; MAX_PDU],
+    pub fn new(header: u8, payload: &[u8]) -> Result<Self, PacketError> {
+        if payload.len() > MAX_PAYLOAD {
+            return Err(PacketError::PayloadTooLong);
+        }
+        let mut packet = Self::empty();
+        packet.buf[S0] = 0x00;
+        packet.buf[LENGTH] = (payload.len() + 1) as u8;
+        packet.buf[HEADER] = header;
+        packet.buf[PAYLOAD..PAYLOAD + payload.len()].copy_from_slice(payload);
+        Ok(packet)
+    }
+
+    fn empty() -> Self {
+        Self {
+            buf: [0u8; MAX_PDU],
         }
     }
 
-    pub fn new_from_slice(slice: &[u8], header: Option<u8>) -> Result<Self, PacketError> {
-        let mut buffer = Self::new();
-        if buffer.fill_with_slice(slice, header).is_ok() {
-            Ok(buffer)
-        } else {
-            Err(PacketError::SliceTooLong)
-        }
+    /// The LENGTH field, i.e. header plus payload. On receive this comes off the air, so it is
+    /// only bounded by the radio's MAXLEN of 255.
+    fn pdu_len(&self) -> usize {
+        self.buf[LENGTH] as usize
     }
 
-    pub fn fill_with_slice(&mut self, slice: &[u8], header: Option<u8>) -> Result<(), PacketError> {
-        if slice.len() <= self.pdu.len() {
-            self.len = slice.len();
-            self.pdu_header = header;
-            self.pdu[..self.len].copy_from_slice(slice);
-            Ok(())
-        } else {
-            Err(PacketError::SliceTooLong)
-        }
+    /// `None` for an empty PDU, which carries no header byte to filter on.
+    pub fn header(&self) -> Option<u8> {
+        (self.pdu_len() > 0).then(|| self.buf[HEADER])
     }
 
-    pub fn as_bytes(&mut self) -> &[u8] {
-        let (offset, len) = if self.pdu_header.is_some() {
-            (3, self.len + 1)
-        } else {
-            (2, self.len)
-        };
-        self.pdu.copy_within(..self.len, offset);
-        self.pdu[0] = 0x00;
-        self.pdu[1] = len as u8;
-
-        if let Some(header) = self.pdu_header {
-            self.pdu[2] = header;
-        }
-        &self.pdu[..len]
-    }
-}
-
-impl TryInto<Packet> for &[u8] {
-    type Error = ();
-
-    fn try_into(self) -> Result<Packet, Self::Error> {
-        let mut packet: Packet = Default::default();
-
-        if self.len() > 1 {
-            packet.len = self[1] as usize;
-            packet.pdu[..packet.len].copy_from_slice(&self[2..2 + packet.len]);
-            Ok(packet)
-        } else {
-            Err(())
-        }
+    pub fn payload(&self) -> &[u8] {
+        let len = self.pdu_len().saturating_sub(1);
+        &self.buf[PAYLOAD..PAYLOAD + len]
     }
 }
 
@@ -157,7 +126,7 @@ impl Radio {
         // 3-byte base address (+1 prefix = 4-byte access address), little-endian, whitening on.
         // MAXLEN caps the DMA so the radio never reads/writes past the packet buffer.
         r.pcnf1().write(|w| {
-            w.set_maxlen(255);
+            w.set_maxlen(MAXLEN as u8);
             w.set_statlen(0);
             w.set_balen(3);
             w.set_endian(Endian::LITTLE);
@@ -198,13 +167,12 @@ impl Radio {
     }
 
     /// Send one packet, blocking until transmission completes.
-    pub fn transmit(&mut self, mut packet: Packet) {
-        let ptr = packet.as_bytes().as_ptr() as u32;
-        self.run(ptr, false);
+    pub fn transmit(&mut self, packet: Packet) {
+        self.run(packet.buf.as_ptr() as u32, false);
     }
 
     /// Send one packet, then block until a CRC-valid packet whose header matches `filter` arrives.
-    pub fn transmit_and_wait_response(&mut self, packet: Packet, filter: Option<u8>) -> Packet {
+    pub fn transmit_and_wait_response(&mut self, packet: Packet, filter: u8) -> Packet {
         self.transmit(packet);
         self.receive_and_filter(filter)
     }
@@ -214,20 +182,14 @@ impl Radio {
         self.transmit(packet);
     }
 
-    /// Block until a CRC-valid packet is received; if `header` is `Some`, keep receiving until the
-    /// packet's application header byte matches (packets that fail CRC or filtering are dropped).
-    pub fn receive_and_filter(&mut self, header: Option<u8>) -> Packet {
+    /// Block until a CRC-valid packet whose application header byte is `filter` is received;
+    /// packets that fail CRC or filtering are dropped.
+    pub fn receive_and_filter(&mut self, filter: u8) -> Packet {
         loop {
-            let mut buffer = [0u8; MAX_PDU];
-            let crc_ok = self.run(buffer.as_mut_ptr() as u32, true);
-            if !crc_ok {
-                continue;
-            }
-            if let Ok(packet) = <&[u8] as TryInto<Packet>>::try_into(&buffer[..]) {
-                match header {
-                    Some(h) if packet.pdu[0] != h => continue,
-                    _ => return packet,
-                }
+            let mut packet = Packet::empty();
+            let crc_ok = self.run(packet.buf.as_mut_ptr() as u32, true);
+            if crc_ok && packet.header() == Some(filter) {
+                return packet;
             }
         }
     }

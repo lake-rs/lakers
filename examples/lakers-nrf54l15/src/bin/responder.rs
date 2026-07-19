@@ -19,7 +19,7 @@ fn main() -> ! {
 
     loop {
         // filter all incoming packets, waiting for cbor true (0xf5), which prefixes message_1
-        let pckt = radio.receive_and_filter(Some(0xf5));
+        let pckt = radio.receive_and_filter(0xf5);
         info!("received message_1");
 
         let cred_r = Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
@@ -33,8 +33,7 @@ fn main() -> ! {
             cred_r,
         );
 
-        // get rid of the 0xf5 metadata byte
-        let message_1: EdhocMessageBuffer = pckt.pdu[1..pckt.len].try_into().expect("wrong length");
+        let message_1: EdhocMessageBuffer = pckt.payload().try_into().expect("wrong length");
 
         let Ok((responder, _c_i, _ead_1)) = responder.process_message_1(&message_1) else {
             info!("edhoc error at process_message_1");
@@ -53,19 +52,13 @@ fn main() -> ! {
         // prepend 0xf5 to message_2 too so the initiator can filter it out from other ble packets,
         // then wait for message_3, now filtered by c_r
         let pckt_3 = radio.transmit_and_wait_response(
-            Packet::new_from_slice(message_2.as_slice(), Some(0xf5)).expect("wrong length"),
-            Some(c_r.as_slice()[0]),
+            Packet::new(0xf5, message_2.as_slice()).expect("wrong length"),
+            c_r.as_slice()[0],
         );
         info!("received message_3");
 
-        let rcvd_c_r = ConnId::from_slice(&[pckt_3.pdu[0]]).unwrap();
-        if rcvd_c_r != c_r {
-            info!("another packet interrupted the handshake");
-            continue;
-        }
-
-        let message_3: EdhocMessageBuffer =
-            pckt_3.pdu[1..pckt_3.len].try_into().expect("wrong length");
+        // the packet was filtered on c_r, so its header byte matches by construction
+        let message_3: EdhocMessageBuffer = pckt_3.payload().try_into().expect("wrong length");
         let Ok((responder, id_cred_i, _ead_3)) = responder.parse_message_3(&message_3) else {
             info!("edhoc error at parse_message_3");
             continue;
@@ -84,7 +77,7 @@ fn main() -> ! {
 
         info!("send message_4");
         radio.transmit_without_response(
-            Packet::new_from_slice(message_4.as_slice(), Some(c_r.as_slice()[0])).unwrap(),
+            Packet::new(c_r.as_slice()[0], message_4.as_slice()).unwrap(),
         );
 
         info!("handshake completed. prk_out = {:X}", r_prk_out);

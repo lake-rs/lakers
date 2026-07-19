@@ -37,13 +37,11 @@ fn main() -> ! {
     let (initiator, message_1) = initiator.prepare_message_1(None, &EadItems::new()).unwrap();
 
     // Send message_1 (prefixed with cbor true, 0xf5) and block until message_2 comes back.
-    let pckt_1 =
-        Packet::new_from_slice(message_1.as_slice(), Some(0xf5)).expect("buffer not long enough");
-    let pckt_2 = radio.transmit_and_wait_response(pckt_1, Some(0xf5));
+    let pckt_1 = Packet::new(0xf5, message_1.as_slice()).expect("buffer not long enough");
+    let pckt_2 = radio.transmit_and_wait_response(pckt_1, 0xf5);
 
     info!("received message_2");
-    // start at 1 to skip the 0xf5 metadata byte
-    let message_2: EdhocMessageBuffer = pckt_2.pdu[1..pckt_2.len].try_into().expect("wrong length");
+    let message_2: EdhocMessageBuffer = pckt_2.payload().try_into().expect("wrong length");
     info!("message_2 :{:?}", message_2.as_slice());
 
     let (initiator, c_r, _ead_2) = initiator.parse_message_2(&message_2).unwrap();
@@ -55,12 +53,12 @@ fn main() -> ! {
 
     // From now on packets are filtered by c_r (the responder's connection identifier).
     info!("send message_3 and wait message_4");
-    let pckt_3 = Packet::new_from_slice(message_3.as_slice(), Some(c_r.as_slice()[0]))
-        .expect("buffer not long enough");
-    let pckt_4 = radio.transmit_and_wait_response(pckt_3, Some(c_r.as_slice()[0]));
+    let pckt_3 =
+        Packet::new(c_r.as_slice()[0], message_3.as_slice()).expect("buffer not long enough");
+    let pckt_4 = radio.transmit_and_wait_response(pckt_3, c_r.as_slice()[0]);
 
     info!("received message_4");
-    let message_4: EdhocMessageBuffer = pckt_4.pdu[1..pckt_4.len].try_into().expect("wrong length");
+    let message_4: EdhocMessageBuffer = pckt_4.payload().try_into().expect("wrong length");
 
     let (_initiator, _ead_4) = initiator.process_message_4(&message_4).unwrap();
 
