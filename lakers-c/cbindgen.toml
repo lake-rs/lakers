@@ -25,5 +25,20 @@ all_features = true
 
 [export]
 include = [
-    "CredentialC"
+    "ResponderParseMessage3CredResolver",
+    "CredentialC",
+    "ProcessingM1C",
+    "WaitM3MethodSpecificsKindC",
+    "WaitM3StatStatC",
+    "WaitM3PskC",
+    "WaitM3MethodSpecificsDataC",
+    "WaitM3MethodSpecificsC",
+    "WaitM3C",
+    "ProcessingM3MethodSpecificsKindC",
+    "ProcessingM3StatStatC",
+    "ProcessingM3PskC",
+    "ProcessingM3MethodSpecificsDataC",
+    "ProcessingM3MethodSpecificsC",
+    "ProcessingM3C",
+    "EdhocResponder",
 ]
