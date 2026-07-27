@@ -6,12 +6,10 @@ hardware-accelerated CRACEN crypto through the [`embedded-cal`](../../../embedde
 
 ## Binaries
 
-| Binary              | What it does                                                                              |
-| ------------------- | ----------------------------------------------------------------------------------------- |
-| `initiator`         | EDHOC Initiator: runs the full handshake (message_1 → message_4) over the raw radio.      |
-| `responder`         | EDHOC Responder: waits for message_1 and completes the handshake, looping to serve again. |
-| `edhoc`             | Single-chip demo: crypto self-tests + an EDHOC `prepare_message_1` on hardware crypto.    |
-| `test_crypto_trait` | Stepped diagnostic that exercises each hardware crypto op in isolation.                   |
+| Binary      | What it does                                                                              |
+| ----------- | ----------------------------------------------------------------------------------------- |
+| `initiator` | EDHOC Initiator: runs the full handshake (message_1 → message_4) over the raw radio.      |
+| `responder` | EDHOC Responder: waits for message_1 and completes the handshake, looping to serve again. |
 
 The `initiator` and `responder` mirror the [nRF52840 example](../lakers-nrf52840): two separate
 boards talk to each other over a raw 2.4 GHz BLE-1Mbit radio link. Each board has its own CRACEN,
