@@ -104,6 +104,10 @@ impl CcmTagLen for CcmTagLen16 {
 }
 
 // Blanket implementation because it is never used ownedly
+//
+// ("region parameter `'a/#1` out of range when instantiating args=[&'_/#0 mut T/#1]").
+// https://github.com/cryspen/hax/issues/1907
+#[cfg(not(hax))]
 impl<T: Crypto> Crypto for &mut T {
     type HashInProcess<'a>
         = T::HashInProcess<'a>
