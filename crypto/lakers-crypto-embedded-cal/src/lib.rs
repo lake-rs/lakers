@@ -8,7 +8,8 @@
 #![cfg_attr(not(test), no_std)]
 
 use embedded_cal::accessor::{
-    AeadAlgorithmOf, DhAlgorithmOf, DhSecretKeyOf, HashAlgorithmOf, HmacAlgorithmOf,
+    AeadAlgorithmOf, DhAlgorithmOf, DhSecretKeyOf, HashAlgorithmOf, HashProviderOf, HashStateOf,
+    HmacAlgorithmOf,
 };
 use embedded_cal::{
     AeadAlgorithm, AeadProvider, Cal, DhAlgorithm, DhProvider, HashAlgorithm, HashProvider,
@@ -61,14 +62,16 @@ impl<C: Cal + rand_core::TryCryptoRng> CryptoTrait for Crypto<C> {
     }
 
     type HashInProcess<'a>
-        = sha2::Sha256
+        = EmbeddedCalHash<'a, C>
     where
         Self: 'a;
 
     #[inline]
     fn sha256_start<'a>(&'a mut self) -> Self::HashInProcess<'a> {
-        use digest::Digest;
-        sha2::Sha256::new()
+        let alg = HashAlgorithmOf::<C>::from_ni_id(1).expect("cal must support sha-256");
+        let hash = self.cal.hash();
+        let state = hash.init(alg);
+        EmbeddedCalHash { hash, state }
     }
 
     fn hkdf_expand(&mut self, prk: &BytesHashLen, info: &[u8], result: &mut [u8]) {
@@ -212,3 +215,34 @@ fn aes_ccm_algorithm<C: Cal, Tag: CcmTagLen>() -> AeadAlgorithmOf<C> {
     };
     AeadAlgorithmOf::<C>::from_cose_number(cose_number).expect("cal must support aes-ccm-16-64-128")
 }
+
+pub struct EmbeddedCalHash<'a, C: Cal> {
+    hash: &'a mut HashProviderOf<C>,
+    state: HashStateOf<C>,
+}
+
+impl<C: Cal> Default for EmbeddedCalHash<'_, C> {
+    fn default() -> Self {
+        panic!("embedded-cal hasher has no usable default; obtain one from crypto::sha256_start()")
+    }
+}
+
+impl<C: Cal> digest::Update for EmbeddedCalHash<'_, C> {
+    #[inline]
+    fn update(&mut self, data: &[u8]) {
+        self.hash.update(&mut self.state, data);
+    }
+}
+
+impl<C: Cal> digest::OutputSizeUser for EmbeddedCalHash<'_, C> {
+    type OutputSize = digest::typenum::U32;
+}
+
+impl<C: Cal> digest::FixedOutput for EmbeddedCalHash<'_, C> {
+    #[inline]
+    fn finalize_into(self, out: &mut digest::Output<Self>) {
+        out.copy_from_slice(self.hash.finalize(self.state).as_ref());
+    }
+}
+
+impl<C: Cal> digest::HashMarker for EmbeddedCalHash<'_, C> {}
