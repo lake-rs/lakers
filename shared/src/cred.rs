@@ -4,7 +4,29 @@ pub type BufferCred = EdhocBuffer<192>; // arbitrary size
 pub type BufferKid = EdhocBuffer<16>; // variable size, up to 16 bytes
 pub type BufferIdCred = EdhocBuffer<192>; // variable size, can contain either the contents of a BufferCred or a BufferKid
 pub type BytesKeyAES128 = [u8; 16];
-pub type BytesKeyEC2 = [u8; 32];
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct BytesKeyEC2(BytesP256ElemLen);
+
+impl TryFrom<BytesP256ElemLen> for BytesKeyEC2 {
+    type Error = EDHOCError;
+
+    fn try_from(value: BytesP256ElemLen) -> Result<Self, Self::Error> {
+        // Not performing any validation yet
+        Ok(Self(value))
+    }
+}
+
+// This is convenient in particular while transitioning away from `pub type BytesKeyEC2 = [u8;
+// 32]`, because try_into was a common way to get it.
+impl TryFrom<&[u8]> for BytesKeyEC2 {
+    type Error = EDHOCError;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        let slice: BytesP256ElemLen = value.try_into().map_err(|_| EDHOCError::ParsingError)?;
+        slice.try_into()
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(C)]
