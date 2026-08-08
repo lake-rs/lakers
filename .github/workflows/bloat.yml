@@ -1,0 +1,20 @@
+name: Bloat size
+
+on:
+  push:
+    branches: [main]
+    tags: 'v*'
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  compute-size:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Run cargo bloat
+        uses: orf/cargo-bloat-action@v1
+        with:
+          bloat_args: --bin coapclient
+          token: ${{ secrets.GITHUB_TOKEN }}
