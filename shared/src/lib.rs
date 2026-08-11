@@ -682,7 +682,7 @@ impl EADItem {
                 value.push(head).unwrap();
                 value.push(value_bytes.len() as u8).unwrap();
             } else if value_bytes.len() <= u16::MAX.into() {
-                head |= 24;
+                head |= 25;
                 value.push(head).unwrap();
                 value
                     .extend_from_slice(&(value_bytes.len() as u16).to_be_bytes())
