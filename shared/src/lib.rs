@@ -63,6 +63,8 @@ pub const AES_CCM_TAG_LEN: usize = 8;
 pub const MAC_LENGTH: usize = 8; // used for EAD Zeroconf
 pub const MAC_LENGTH_2: usize = MAC_LENGTH;
 pub const MAC_LENGTH_3: usize = MAC_LENGTH_2;
+pub const MAC_LENGTH_SIG: usize = SHA256_DIGEST_LEN;
+pub const SIGNATURE_LENGTH: usize = 64; // r + s
 pub const VOUCHER_LEN: usize = MAC_LENGTH;
 pub const MAX_EAD_ITEMS: usize = 4;
 
@@ -170,6 +172,8 @@ pub type BufferPlaintext3 = EdhocMessageBuffer;
 pub type BufferPlaintext4 = EdhocMessageBuffer;
 pub type BytesMac2 = [u8; MAC_LENGTH_2];
 pub type BytesMac3 = [u8; MAC_LENGTH_3];
+pub type BytesMacSig = [u8; MAC_LENGTH_SIG];
+pub type BytesSignature = [u8; SIGNATURE_LENGTH];
 pub type BufferMessage1 = EdhocMessageBuffer;
 pub type BufferMessage3 = EdhocMessageBuffer;
 pub type BufferMessage4 = EdhocMessageBuffer;
@@ -369,6 +373,7 @@ impl ConnId {
 #[repr(C)]
 #[non_exhaustive]
 pub enum EDHOCMethod {
+    SigSig = 0,
     StatStat = 3,
     PSK = 4,
 }
@@ -378,6 +383,7 @@ impl TryFrom<u8> for EDHOCMethod {
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
+            0 => Ok(EDHOCMethod::SigSig),
             3 => Ok(EDHOCMethod::StatStat),
             4 => Ok(EDHOCMethod::PSK),
             _ => Err(EDHOCError::UnsupportedMethod),
@@ -513,6 +519,7 @@ pub struct WaitM2 {
 }
 #[derive(Debug)]
 pub enum WaitM3MethodSpecifics {
+    SigSig {},
     StatStat {},
     Psk { cred_r: Credential },
 }
@@ -527,6 +534,10 @@ pub struct WaitM3 {
 /// Method-specific details required to prepare EDHOC message_2.
 #[derive(Copy, Clone, Debug)]
 pub enum PrepareMessage2Details<'a> {
+    SigSig {
+        r: &'a BytesP256ElemLen,
+        cred_transfer: CredentialTransfer,
+    },
     StatStat {
         r: &'a BytesP256ElemLen,
         cred_transfer: CredentialTransfer,
@@ -537,7 +548,14 @@ pub enum PrepareMessage2Details<'a> {
 #[derive(Debug)]
 #[repr(C)]
 pub enum ProcessingM2MethodSpecifics {
-    StatStat { mac_2: BytesMac2, id_cred_r: IdCred },
+    SigSig {
+        signature_2: BytesSignature,
+        id_cred_r: IdCred,
+    },
+    StatStat {
+        mac_2: BytesMac2,
+        id_cred_r: IdCred,
+    },
     Psk {},
 }
 #[derive(Debug)]
@@ -555,6 +573,7 @@ pub struct ProcessingM2 {
 
 #[derive(Debug)]
 pub enum ParsedMessage2Details {
+    SigSig { id_cred_r: IdCred },
     StatStat { id_cred_r: IdCred },
     Psk {},
 }
@@ -562,6 +581,7 @@ pub enum ParsedMessage2Details {
 #[derive(Debug)]
 #[repr(C)]
 pub enum ProcessedM2MethodSpecifics {
+    SigSig { i: BytesP256ElemLen },
     StatStat {},
     Psk { cred_r: Credential },
 }
@@ -576,6 +596,10 @@ pub struct ProcessedM2 {
 }
 #[derive(Debug)]
 pub enum ProcessingM3MethodSpecifics {
+    SigSig {
+        signature_3: BytesSignature,
+        id_cred_i: IdCred,
+    },
     StatStat {
         mac_3: BytesMac3,
         id_cred_i: IdCred,
@@ -1147,11 +1171,24 @@ mod edhoc_parser {
         Ok(ciphertext_3a)
     }
 
+    pub fn decode_plaintext_2_sig(
+        plaintext_2: &BufferCiphertext2,
+    ) -> Result<(ConnId, IdCred, BytesSignature, EadItems), EDHOCError> {
+        decode_plaintext_2_sized::<SIGNATURE_LENGTH>(plaintext_2)
+    }
+
+    // TODO: rename to decode_plaintext_3_stat
     pub fn decode_plaintext_2(
         plaintext_2: &BufferCiphertext2,
     ) -> Result<(ConnId, IdCred, BytesMac2, EadItems), EDHOCError> {
+        decode_plaintext_2_sized::<MAC_LENGTH_2>(plaintext_2)
+    }
+
+    fn decode_plaintext_2_sized<const N: usize>(
+        plaintext_2: &BufferCiphertext2,
+    ) -> Result<(ConnId, IdCred, [u8; N], EadItems), EDHOCError> {
         trace!("Enter decode_plaintext_2");
-        let mut mac_2: BytesMac2 = [0x00; MAC_LENGTH_2];
+        let mut mac_2 = [0x00; N];
 
         let mut decoder = CBORDecoder::new(plaintext_2.as_slice());
 
@@ -1160,7 +1197,7 @@ mod edhoc_parser {
         // the id_cred may have been encoded as a single int, a byte string, or a map
         let id_cred_r = IdCred::from_encoded_value(decoder.any_as_encoded()?)?;
 
-        mac_2[..].copy_from_slice(decoder.bytes_sized(MAC_LENGTH_2)?);
+        mac_2[..].copy_from_slice(decoder.bytes_sized(N)?);
 
         // if there is still more to parse, the rest will be the EADs
         if plaintext_2.len() > decoder.position() {
@@ -1200,18 +1237,31 @@ mod edhoc_parser {
         }
     }
 
+    pub fn decode_plaintext_3_sig(
+        plaintext_3: &BufferPlaintext3,
+    ) -> Result<(IdCred, BytesSignature, EadItems), EDHOCError> {
+        decode_plaintext_3_sized::<SIGNATURE_LENGTH>(plaintext_3)
+    }
+
+    // TODO: rename to decode_plaintext_3_stat
     pub fn decode_plaintext_3(
         plaintext_3: &BufferPlaintext3,
     ) -> Result<(IdCred, BytesMac3, EadItems), EDHOCError> {
+        decode_plaintext_3_sized::<MAC_LENGTH_3>(plaintext_3)
+    }
+
+    fn decode_plaintext_3_sized<const N: usize>(
+        plaintext_3: &BufferPlaintext3,
+    ) -> Result<(IdCred, [u8; N], EadItems), EDHOCError> {
         trace!("Enter decode_plaintext_3");
-        let mut mac_3: BytesMac3 = [0x00; MAC_LENGTH_3];
+        let mut mac_3 = [0x00; N];
 
         let mut decoder = CBORDecoder::new(plaintext_3.as_slice());
 
         // the id_cred may have been encoded as a single int, a byte string, or a map
         let id_cred_i = IdCred::from_encoded_value(decoder.any_as_encoded()?)?;
 
-        mac_3[..].copy_from_slice(decoder.bytes_sized(MAC_LENGTH_3)?);
+        mac_3[..].copy_from_slice(decoder.bytes_sized(N)?);
 
         // if there is still more to parse, the rest will be the EADs
         if plaintext_3.len() > decoder.position() {
