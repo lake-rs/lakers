@@ -48,13 +48,14 @@ jobs:
       matrix:
         crypto_backend: [lakers-crypto/psa, lakers-crypto/rustcrypto]
         ead: [ead-none, ead-authz]
+        buffers: [default-buffers, large-buffers]
 
     steps:
     - name: Checkout repo
       uses: actions/checkout@v4
 
     - name: Run unit tests with feature matrix # note that we only add `--package lakers-ead-authz` when testing with that config
-      run: RUST_BACKTRACE=1 cargo test -p lakers -p lakers-crypto -p lakers-shared ${{ matrix.ead == 'ead-authz' && '-p lakers-ead-authz' || '' }}  --no-default-features --features="${{ matrix.crypto_backend }}, test-${{ matrix.ead }}" --no-fail-fast -- --test-threads 1
+      run: RUST_BACKTRACE=1 cargo test -p lakers -p lakers-crypto -p lakers-shared ${{ matrix.ead == 'ead-authz' && '-p lakers-ead-authz' || '' }}  --no-default-features --features="${{ matrix.crypto_backend }}, test-${{ matrix.ead }}${{ matrix.buffers == 'large-buffers' && ', lakers-shared/large_buffers' || '' }}" --no-fail-fast -- --test-threads 1
 
 
   build-edhoc-package:
