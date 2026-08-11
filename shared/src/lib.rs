@@ -1496,12 +1496,20 @@ mod cbor_decoder {
             }
         }
 
-        /// Decode a `u8` value into usize.
+        /// Decode a CBOR argument from the given additional-information value, reading any following argument bytes.
         pub fn as_usize(&mut self, b: u8) -> Result<usize, CBORError> {
             if (0..=0x17).contains(&b) {
                 Ok(usize::from(b))
             } else if 0x18 == b {
                 self.read().map(usize::from)
+            } else if 0x19 == b {
+                let high = self.read()?;
+                let low = self.read()?;
+                let value = usize::from(u16::from_be_bytes([high, low]));
+                if value <= u8::MAX as usize {
+                    return Err(CBORError::DecodingError); // deterministic CBOR
+                }
+                Ok(value)
             } else {
                 Err(CBORError::DecodingError)
             }
@@ -1612,6 +1620,28 @@ mod test_cbor_decoder {
 
         assert_eq!(input, decoder.any_as_encoded().unwrap());
         assert!(decoder.finished())
+    }
+
+    #[test]
+    fn test_cbor_decoder_long_bytes() {
+        let mut input = [0xab; 3 + 300]; // header + 300
+        input[..3].copy_from_slice(&[0x59, 0x01, 0x2c]); // 0x012c = 300
+
+        let mut decoder = CBORDecoder::new(&input);
+        let bytes = decoder.bytes().unwrap();
+        assert_eq!(bytes.len(), 300);
+        assert_eq!(bytes, &[0xab; 300][..]);
+        assert!(decoder.finished());
+    }
+
+    #[test]
+    fn test_cbor_decoder_rejects_non_minimal_length() {
+        // 0x0010 = 16, which must be encoded as the single byte 0x50
+        let mut input = [0xab; 3 + 16];
+        input[..3].copy_from_slice(&[0x59, 0x00, 0x10]);
+
+        let mut decoder = CBORDecoder::new(&input);
+        assert!(decoder.bytes().is_err());
     }
 }
 
