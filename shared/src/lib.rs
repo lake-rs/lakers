@@ -97,6 +97,7 @@ pub const MAX_BUFFER_LEN: usize = if cfg!(feature = "max_buffer_len_1024") {
     256 + 64
 };
 pub const CBOR_BYTE_STRING: u8 = 0x58u8;
+pub const CBOR_BYTE_STRING_2BYTE_LEN: u8 = 0x59u8;
 pub const CBOR_TEXT_STRING: u8 = 0x78u8;
 pub const CBOR_UINT_1BYTE: u8 = 0x18u8;
 pub const CBOR_NEG_INT_1BYTE_START: u8 = 0x20u8;
@@ -115,7 +116,7 @@ pub const CBOR_MAJOR_ARRAY_MAX: u8 = 0x97u8;
 pub const CBOR_MAJOR_MAP: u8 = 0xA0;
 pub const MAX_INFO_LEN: usize = 2 + SHA256_DIGEST_LEN + // 32-byte digest as bstr
 				            1 + MAX_KDF_LABEL_LEN +     // label <24 bytes as tstr
-						    1 + MAX_KDF_CONTEXT_LEN +   // context <24 bytes as bstr
+						    3 + MAX_KDF_CONTEXT_LEN +   // context as bstr, up to a 2-byte length header
 						    1; // length as u8
 
 pub const KCCS_LABEL: u8 = 14;
@@ -943,9 +944,13 @@ mod helpers {
         if context.len() < 24 {
             info.push(context.len() as u8 | CBOR_MAJOR_BYTE_STRING)
                 .unwrap();
-        } else {
+        } else if context.len() <= u8::MAX as usize {
             info.push(CBOR_BYTE_STRING).unwrap();
             info.push(context.len() as u8).unwrap();
+        } else {
+            info.push(CBOR_BYTE_STRING_2BYTE_LEN).unwrap();
+            info.extend_from_slice(&(context.len() as u16).to_be_bytes())
+                .unwrap();
         };
         info.extend_from_slice(context).unwrap();
 
@@ -1670,5 +1675,31 @@ mod test_ead_items {
             .iter()
             .map(|i| (i.label(), i.is_critical(), Vec::from(i.value.as_slice())))
             .collect::<Vec<_>>()
+    }
+}
+
+#[cfg(test)]
+mod test_encode_info {
+    use super::*;
+
+    #[test]
+    fn context_length_header_is_well_formed() {
+        let info = encode_info(2, &[0xaa; 10], 32);
+        assert_eq!(&info.as_slice()[..2], &[0x02, 0x4a]);
+
+        let info = encode_info(2, &[0xaa; 200], 32);
+        assert_eq!(&info.as_slice()[..3], &[0x02, 0x58, 200]);
+
+        let info = encode_info(2, &[0xaa; 256], 32);
+        assert_eq!(&info.as_slice()[..4], &[0x02, 0x59, 0x01, 0x00]);
+    }
+
+    #[test]
+    fn long_context_is_encoded_in_full() {
+        let context = [0xaa; 256];
+        let info = encode_info(2, &context, 32);
+        assert_eq!(info.len(), 1 + 3 + context.len() + 2);
+        assert_eq!(&info.as_slice()[4..4 + context.len()], &context[..]);
+        assert_eq!(&info.as_slice()[info.len() - 2..], &[0x18, 0x20]);
     }
 }
