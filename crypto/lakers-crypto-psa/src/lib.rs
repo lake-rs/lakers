@@ -22,6 +22,176 @@ pub extern "C" fn mbedtls_hardware_poll(
     0i32
 }
 
+// Minimal P-256 field arithmetic to recover `y` from `x`
+
+// rust-psa-crypto (https://github.com/malishav/rust-psa-crypto) only accepts uncompressed public keys
+// since the plan is to remove psa in the future (in favor of embedded-cal)
+// instead of fixing upstream, we will just add a small p256 arithmetic to finish ecdsa_verify
+mod p256_field {
+    /// A 256-bit unsigned integer, big-endian: `limbs[0]` is the most
+    /// significant word.
+    type Limbs = [u64; 4];
+
+    const P: Limbs = [
+        0xFFFFFFFF00000001,
+        0x0000000000000000,
+        0x00000000FFFFFFFF,
+        0xFFFFFFFFFFFFFFFF,
+    ];
+    const B: Limbs = [
+        0x5AC635D8AA3A93E7,
+        0xB3EBBD55769886BC,
+        0x651D06B0CC53B0F6,
+        0x3BCE3C3E27D2604B,
+    ];
+
+    fn from_be_bytes(bytes: &[u8; 32]) -> Limbs {
+        let mut limbs = [0u64; 4];
+        for i in 0..4 {
+            limbs[i] = u64::from_be_bytes(bytes[i * 8..i * 8 + 8].try_into().unwrap());
+        }
+        limbs
+    }
+
+    fn to_be_bytes(limbs: &Limbs) -> [u8; 32] {
+        let mut out = [0u8; 32];
+        for i in 0..4 {
+            out[i * 8..i * 8 + 8].copy_from_slice(&limbs[i].to_be_bytes());
+        }
+        out
+    }
+
+    fn is_zero(a: &Limbs) -> bool {
+        a.iter().all(|&limb| limb == 0)
+    }
+
+    fn is_ge(a: &Limbs, b: &Limbs) -> bool {
+        for i in 0..4 {
+            if a[i] != b[i] {
+                return a[i] > b[i];
+            }
+        }
+        true
+    }
+
+    fn add_raw(a: &Limbs, b: &Limbs) -> (Limbs, bool) {
+        let mut out = [0u64; 4];
+        let mut carry = 0u128;
+        for i in (0..4).rev() {
+            let sum = a[i] as u128 + b[i] as u128 + carry;
+            out[i] = sum as u64;
+            carry = sum >> 64;
+        }
+        (out, carry != 0)
+    }
+
+    fn sub_raw(a: &Limbs, b: &Limbs) -> (Limbs, bool) {
+        let mut out = [0u64; 4];
+        let mut borrow = 0i128;
+        for i in (0..4).rev() {
+            let diff = a[i] as i128 - b[i] as i128 - borrow;
+            if diff < 0 {
+                out[i] = (diff + (1i128 << 64)) as u64;
+                borrow = 1;
+            } else {
+                out[i] = diff as u64;
+                borrow = 0;
+            }
+        }
+        (out, borrow != 0)
+    }
+
+    fn add_mod(a: &Limbs, b: &Limbs, p: &Limbs) -> Limbs {
+        let (sum, carry) = add_raw(a, b);
+        if carry || is_ge(&sum, p) {
+            sub_raw(&sum, p).0
+        } else {
+            sum
+        }
+    }
+
+    fn sub_mod(a: &Limbs, b: &Limbs, p: &Limbs) -> Limbs {
+        let (diff, borrow) = sub_raw(a, b);
+        if borrow {
+            add_raw(&diff, p).0
+        } else {
+            diff
+        }
+    }
+
+    fn neg_mod(a: &Limbs, p: &Limbs) -> Limbs {
+        if is_zero(a) {
+            [0; 4]
+        } else {
+            sub_raw(p, a).0
+        }
+    }
+
+    /// `i == 0` is the most significant bit.
+    fn bit_at(limbs: &Limbs, i: usize) -> bool {
+        let limb = limbs[i / 64];
+        let shift = 63 - (i % 64);
+        (limb >> shift) & 1 == 1
+    }
+
+    fn mul_mod(a: &Limbs, b: &Limbs, p: &Limbs) -> Limbs {
+        let mut acc = [0u64; 4];
+        for i in 0..256 {
+            acc = add_mod(&acc, &acc, p);
+            if bit_at(b, i) {
+                acc = add_mod(&acc, a, p);
+            }
+        }
+        acc
+    }
+
+    fn pow_mod(base: &Limbs, exp: &Limbs, p: &Limbs) -> Limbs {
+        let mut result: Limbs = [0, 0, 0, 1];
+        for i in 0..256 {
+            result = mul_mod(&result, &result, p);
+            if bit_at(exp, i) {
+                result = mul_mod(&result, base, p);
+            }
+        }
+        result
+    }
+
+    fn shr2(limbs: &Limbs) -> Limbs {
+        [
+            limbs[0] >> 2,
+            (limbs[1] >> 2) | (limbs[0] << 62),
+            (limbs[2] >> 2) | (limbs[1] << 62),
+            (limbs[3] >> 2) | (limbs[2] << 62),
+        ]
+    }
+
+    fn add_one(limbs: &Limbs) -> Limbs {
+        add_raw(limbs, &[0, 0, 0, 1]).0
+    }
+
+    pub fn decompress_both(x: &[u8; 32]) -> Option<([u8; 32], [u8; 32])> {
+        let xl = from_be_bytes(x);
+        if is_ge(&xl, &P) {
+            return None;
+        }
+
+        let x2 = mul_mod(&xl, &xl, &P);
+        let x3 = mul_mod(&x2, &xl, &P);
+        let three_x = add_mod(&add_mod(&xl, &xl, &P), &xl, &P);
+        let alpha = sub_mod(&add_mod(&x3, &B, &P), &three_x, &P);
+
+        let exp = shr2(&add_one(&P));
+        let y0 = pow_mod(&alpha, &exp, &P);
+
+        if mul_mod(&y0, &y0, &P) != alpha {
+            return None; // x is not a valid curve coordinate
+        }
+
+        let y1 = neg_mod(&y0, &P);
+        Some((to_be_bytes(&y0), to_be_bytes(&y1)))
+    }
+}
+
 #[derive(Debug)]
 pub struct Crypto;
 
