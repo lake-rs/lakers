@@ -54,6 +54,32 @@ struct VerifiedMessage3 {
     th_4: BytesHashLen,
 }
 
+#[derive(Debug)]
+enum SignatureOrMac {
+    Mac(BytesMac),
+    Signature(BytesSignature),
+}
+
+impl SignatureOrMac {
+    fn as_slice(&self) -> &[u8] {
+        match self {
+            SignatureOrMac::Mac(mac) => mac.as_slice(),
+            SignatureOrMac::Signature(signature) => signature.as_slice(),
+        }
+    }
+}
+
+impl From<BytesMac> for SignatureOrMac {
+    fn from(value: BytesMac) -> Self {
+        SignatureOrMac::Mac(value)
+    }
+}
+impl From<BytesSignature> for SignatureOrMac {
+    fn from(value: BytesSignature) -> Self {
+        SignatureOrMac::Signature(value)
+    }
+}
+
 pub fn edhoc_exporter(
     state: &Completed,
     crypto: &mut impl CryptoTrait,
@@ -619,18 +645,17 @@ fn edhoc_kdf_owned<const N: usize>(
 }
 
 fn encode_plaintext_3(
-    stat_fields: Option<(&[u8], &BytesMac3)>,
+    stat_fields: Option<(&[u8], &SignatureOrMac)>,
     ead_3: &EadItems,
 ) -> Result<BufferPlaintext3, EDHOCError> {
     let mut plaintext_3 = match stat_fields {
-        Some((id_cred_i, mac_3)) => {
+        Some((id_cred_i, sig_or_mac_3)) => {
+            let sig_or_mac_3 = sig_or_mac_3.as_slice();
             let mut plaintext_3 =
                 BufferPlaintext3::new_from_slice(id_cred_i).or(Err(EDHOCError::EncodingError))?;
+            encode_bstr_header(&mut plaintext_3, sig_or_mac_3.len())?;
             plaintext_3
-                .push(CBOR_MAJOR_BYTE_STRING | MAC_LENGTH_3 as u8)
-                .or(Err(EDHOCError::EncodingError))?;
-            plaintext_3
-                .extend_from_slice(mac_3)
+                .extend_from_slice(sig_or_mac_3)
                 .or(Err(EDHOCError::EncodingError))?;
             plaintext_3
         }
@@ -711,6 +736,50 @@ fn encode_enc_structure(external_aad: &[u8]) -> Result<EdhocBuffer<MAX_BUFFER_LE
         .map_err(|_| EDHOCError::EncodingError)?;
 
     Ok(enc_structure)
+}
+
+// `[ "Signature1", << ID_CRED_x >>, << TH, CRED, ? EAD >>, MAC ]`
+fn encode_sig_structure(
+    id_cred: &[u8],
+    th: &BytesHashLen,
+    cred: &[u8],
+    ead: &EadItems,
+    mac: &[u8],
+) -> Result<EdhocBuffer<MAX_BUFFER_LEN>, EDHOCError> {
+    let signature1 = b"Signature1";
+    let mut sig_structure = EdhocBuffer::<MAX_BUFFER_LEN>::new();
+
+    sig_structure
+        .push(CBOR_MAJOR_ARRAY | 4)
+        .map_err(|_| EDHOCError::EncodingError)?;
+
+    sig_structure
+        .push(CBOR_MAJOR_TEXT_STRING | signature1.len() as u8)
+        .map_err(|_| EDHOCError::EncodingError)?;
+    sig_structure
+        .extend_from_slice(signature1)
+        .map_err(|_| EDHOCError::EncodingError)?;
+
+    // protected
+    encode_bstr_header(&mut sig_structure, id_cred.len())?;
+    sig_structure
+        .extend_from_slice(id_cred)
+        .map_err(|_| EDHOCError::EncodingError)?;
+
+    // external_aad, which is the same as the KDF context without ID_CRED_x and C_R
+    let external_aad = encode_kdf_context(None, &[], th, cred, ead);
+    encode_bstr_header(&mut sig_structure, external_aad.len())?;
+    sig_structure
+        .extend_from_slice(external_aad.as_slice())
+        .map_err(|_| EDHOCError::EncodingError)?;
+
+    // payload
+    encode_bstr_header(&mut sig_structure, mac.len())?;
+    sig_structure
+        .extend_from_slice(mac)
+        .map_err(|_| EDHOCError::EncodingError)?;
+
+    Ok(sig_structure)
 }
 
 fn encode_bstr_header<const N: usize>(
@@ -949,14 +1018,14 @@ fn encode_kdf_context(
     output
 }
 
-fn compute_mac_3(
+fn compute_mac_3<const N: usize>(
     crypto: &mut impl CryptoTrait,
     prk_4e3m: &BytesHashLen,
     th_3: &BytesHashLen,
     id_cred_i: &[u8],
     cred_i: &[u8],
     ead_3: &EadItems,
-) -> BytesMac3 {
+) -> [u8; N] {
     // MAC_3 = EDHOC-KDF( PRK_4e3m, 6, context_3, mac_length_3 )
     let context = encode_kdf_context(None, id_cred_i, th_3, cred_i, ead_3);
 
@@ -969,7 +1038,7 @@ fn compute_mac_3(
     )
 }
 
-fn compute_mac_2(
+fn compute_mac_2<const N: usize>(
     crypto: &mut impl CryptoTrait,
     prk_3e2m: &BytesHashLen,
     c_r: ConnId,
@@ -977,7 +1046,7 @@ fn compute_mac_2(
     cred_r: &[u8],
     th_2: &BytesHashLen,
     ead_2: &EadItems,
-) -> BytesMac2 {
+) -> [u8; N] {
     // compute MAC_2
     let context = encode_kdf_context(Some(c_r), id_cred_r, th_2, cred_r, ead_2);
 
@@ -987,7 +1056,7 @@ fn compute_mac_2(
 
 fn encode_plaintext_2(
     c_r: ConnId,
-    stat_fields: Option<(&[u8], &BytesMac2)>,
+    stat_fields: Option<(&[u8], &SignatureOrMac)>,
     ead_2: &EadItems,
 ) -> Result<BufferPlaintext2, EDHOCError> {
     let mut plaintext_2: BufferPlaintext2 = BufferPlaintext2::new();
@@ -997,15 +1066,14 @@ fn encode_plaintext_2(
         .extend_from_slice(c_r)
         .or(Err(EDHOCError::EncodingError))?;
 
-    if let Some((id_cred_r, mac_2)) = stat_fields {
+    if let Some((id_cred_r, sig_or_mac_2)) = stat_fields {
+        let sig_or_mac_2 = sig_or_mac_2.as_slice();
         plaintext_2
             .extend_from_slice(id_cred_r)
             .or(Err(EDHOCError::EncodingError))?;
 
-        plaintext_2
-            .push(CBOR_MAJOR_BYTE_STRING | MAC_LENGTH_2 as u8)
-            .unwrap();
-        plaintext_2.extend_from_slice(&mac_2[..]).unwrap();
+        encode_bstr_header(&mut plaintext_2, sig_or_mac_2.len())?;
+        plaintext_2.extend_from_slice(&sig_or_mac_2).unwrap();
     }
 
     // Encode optional EAD_2
