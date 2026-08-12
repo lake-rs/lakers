@@ -1,10 +1,12 @@
 #![no_std]
 
 use lakers_shared::{Crypto as CryptoTrait, *};
-use psa_crypto::operations::hash::hash_compute;
-use psa_crypto::operations::{aead, key_agreement, key_management, other::generate_random};
-use psa_crypto::types::algorithm::Hash;
-use psa_crypto::types::algorithm::{Aead, AeadWithDefaultLengthTag, KeyAgreement, RawKeyAgreement};
+use psa_crypto::operations::{
+    aead, asym_signature, hash::hash_compute, key_agreement, key_management, other::generate_random,
+};
+use psa_crypto::types::algorithm::{
+    Aead, AeadWithDefaultLengthTag, AsymmetricSignature, Hash, KeyAgreement, RawKeyAgreement,
+};
 use psa_crypto::types::key::{Attributes, EccFamily, Lifetime, Policy, Type, UsageFlags};
 
 #[no_mangle]
@@ -129,15 +131,19 @@ impl CryptoTrait for Crypto {
             .unwrap();
 
         #[allow(deprecated, reason = "using extend_reserve")]
-        aead::encrypt(
+        let result = aead::encrypt(
             my_key,
             alg,
             iv,
             ad,
             plaintext,
             &mut output_buffer.content[full_range],
-        )
-        .unwrap();
+        );
+
+        // SAFETY: The function demands that the Id is not used while destroyed.
+        // We did not hand out the Id `my_key` in the last few lines, so we can destroy it.
+        unsafe { key_management::destroy(my_key).unwrap() };
+        result.unwrap();
 
         output_buffer
     }
@@ -174,14 +180,19 @@ impl CryptoTrait for Crypto {
             .unwrap();
 
         #[allow(deprecated, reason = "using extend_reserve")]
-        match aead::decrypt(
+        let result = aead::decrypt(
             my_key,
             alg,
             iv,
             ad,
             ciphertext,
             &mut output_buffer.content[out_slice],
-        ) {
+        );
+        // SAFETY: The function demands that the Id is not used while destroyed.
+        // We did not hand out the Id `my_key` in the last few lines, so we can destroy it.
+        unsafe { key_management::destroy(my_key).unwrap() };
+
+        match result {
             Ok(_) => Ok(output_buffer),
             Err(_) => Err(EDHOCError::MacVerificationFailed),
         }
@@ -257,7 +268,100 @@ impl CryptoTrait for Crypto {
         key_management::export_public(key_id, &mut public_key).unwrap();
         let public_key: [u8; P256_ELEM_LEN] = public_key[1..33].try_into().unwrap(); // return only the x coordinate
 
+        // SAFETY: The function demands that the Id is not used while destroyed.
+        // We did not hand out the Id `key_id` in the last few lines, so we can destroy it.
+        unsafe { key_management::destroy(key_id).unwrap() };
+
         (private_key, public_key)
+    }
+
+    fn p256_ecdsa_sign(
+        &mut self,
+        private_key: &BytesP256ElemLen,
+        message: &[u8],
+    ) -> Result<BytesSignature, EDHOCError> {
+        let alg = AsymmetricSignature::Ecdsa {
+            hash_alg: Hash::Sha256.into(),
+        };
+        let mut usage_flags: UsageFlags = Default::default();
+        usage_flags.set_sign_hash();
+        let attributes = Attributes {
+            key_type: Type::EccKeyPair {
+                curve_family: EccFamily::SecpR1,
+            },
+            bits: 256,
+            lifetime: Lifetime::Volatile,
+            policy: Policy {
+                usage_flags,
+                permitted_algorithms: alg.into(),
+            },
+        };
+
+        psa_crypto::init().unwrap();
+        let hash = self.sha256_digest(message);
+        let my_key = key_management::import(attributes, None, private_key)
+            .map_err(|_| EDHOCError::MissingIdentity)?;
+
+        let mut signature: BytesSignature = [0; SIGNATURE_LENGTH];
+        let result = asym_signature::sign_hash(my_key, alg, &hash, &mut signature);
+        // SAFETY: The function demands that the Id is not used while destroyed.
+        // We did not hand out the Id `my_key` in the last few lines, so we can destroy it.
+        unsafe { key_management::destroy(my_key).unwrap() };
+
+        result.map_err(|_| EDHOCError::MissingIdentity)?;
+        Ok(signature)
+    }
+
+    fn p256_ecdsa_verify(
+        &mut self,
+        public_key_x: &BytesP256ElemLen,
+        message: &[u8],
+        signature: &BytesSignature,
+    ) -> Result<bool, EDHOCError> {
+        let alg = AsymmetricSignature::Ecdsa {
+            hash_alg: Hash::Sha256.into(),
+        };
+        let hash = self.sha256_digest(message);
+
+        let Some((y_a, y_b)) = p256_field::decompress_both(public_key_x) else {
+            return Ok(false);
+        };
+        for y in [y_a, y_b] {
+            let mut peer_public_key: [u8; 65] = [0; 65];
+            peer_public_key[0] = 0x04;
+            peer_public_key[1..33].copy_from_slice(&public_key_x[..]);
+            peer_public_key[33..65].copy_from_slice(&y);
+
+            let mut usage_flags: UsageFlags = Default::default();
+            usage_flags.set_verify_hash();
+            let attributes = Attributes {
+                key_type: Type::EccPublicKey {
+                    curve_family: EccFamily::SecpR1,
+                },
+                bits: 256,
+                lifetime: Lifetime::Volatile,
+                policy: Policy {
+                    usage_flags,
+                    permitted_algorithms: alg.into(),
+                },
+            };
+
+            psa_crypto::init().unwrap();
+            let Ok(their_key) = key_management::import(attributes, None, &peer_public_key) else {
+                continue;
+            };
+
+            let result = asym_signature::verify_hash(their_key, alg, &hash, signature);
+            // SAFETY: The function demands that the Id is not used while destroyed.
+            // We did not hand out the Id `their_key` in the last few lines, so we can destroy it.
+            unsafe { key_management::destroy(their_key).unwrap() };
+
+            if result.is_ok() {
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
     }
 }
 
@@ -369,5 +473,12 @@ mod tests {
 
         test_aes_ccm_tag_8::<Crypto>(&mut Crypto);
         test_aes_ccm_tag_16::<Crypto>(&mut Crypto);
+    }
+
+    #[test]
+    fn test_psa_ecdsa() {
+        test_ecdsa_roundtrip::<Crypto>(&mut Crypto);
+        test_ecdsa_rejects_bad_signature::<Crypto>(&mut Crypto);
+        test_ecdsa_is_deterministic::<Crypto>(&mut Crypto);
     }
 }
