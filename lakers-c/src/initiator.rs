@@ -181,6 +181,8 @@ pub unsafe extern "C" fn initiator_verify_message_2(
             lakers::credential_check_or_fetch(cred_expected, id_cred_r.clone())
         }
         ProcessingM2MethodSpecifics::Psk {} => cred_expected.ok_or(EDHOCError::MissingIdentity),
+        // TODO: SigSig support for the C bindings
+        ProcessingM2MethodSpecifics::SigSig { .. } => todo!(),
     };
 
     match valid_cred_r

@@ -63,6 +63,8 @@ pub const AES_CCM_TAG_LEN: usize = 8;
 pub const MAC_LENGTH: usize = 8; // used for EAD Zeroconf
 pub const MAC_LENGTH_2: usize = MAC_LENGTH;
 pub const MAC_LENGTH_3: usize = MAC_LENGTH_2;
+pub const MAC_LENGTH_SIG: usize = SHA256_DIGEST_LEN;
+pub const SIGNATURE_LENGTH: usize = 64; // r + s
 pub const VOUCHER_LEN: usize = MAC_LENGTH;
 pub const MAX_EAD_ITEMS: usize = 4;
 
@@ -97,6 +99,7 @@ pub const MAX_BUFFER_LEN: usize = if cfg!(feature = "max_buffer_len_1024") {
     256 + 64
 };
 pub const CBOR_BYTE_STRING: u8 = 0x58u8;
+pub const CBOR_BYTE_STRING_2BYTE_LEN: u8 = 0x59u8;
 pub const CBOR_TEXT_STRING: u8 = 0x78u8;
 pub const CBOR_UINT_1BYTE: u8 = 0x18u8;
 pub const CBOR_NEG_INT_1BYTE_START: u8 = 0x20u8;
@@ -115,7 +118,7 @@ pub const CBOR_MAJOR_ARRAY_MAX: u8 = 0x97u8;
 pub const CBOR_MAJOR_MAP: u8 = 0xA0;
 pub const MAX_INFO_LEN: usize = 2 + SHA256_DIGEST_LEN + // 32-byte digest as bstr
 				            1 + MAX_KDF_LABEL_LEN +     // label <24 bytes as tstr
-						    1 + MAX_KDF_CONTEXT_LEN +   // context <24 bytes as bstr
+						    3 + MAX_KDF_CONTEXT_LEN +   // context as bstr, up to a 2-byte length header
 						    1; // length as u8
 
 pub const KCCS_LABEL: u8 = 14;
@@ -169,6 +172,8 @@ pub type BufferPlaintext3 = EdhocMessageBuffer;
 pub type BufferPlaintext4 = EdhocMessageBuffer;
 pub type BytesMac2 = [u8; MAC_LENGTH_2];
 pub type BytesMac3 = [u8; MAC_LENGTH_3];
+pub type BytesMacSig = [u8; MAC_LENGTH_SIG];
+pub type BytesSignature = [u8; SIGNATURE_LENGTH];
 pub type BufferMessage1 = EdhocMessageBuffer;
 pub type BufferMessage3 = EdhocMessageBuffer;
 pub type BufferMessage4 = EdhocMessageBuffer;
@@ -368,6 +373,7 @@ impl ConnId {
 #[repr(C)]
 #[non_exhaustive]
 pub enum EDHOCMethod {
+    SigSig = 0,
     StatStat = 3,
     PSK = 4,
 }
@@ -377,6 +383,7 @@ impl TryFrom<u8> for EDHOCMethod {
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
+            0 => Ok(EDHOCMethod::SigSig),
             3 => Ok(EDHOCMethod::StatStat),
             4 => Ok(EDHOCMethod::PSK),
             _ => Err(EDHOCError::UnsupportedMethod),
@@ -512,6 +519,7 @@ pub struct WaitM2 {
 }
 #[derive(Debug)]
 pub enum WaitM3MethodSpecifics {
+    SigSig {},
     StatStat {},
     Psk { cred_r: Credential },
 }
@@ -526,6 +534,10 @@ pub struct WaitM3 {
 /// Method-specific details required to prepare EDHOC message_2.
 #[derive(Copy, Clone, Debug)]
 pub enum PrepareMessage2Details<'a> {
+    SigSig {
+        r: &'a BytesP256ElemLen,
+        cred_transfer: CredentialTransfer,
+    },
     StatStat {
         r: &'a BytesP256ElemLen,
         cred_transfer: CredentialTransfer,
@@ -536,7 +548,14 @@ pub enum PrepareMessage2Details<'a> {
 #[derive(Debug)]
 #[repr(C)]
 pub enum ProcessingM2MethodSpecifics {
-    StatStat { mac_2: BytesMac2, id_cred_r: IdCred },
+    SigSig {
+        signature_2: BytesSignature,
+        id_cred_r: IdCred,
+    },
+    StatStat {
+        mac_2: BytesMac2,
+        id_cred_r: IdCred,
+    },
     Psk {},
 }
 #[derive(Debug)]
@@ -554,6 +573,7 @@ pub struct ProcessingM2 {
 
 #[derive(Debug)]
 pub enum ParsedMessage2Details {
+    SigSig { id_cred_r: IdCred },
     StatStat { id_cred_r: IdCred },
     Psk {},
 }
@@ -561,6 +581,7 @@ pub enum ParsedMessage2Details {
 #[derive(Debug)]
 #[repr(C)]
 pub enum ProcessedM2MethodSpecifics {
+    SigSig { i: BytesP256ElemLen },
     StatStat {},
     Psk { cred_r: Credential },
 }
@@ -575,6 +596,10 @@ pub struct ProcessedM2 {
 }
 #[derive(Debug)]
 pub enum ProcessingM3MethodSpecifics {
+    SigSig {
+        signature_3: BytesSignature,
+        id_cred_i: IdCred,
+    },
     StatStat {
         mac_3: BytesMac3,
         id_cred_i: IdCred,
@@ -681,7 +706,7 @@ impl EADItem {
                 value.push(head).unwrap();
                 value.push(value_bytes.len() as u8).unwrap();
             } else if value_bytes.len() <= u16::MAX.into() {
-                head |= 24;
+                head |= 25;
                 value.push(head).unwrap();
                 value
                     .extend_from_slice(&(value_bytes.len() as u16).to_be_bytes())
@@ -943,9 +968,13 @@ mod helpers {
         if context.len() < 24 {
             info.push(context.len() as u8 | CBOR_MAJOR_BYTE_STRING)
                 .unwrap();
-        } else {
+        } else if context.len() <= u8::MAX as usize {
             info.push(CBOR_BYTE_STRING).unwrap();
             info.push(context.len() as u8).unwrap();
+        } else {
+            info.push(CBOR_BYTE_STRING_2BYTE_LEN).unwrap();
+            info.extend_from_slice(&(context.len() as u16).to_be_bytes())
+                .unwrap();
         };
         info.extend_from_slice(context).unwrap();
 
@@ -1142,11 +1171,24 @@ mod edhoc_parser {
         Ok(ciphertext_3a)
     }
 
+    pub fn decode_plaintext_2_sig(
+        plaintext_2: &BufferCiphertext2,
+    ) -> Result<(ConnId, IdCred, BytesSignature, EadItems), EDHOCError> {
+        decode_plaintext_2_sized::<SIGNATURE_LENGTH>(plaintext_2)
+    }
+
+    // TODO: rename to decode_plaintext_3_stat
     pub fn decode_plaintext_2(
         plaintext_2: &BufferCiphertext2,
     ) -> Result<(ConnId, IdCred, BytesMac2, EadItems), EDHOCError> {
+        decode_plaintext_2_sized::<MAC_LENGTH_2>(plaintext_2)
+    }
+
+    fn decode_plaintext_2_sized<const N: usize>(
+        plaintext_2: &BufferCiphertext2,
+    ) -> Result<(ConnId, IdCred, [u8; N], EadItems), EDHOCError> {
         trace!("Enter decode_plaintext_2");
-        let mut mac_2: BytesMac2 = [0x00; MAC_LENGTH_2];
+        let mut mac_2 = [0x00; N];
 
         let mut decoder = CBORDecoder::new(plaintext_2.as_slice());
 
@@ -1155,7 +1197,7 @@ mod edhoc_parser {
         // the id_cred may have been encoded as a single int, a byte string, or a map
         let id_cred_r = IdCred::from_encoded_value(decoder.any_as_encoded()?)?;
 
-        mac_2[..].copy_from_slice(decoder.bytes_sized(MAC_LENGTH_2)?);
+        mac_2[..].copy_from_slice(decoder.bytes_sized(N)?);
 
         // if there is still more to parse, the rest will be the EADs
         if plaintext_2.len() > decoder.position() {
@@ -1195,18 +1237,31 @@ mod edhoc_parser {
         }
     }
 
+    pub fn decode_plaintext_3_sig(
+        plaintext_3: &BufferPlaintext3,
+    ) -> Result<(IdCred, BytesSignature, EadItems), EDHOCError> {
+        decode_plaintext_3_sized::<SIGNATURE_LENGTH>(plaintext_3)
+    }
+
+    // TODO: rename to decode_plaintext_3_stat
     pub fn decode_plaintext_3(
         plaintext_3: &BufferPlaintext3,
     ) -> Result<(IdCred, BytesMac3, EadItems), EDHOCError> {
+        decode_plaintext_3_sized::<MAC_LENGTH_3>(plaintext_3)
+    }
+
+    fn decode_plaintext_3_sized<const N: usize>(
+        plaintext_3: &BufferPlaintext3,
+    ) -> Result<(IdCred, [u8; N], EadItems), EDHOCError> {
         trace!("Enter decode_plaintext_3");
-        let mut mac_3: BytesMac3 = [0x00; MAC_LENGTH_3];
+        let mut mac_3 = [0x00; N];
 
         let mut decoder = CBORDecoder::new(plaintext_3.as_slice());
 
         // the id_cred may have been encoded as a single int, a byte string, or a map
         let id_cred_i = IdCred::from_encoded_value(decoder.any_as_encoded()?)?;
 
-        mac_3[..].copy_from_slice(decoder.bytes_sized(MAC_LENGTH_3)?);
+        mac_3[..].copy_from_slice(decoder.bytes_sized(N)?);
 
         // if there is still more to parse, the rest will be the EADs
         if plaintext_3.len() > decoder.position() {
@@ -1491,12 +1546,20 @@ mod cbor_decoder {
             }
         }
 
-        /// Decode a `u8` value into usize.
+        /// Decode a CBOR argument from the given additional-information value, reading any following argument bytes.
         pub fn as_usize(&mut self, b: u8) -> Result<usize, CBORError> {
             if (0..=0x17).contains(&b) {
                 Ok(usize::from(b))
             } else if 0x18 == b {
                 self.read().map(usize::from)
+            } else if 0x19 == b {
+                let high = self.read()?;
+                let low = self.read()?;
+                let value = usize::from(u16::from_be_bytes([high, low]));
+                if value <= u8::MAX as usize {
+                    return Err(CBORError::DecodingError); // deterministic CBOR
+                }
+                Ok(value)
             } else {
                 Err(CBORError::DecodingError)
             }
@@ -1608,6 +1671,28 @@ mod test_cbor_decoder {
         assert_eq!(input, decoder.any_as_encoded().unwrap());
         assert!(decoder.finished())
     }
+
+    #[test]
+    fn test_cbor_decoder_long_bytes() {
+        let mut input = [0xab; 3 + 300]; // header + 300
+        input[..3].copy_from_slice(&[0x59, 0x01, 0x2c]); // 0x012c = 300
+
+        let mut decoder = CBORDecoder::new(&input);
+        let bytes = decoder.bytes().unwrap();
+        assert_eq!(bytes.len(), 300);
+        assert_eq!(bytes, &[0xab; 300][..]);
+        assert!(decoder.finished());
+    }
+
+    #[test]
+    fn test_cbor_decoder_rejects_non_minimal_length() {
+        // 0x0010 = 16, which must be encoded as the single byte 0x50
+        let mut input = [0xab; 3 + 16];
+        input[..3].copy_from_slice(&[0x59, 0x00, 0x10]);
+
+        let mut decoder = CBORDecoder::new(&input);
+        assert!(decoder.bytes().is_err());
+    }
 }
 
 #[cfg(test)]
@@ -1670,5 +1755,31 @@ mod test_ead_items {
             .iter()
             .map(|i| (i.label(), i.is_critical(), Vec::from(i.value.as_slice())))
             .collect::<Vec<_>>()
+    }
+}
+
+#[cfg(test)]
+mod test_encode_info {
+    use super::*;
+
+    #[test]
+    fn context_length_header_is_well_formed() {
+        let info = encode_info(2, &[0xaa; 10], 32);
+        assert_eq!(&info.as_slice()[..2], &[0x02, 0x4a]);
+
+        let info = encode_info(2, &[0xaa; 200], 32);
+        assert_eq!(&info.as_slice()[..3], &[0x02, 0x58, 200]);
+
+        let info = encode_info(2, &[0xaa; 256], 32);
+        assert_eq!(&info.as_slice()[..4], &[0x02, 0x59, 0x01, 0x00]);
+    }
+
+    #[test]
+    fn long_context_is_encoded_in_full() {
+        let context = [0xaa; 256];
+        let info = encode_info(2, &context, 32);
+        assert_eq!(info.len(), 1 + 3 + context.len() + 2);
+        assert_eq!(&info.as_slice()[4..4 + context.len()], &context[..]);
+        assert_eq!(&info.as_slice()[info.len() - 2..], &[0x18, 0x20]);
     }
 }

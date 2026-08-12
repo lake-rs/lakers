@@ -108,12 +108,14 @@ pub struct EdhocResponderDone<Crypto: CryptoTrait> {
 
 #[derive(Debug)]
 pub enum ResponderIdentity {
+    SigSig { r: BytesP256ElemLen },
     StatStat { r: BytesP256ElemLen },
     Psk,
 }
 
 #[derive(Debug)]
 pub enum InitiatorIdentity {
+    SigSig { i: BytesP256ElemLen },
     StatStat { i: BytesP256ElemLen },
     Psk,
 }
@@ -167,6 +169,9 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM1<Crypto> {
         let method_details = match (self.state.method, &self.r) {
             (EDHOCMethod::StatStat, ResponderIdentity::StatStat { r }) => {
                 PrepareMessage2Details::StatStat { r, cred_transfer }
+            }
+            (EDHOCMethod::SigSig, ResponderIdentity::SigSig { r }) => {
+                PrepareMessage2Details::SigSig { r, cred_transfer }
             }
             (EDHOCMethod::PSK, ResponderIdentity::Psk) => PrepareMessage2Details::Psk {},
             // FIXME: Distinguish `MissingIdentity` from `MethodIdentityMismatch` here;
@@ -415,7 +420,8 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessingM2<Crypto> {
         trace!("Enter verify_message_2");
         let i = self.i.ok_or(EDHOCError::MissingIdentity)?;
         let valid_cred_r = match &self.state.method_specifics {
-            ProcessingM2MethodSpecifics::StatStat { id_cred_r, .. } => {
+            ProcessingM2MethodSpecifics::SigSig { id_cred_r, .. }
+            | ProcessingM2MethodSpecifics::StatStat { id_cred_r, .. } => {
                 credential_check_or_fetch(cred_expected, id_cred_r.clone())?
             }
             ProcessingM2MethodSpecifics::Psk {} => {
@@ -862,6 +868,118 @@ mod test {
 
         assert_eq!(i_oscore_secret, r_oscore_secret);
         assert_eq!(i_oscore_salt, r_oscore_salt);
+    }
+
+    #[cfg(feature = "test-ead-none")]
+    #[test]
+    fn test_handshake_sigsig() {
+        let cred_i = Credential::parse_ccs(CRED_I.try_into().unwrap()).unwrap();
+        let cred_r = Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
+
+        let initiator = EdhocInitiator::new(
+            default_crypto(),
+            EDHOCMethod::SigSig,
+            EDHOCSuite::CipherSuite2,
+        );
+
+        let responder = EdhocResponder::new(
+            default_crypto(),
+            ResponderIdentity::SigSig {
+                r: R.try_into().expect("Wrong length of responder private key"),
+            },
+            cred_r.clone(),
+        ); // has to select an identity before learning who is I
+
+        let (initiator, message_1) = initiator.prepare_message_1(None, &EadItems::new()).unwrap();
+
+        let (responder, _c_i, _ead_1) = responder.process_message_1(&message_1).unwrap();
+        let (responder, message_2) = responder
+            .prepare_message_2(CredentialTransfer::ByReference, None, &EadItems::new())
+            .unwrap();
+
+        let (mut initiator, _c_r, _ead_2) = initiator.parse_message_2(&message_2).unwrap();
+        initiator
+            .set_identity(
+                InitiatorIdentity::SigSig {
+                    i: I.try_into().expect("Wrong length of initiator private key"),
+                },
+                cred_i.clone(),
+            )
+            .unwrap(); // exposing own identity only after validating cred_r
+        let initiator = initiator.verify_message_2(Some(cred_r)).unwrap();
+
+        let (initiator, message_3, i_prk_out) = initiator
+            .prepare_message_3(CredentialTransfer::ByReference, &EadItems::new())
+            .unwrap();
+
+        let (responder, id_cred_i, _ead_3) = responder.parse_message_3(&message_3).unwrap();
+        let valid_cred_i = credential_check_or_fetch(Some(cred_i), id_cred_i).unwrap();
+        let (responder, r_prk_out) = responder.verify_message_3(valid_cred_i).unwrap();
+
+        let (mut responder, message_4) = responder.prepare_message_4(&EadItems::new()).unwrap();
+        let (mut initiator, _ead_4) = initiator.process_message_4(&message_4).unwrap();
+
+        // check that prk_out is equal at initiator and responder side
+        assert_eq!(i_prk_out, r_prk_out);
+
+        // derive OSCORE secret and salt at both sides and compare
+        let mut i_oscore_secret = [0; 16];
+        initiator.edhoc_exporter(0u8, &[], &mut i_oscore_secret);
+        let mut i_oscore_salt = [0; 8];
+        initiator.edhoc_exporter(1u8, &[], &mut i_oscore_salt);
+
+        let mut r_oscore_secret = [0; 16];
+        responder.edhoc_exporter(0u8, &[], &mut r_oscore_secret);
+        let mut r_oscore_salt = [0; 8];
+        responder.edhoc_exporter(1u8, &[], &mut r_oscore_salt);
+
+        assert_eq!(i_oscore_secret, r_oscore_secret);
+        assert_eq!(i_oscore_salt, r_oscore_salt);
+    }
+
+    #[cfg(feature = "test-ead-none")]
+    #[test]
+    fn test_handshake_sigsig_rejects_tampered_signature_2() {
+        let cred_r = Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
+
+        let initiator = EdhocInitiator::new(
+            default_crypto(),
+            EDHOCMethod::SigSig,
+            EDHOCSuite::CipherSuite2,
+        );
+
+        let responder = EdhocResponder::new(
+            default_crypto(),
+            ResponderIdentity::SigSig {
+                r: R.try_into().expect("Wrong length of responder private key"),
+            },
+            cred_r.clone(),
+        );
+
+        let (initiator, message_1) = initiator.prepare_message_1(None, &EadItems::new()).unwrap();
+        let (responder, _c_i, _ead_1) = responder.process_message_1(&message_1).unwrap();
+        let (_responder, message_2) = responder
+            .prepare_message_2(CredentialTransfer::ByReference, None, &EadItems::new())
+            .unwrap();
+
+        // flip the last byte of ciphertext_2, landing inside signature_2 (the field
+        // immediately preceding EAD_2, which is absent here)
+        let last = message_2.len() - 1;
+        let mut bytes = message_2.as_slice().to_vec();
+        bytes[last] ^= 0xff;
+        let message_2 = BufferMessage2::new_from_slice(&bytes).unwrap();
+
+        let (mut initiator, _c_r, _ead_2) = initiator.parse_message_2(&message_2).unwrap();
+        initiator
+            .set_identity(
+                InitiatorIdentity::SigSig {
+                    i: I.try_into().expect("Wrong length of initiator private key"),
+                },
+                Credential::parse_ccs(CRED_I.try_into().unwrap()).unwrap(),
+            )
+            .unwrap();
+        let error = initiator.verify_message_2(Some(cred_r)).unwrap_err();
+        assert_eq!(error, EDHOCError::MacVerificationFailed);
     }
 
     #[test]

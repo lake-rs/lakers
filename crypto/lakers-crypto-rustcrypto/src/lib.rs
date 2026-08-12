@@ -1,15 +1,17 @@
 #![no_std]
 
-use lakers_shared::CcmTagLen;
 use lakers_shared::{
     BytesCcmIvLen, BytesCcmKeyLen, BytesElemLenPSK, BytesHashLen, BytesP256ElemLen,
     Crypto as CryptoTrait, EDHOCError, EDHOCSuite, EdhocBuffer, MAX_SUITES_LEN,
 };
+use lakers_shared::{BytesSignature, CcmTagLen};
 
 use ccm::AeadInPlace;
 use ccm::KeyInit;
+use p256::ecdsa::signature::{Signer, Verifier};
 use p256::elliptic_curve::point::AffineCoordinates;
 use p256::elliptic_curve::point::DecompressPoint;
+use p256::elliptic_curve::subtle::Choice;
 use sha2::Digest;
 
 type AesCcm16_64_128 = ccm::Ccm<aes::Aes128, ccm::consts::U8, ccm::consts::U13>;
@@ -192,12 +194,57 @@ impl<Rng: rand_core::RngCore + rand_core::CryptoRng> CryptoTrait for Crypto<Rng>
 
         (private_key.into(), public_key.into())
     }
+
+    fn p256_ecdsa_sign(
+        &mut self,
+        private_key: &BytesP256ElemLen,
+        message: &[u8],
+    ) -> Result<BytesSignature, EDHOCError> {
+        let signing_key = p256::ecdsa::SigningKey::from_bytes(private_key.into())
+            .map_err(|_| EDHOCError::MissingIdentity)?;
+
+        let signature: p256::ecdsa::Signature = signing_key.sign(message);
+
+        Ok(signature.to_bytes().into())
+    }
+
+    fn p256_ecdsa_verify(
+        &mut self,
+        public_key_x: &BytesP256ElemLen,
+        message: &[u8],
+        signature: &BytesSignature,
+    ) -> Result<bool, EDHOCError> {
+        let Ok(signature) = p256::ecdsa::Signature::from_slice(signature) else {
+            return Ok(false);
+        };
+
+        // the compact representation of the credential omits the y coordinate, so both points
+        // with this x are tried; both belong to the same key holder (private keys d and n-d)
+        for y_is_odd in [0u8, 1u8] {
+            let point = p256::AffinePoint::decompress(public_key_x.into(), Choice::from(y_is_odd));
+            if bool::from(point.is_none()) {
+                continue;
+            }
+            let point = point.unwrap();
+
+            let Ok(verifying_key) = p256::ecdsa::VerifyingKey::from_affine(point) else {
+                continue;
+            };
+
+            if verifying_key.verify(message, &signature).is_ok() {
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use lakers_shared::test_helper::{
         test_aes_ccm_roundtrip, test_aes_ccm_tag_16, test_aes_ccm_tag_8,
+        test_ecdsa_is_deterministic, test_ecdsa_rejects_bad_signature, test_ecdsa_roundtrip,
     };
     use lakers_shared::{CcmTagLen16, CcmTagLen8};
 
@@ -211,5 +258,13 @@ mod tests {
 
         test_aes_ccm_tag_8::<Crypto<rand_core::OsRng>>(&mut crypto);
         test_aes_ccm_tag_16::<Crypto<rand_core::OsRng>>(&mut crypto);
+    }
+
+    #[test]
+    fn test_rustcrypto_ecdsa() {
+        let mut crypto = Crypto::new(rand_core::OsRng);
+        test_ecdsa_roundtrip::<Crypto<rand_core::OsRng>>(&mut crypto);
+        test_ecdsa_rejects_bad_signature::<Crypto<rand_core::OsRng>>(&mut crypto);
+        test_ecdsa_is_deterministic::<Crypto<rand_core::OsRng>>(&mut crypto);
     }
 }

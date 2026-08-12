@@ -308,6 +308,114 @@ impl CryptoTrait for Crypto {
 
         (private_key, public_key)
     }
+
+    fn p256_ecdsa_sign(
+        &mut self,
+        private_key: &BytesP256ElemLen,
+        message: &[u8],
+    ) -> Result<BytesSignature, EDHOCError> {
+        let mut rnd_context = CRYS_RND_State_t::default();
+        let mut rnd_work_buffer = CRYS_RND_WorkBuff_t::default();
+        unsafe {
+            SaSi_LibInit();
+            CRYS_RndInit(
+                &mut rnd_context as *mut _ as *mut c_void,
+                &mut rnd_work_buffer as *mut _,
+            );
+        }
+        let rnd_generate_vect_func: SaSiRndGenerateVectWorkFunc_t = Some(CRYS_RND_GenerateVector);
+
+        let domain =
+            unsafe { CRYS_ECPKI_GetEcDomain(CRYS_ECPKI_DomainID_t_CRYS_ECPKI_DomainID_secp256r1) };
+
+        let mut private_key_cc310: CRYS_ECPKI_UserPrivKey_t = Default::default();
+        let ret = unsafe {
+            CRYS_ECPKI_BuildPrivKey(
+                domain,
+                private_key.clone().as_mut_ptr(),
+                P256_ELEM_LEN as u32,
+                &mut private_key_cc310,
+            )
+        };
+        if ret != CRYS_OK {
+            return Err(EDHOCError::MissingIdentity);
+        }
+
+        let mut sign_ctx: CRYS_ECDSA_SignUserContext_t = Default::default();
+        let mut signature: BytesSignature = [0x0u8; SIGNATURE_LENGTH];
+        let mut signature_len: u32 = SIGNATURE_LENGTH as u32;
+
+        let ret = unsafe {
+            CRYS_ECDSA_Sign(
+                &mut rnd_context as *mut _ as *mut c_void,
+                rnd_generate_vect_func,
+                &mut sign_ctx,
+                &mut private_key_cc310,
+                CRYS_ECPKI_HASH_OpMode_t_CRYS_ECPKI_HASH_SHA256_mode,
+                // CRYS_ECDSA_Sign does not really write there, it's just missing a `const`
+                message.as_ptr() as *mut _,
+                message.len() as u32,
+                signature.as_mut_ptr(),
+                &mut signature_len,
+            )
+        };
+
+        match ret {
+            CRYS_OK => Ok(signature),
+            _ => Err(EDHOCError::MissingIdentity),
+        }
+    }
+
+    fn p256_ecdsa_verify(
+        &mut self,
+        public_key_x: &BytesP256ElemLen,
+        message: &[u8],
+        signature: &BytesSignature,
+    ) -> Result<bool, EDHOCError> {
+        let domain =
+            unsafe { CRYS_ECPKI_GetEcDomain(CRYS_ECPKI_DomainID_t_CRYS_ECPKI_DomainID_secp256r1) };
+
+        for sign_byte in [0x02u8, 0x03u8] {
+            let mut public_key_compressed = [0x0u8; P256_ELEM_LEN + 1];
+            public_key_compressed[0] = sign_byte;
+            public_key_compressed[1..].copy_from_slice(&public_key_x[..]);
+
+            let mut public_key_cc310: CRYS_ECPKI_UserPublKey_t = Default::default();
+            let ret = unsafe {
+                _DX_ECPKI_BuildPublKey(
+                    domain,
+                    public_key_compressed.as_mut_ptr(),
+                    (P256_ELEM_LEN + 1) as u32,
+                    EC_PublKeyCheckMode_t_CheckPointersAndSizesOnly,
+                    &mut public_key_cc310,
+                    core::ptr::null_mut(),
+                )
+            };
+            if ret != CRYS_OK {
+                continue;
+            }
+
+            let mut verify_ctx: CRYS_ECDSA_VerifyUserContext_t = Default::default();
+            let ret = unsafe {
+                CRYS_ECDSA_Verify(
+                    &mut verify_ctx,
+                    &mut public_key_cc310,
+                    CRYS_ECPKI_HASH_OpMode_t_CRYS_ECPKI_HASH_SHA256_mode,
+                    // CRYS_ECDSA_Verify does not really write there, it's just missing a `const`
+                    signature.as_ptr() as *mut _,
+                    signature.len() as u32,
+                    message.as_ptr() as *mut _,
+                    message.len() as u32,
+                )
+            };
+
+            if ret == CRYS_OK {
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
+    }
 }
 
 impl Crypto {
@@ -380,6 +488,7 @@ mod tests {
     use super::*;
     use lakers_shared::test_helper::{
         test_aes_ccm_roundtrip, test_aes_ccm_tag_16, test_aes_ccm_tag_8,
+        test_ecdsa_is_deterministic, test_ecdsa_rejects_bad_signature, test_ecdsa_roundtrip,
     };
 
     #[test]
@@ -389,5 +498,12 @@ mod tests {
 
         test_aes_ccm_tag_8::<Crypto>(&mut Crypto);
         test_aes_ccm_tag_16::<Crypto>(&mut Crypto);
+    }
+
+    #[test]
+    fn test_cryptocell_ecdsa() {
+        test_ecdsa_roundtrip::<Crypto>(&mut Crypto);
+        test_ecdsa_rejects_bad_signature::<Crypto>(&mut Crypto);
+        test_ecdsa_is_deterministic::<Crypto>(&mut Crypto);
     }
 }

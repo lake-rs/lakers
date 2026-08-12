@@ -119,6 +119,8 @@ impl PyEdhocInitiator {
         let id_cred_r = match details {
             ParsedMessage2Details::StatStat { id_cred_r } => id_cred_r,
             ParsedMessage2Details::Psk {} => IdCred::new(),
+            // TODO: SigSig support for the Python bindings
+            ParsedMessage2Details::SigSig { .. } => todo!(),
         };
         self.processing_m2 = Some(state);
         Ok((

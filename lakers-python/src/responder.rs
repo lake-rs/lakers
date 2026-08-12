@@ -51,6 +51,8 @@ impl PyEdhocResponder {
                 super::parse_credential(EDHOCMethod::StatStat, cred_r)
             }
             Ok(ResponderIdentity::Psk) => super::parse_credential(EDHOCMethod::PSK, cred_r),
+            // TODO: SigSig support for the Python bindings
+            Ok(ResponderIdentity::SigSig { .. }) => todo!(),
             Err(err) => Err(err),
         }
         .with_cause(py, "Failed to ingest CRED_R")?;
@@ -180,6 +182,8 @@ impl PyEdhocResponder {
         let method = match &self.as_ref_processing_m3()?.method_specifics {
             ProcessingM3MethodSpecifics::StatStat { .. } => EDHOCMethod::StatStat,
             ProcessingM3MethodSpecifics::Psk { .. } => EDHOCMethod::PSK,
+            // TODO: SigSig support for the Python bindings
+            ProcessingM3MethodSpecifics::SigSig { .. } => EDHOCMethod::SigSig,
         };
         let valid_cred_i = super::parse_credential(method, valid_cred_i)
             .with_cause(py, "Failed to ingest CRED_I")?;
