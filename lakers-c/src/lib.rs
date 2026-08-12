@@ -228,6 +228,8 @@ impl ProcessingM2C {
                     },
                 };
             }
+            // TODO: SigSig support for the C bindings
+            ProcessingM2MethodSpecifics::SigSig { .. } => todo!(),
         }
     }
 }
@@ -365,6 +367,8 @@ impl ProcessedM2C {
                     },
                 };
             }
+            // TODO: SigSig support for the C bindings
+            ProcessedM2MethodSpecifics::SigSig { .. } => todo!(),
         }
     }
 }
