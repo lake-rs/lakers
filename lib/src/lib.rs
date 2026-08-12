@@ -421,6 +421,10 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessingM2<Crypto> {
             ProcessingM2MethodSpecifics::Psk {} => {
                 cred_expected.ok_or(EDHOCError::MissingIdentity)?
             }
+            ProcessingM2MethodSpecifics::SigSig {
+                signature_2: _,
+                id_cred_r: _,
+            } => todo!(),
         };
         match i_verify_message_2(&self.state, &mut self.crypto, valid_cred_r, i) {
             Ok(state) => Ok(EdhocInitiatorProcessedM2 {

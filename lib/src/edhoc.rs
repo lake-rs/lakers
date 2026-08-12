@@ -208,6 +208,7 @@ pub fn r_parse_message_3(
         WaitM3MethodSpecifics::Psk { cred_r } => {
             r_parse_message_3_psk(state, crypto, message_3, cred_r)?
         }
+        WaitM3MethodSpecifics::SigSig {} => todo!(),
     };
 
     Ok((
@@ -244,6 +245,7 @@ where
             cred_r,
             resolve_cred_i,
         )?,
+        WaitM3MethodSpecifics::SigSig {} => todo!(),
     };
 
     Ok((
@@ -275,6 +277,10 @@ pub fn r_verify_message_3(
             id_cred_psk,
             cred_r,
         } => r_verify_message_3_psk(state, crypto, valid_cred_i, id_cred_psk, cred_r, &salt_4e3m)?,
+        ProcessingM3MethodSpecifics::SigSig {
+            signature_3: _,
+            id_cred_i: _,
+        } => todo!(),
     };
 
     let mut prk_out: BytesHashLen = Default::default();
@@ -423,6 +429,7 @@ pub fn i_prepare_message_3(
         ProcessedM2MethodSpecifics::Psk { .. } => {
             i_prepare_message_3_psk(state, crypto, cred_i, cred_transfer, ead_3)?
         }
+        ProcessedM2MethodSpecifics::SigSig { i: _ } => todo!(),
     };
 
     let mut prk_out: BytesHashLen = Default::default();
