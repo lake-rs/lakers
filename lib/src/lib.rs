@@ -41,6 +41,7 @@ pub struct EdhocInitiatorWaitM2<Crypto: CryptoTrait> {
 #[derive(Debug)]
 pub struct EdhocInitiatorProcessingM2<Crypto: CryptoTrait> {
     state: ProcessingM2, // opaque state
+    method: EDHOCMethod,
     i: Option<InitiatorIdentity>,
     cred_i: Option<Credential>,
     crypto: Crypto,
@@ -118,6 +119,21 @@ pub enum InitiatorIdentity {
     Signature { i: BytesP256ElemLen },
     StaticDh { i: BytesP256ElemLen },
     Psk,
+}
+
+/// Rejects an identity whose authentication method disagrees with the EDHOC method
+/// announced in message_1.
+fn check_initiator_identity(
+    method: EDHOCMethod,
+    identity: &InitiatorIdentity,
+) -> Result<(), EDHOCError> {
+    match (method, identity) {
+        (EDHOCMethod::SigSig | EDHOCMethod::SigStat, InitiatorIdentity::Signature { .. })
+        | (EDHOCMethod::StatSig | EDHOCMethod::StatStat, InitiatorIdentity::StaticDh { .. })
+        | (EDHOCMethod::PSK, InitiatorIdentity::Psk) => Ok(()),
+        // FIXME: Distinguish `MissingIdentity` from `MethodIdentityMismatch` here;
+        _ => Err(EDHOCError::MissingIdentity),
+    }
 }
 
 impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
@@ -338,6 +354,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiator<Crypto> {
         if self.i.is_some() || self.cred_i.is_some() {
             return Err(EDHOCError::IdentityAlreadySet);
         }
+        check_initiator_identity(self.state.method, &identity)?;
         self.i = Some(identity);
         self.cred_i = Some(cred_i);
         Ok(())
@@ -387,6 +404,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorWaitM2<Crypto> {
             Ok((state, c_r, _details, ead_2)) => Ok((
                 EdhocInitiatorProcessingM2 {
                     state,
+                    method: self.state.method,
                     i: self.i,
                     cred_i: self.cred_i,
                     crypto: self.crypto,
@@ -408,6 +426,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessingM2<Crypto> {
         if self.i.is_some() || self.cred_i.is_some() {
             return Err(EDHOCError::IdentityAlreadySet);
         }
+        check_initiator_identity(self.method, &identity)?;
         self.i = Some(identity);
         self.cred_i = Some(cred_i);
         Ok(())
