@@ -163,7 +163,17 @@ pub fn r_prepare_message_2(
 
     let prepared = match (state.method, method_details) {
         (EDHOCMethod::SigSig, PrepareMessage2Details::Signature { r, cred_transfer }) => {
-            r_prepare_message_2_sig(crypto, cred_r, r, c_r, cred_transfer, ead_2, &th_2, &prk_2e)?
+            r_prepare_message_2_sig(
+                crypto,
+                cred_r,
+                r,
+                c_r,
+                cred_transfer,
+                ead_2,
+                &th_2,
+                &prk_2e,
+                &state.method,
+            )?
         }
         (EDHOCMethod::StatStat, PrepareMessage2Details::StaticDh { r, cred_transfer }) => {
             r_prepare_message_2_stat(
@@ -176,6 +186,7 @@ pub fn r_prepare_message_2(
                 ead_2,
                 &th_2,
                 &prk_2e,
+                &state.method,
             )?
         }
         (EDHOCMethod::PSK, PrepareMessage2Details::Psk) => {

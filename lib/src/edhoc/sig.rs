@@ -1,3 +1,5 @@
+use core::unreachable;
+
 use lakers_shared::{decode_plaintext_2_sig, decode_plaintext_3_sig, BytesMacSig, BytesSignature};
 
 use crate::edhoc::encode_sig_structure;
@@ -6,10 +8,11 @@ use super::{
     compute_mac_2, compute_mac_3, compute_th_3, compute_th_4, decrypt_message_3,
     encode_plaintext_2, encode_plaintext_3, encrypt_message_3, BufferMessage3, BufferPlaintext2,
     BytesHashLen, BytesP256ElemLen, ConnId, Credential, CredentialKey, CredentialTransfer,
-    Crypto as CryptoTrait, DecodedMessage2, EDHOCError, EadItems, IdCred, ParsedMessage2Details,
-    ParsedMessage3, PreparedMessage2, PreparedMessage3, ProcessedM2, ProcessedM2MethodSpecifics,
-    ProcessingM2, ProcessingM2MethodSpecifics, ProcessingM3, ProcessingM3MethodSpecifics, Th4Input,
-    VerifiedMessage2, VerifiedMessage3, WaitM3, WaitM3MethodSpecifics,
+    Crypto as CryptoTrait, DecodedMessage2, EDHOCError, EDHOCMethod, EadItems, IdCred,
+    ParsedMessage2Details, ParsedMessage3, PreparedMessage2, PreparedMessage3, ProcessedM2,
+    ProcessedM2MethodSpecifics, ProcessingM2, ProcessingM2MethodSpecifics, ProcessingM3,
+    ProcessingM3MethodSpecifics, Th4Input, VerifiedMessage2, VerifiedMessage3, WaitM3,
+    WaitM3MethodSpecifics,
 };
 
 pub(crate) fn r_prepare_message_2_sig(
@@ -21,6 +24,7 @@ pub(crate) fn r_prepare_message_2_sig(
     ead_2: &EadItems,
     th_2: &BytesHashLen,
     prk_2e: &BytesHashLen,
+    edhoc_method: &EDHOCMethod,
 ) -> Result<PreparedMessage2, EDHOCError> {
     // no static ECDH: PRK_3e2m is PRK_2e directly
     let prk_3e2m = *prk_2e;
@@ -60,11 +64,19 @@ pub(crate) fn r_prepare_message_2_sig(
 
     let th_3 = compute_th_3(crypto, th_2, &plaintext_2, Some(cred_r.bytes.as_slice()));
 
+    // R authenticates with a signature here; the arm depends on how I will
+    // authenticate in message_3
+    let method_specifics = match edhoc_method {
+        EDHOCMethod::SigSig => WaitM3MethodSpecifics::Signature {},
+        EDHOCMethod::StatSig => WaitM3MethodSpecifics::StaticDh {},
+        _ => unreachable!("r_prepare_message_2_sig must be used only when r is sig"),
+    };
+
     Ok(PreparedMessage2 {
         plaintext_2,
         prk_3e2m,
         th_3,
-        method_specifics: WaitM3MethodSpecifics::Signature {},
+        method_specifics,
     })
 }
 

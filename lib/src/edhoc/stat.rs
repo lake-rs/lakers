@@ -3,11 +3,11 @@ use super::{
     compute_salt_4e3m, compute_th_3, compute_th_4, decode_plaintext_2, decode_plaintext_3,
     decrypt_message_3, encode_plaintext_2, encode_plaintext_3, encrypt_message_3, BufferMessage3,
     BufferPlaintext2, BytesHashLen, BytesMac3, BytesP256ElemLen, ConnId, Credential, CredentialKey,
-    CredentialTransfer, DecodedMessage2, EDHOCError, EadItems, IdCred, ParsedMessage2Details,
-    ParsedMessage3, PreparedMessage2, PreparedMessage3, ProcessedM2, ProcessedM2MethodSpecifics,
-    ProcessingM1, ProcessingM2, ProcessingM2MethodSpecifics, ProcessingM3,
-    ProcessingM3MethodSpecifics, Th4Input, VerifiedMessage2, VerifiedMessage3, WaitM3,
-    WaitM3MethodSpecifics,
+    CredentialTransfer, DecodedMessage2, EDHOCError, EDHOCMethod, EadItems, IdCred,
+    ParsedMessage2Details, ParsedMessage3, PreparedMessage2, PreparedMessage3, ProcessedM2,
+    ProcessedM2MethodSpecifics, ProcessingM1, ProcessingM2, ProcessingM2MethodSpecifics,
+    ProcessingM3, ProcessingM3MethodSpecifics, Th4Input, VerifiedMessage2, VerifiedMessage3,
+    WaitM3, WaitM3MethodSpecifics,
 };
 use lakers_shared::{BytesMac2, Crypto as CryptoTrait};
 pub(crate) fn r_prepare_message_2_stat(
@@ -20,6 +20,7 @@ pub(crate) fn r_prepare_message_2_stat(
     ead_2: &EadItems,
     th_2: &BytesHashLen,
     prk_2e: &BytesHashLen,
+    edhoc_method: &EDHOCMethod,
 ) -> Result<PreparedMessage2, EDHOCError> {
     // compute prk_3e2m
     let salt_3e2m = compute_salt_3e2m(crypto, &prk_2e, &th_2);
@@ -51,11 +52,17 @@ pub(crate) fn r_prepare_message_2_stat(
     // but we do it here to avoid storing plaintext_2 in State
     let th_3 = compute_th_3(crypto, &th_2, &plaintext_2, Some(cred_r.bytes.as_slice()));
 
+    let method_specifics = match edhoc_method {
+        EDHOCMethod::SigStat => WaitM3MethodSpecifics::Signature {},
+        EDHOCMethod::StatStat => WaitM3MethodSpecifics::StaticDh {},
+        _ => unreachable!("r_prepare_message_2_stat must be used only when r is stat"),
+    };
+
     Ok(PreparedMessage2 {
         plaintext_2,
         prk_3e2m,
         th_3,
-        method_specifics: WaitM3MethodSpecifics::StaticDh {},
+        method_specifics,
     })
 }
 
