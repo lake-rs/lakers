@@ -121,7 +121,11 @@ pub fn r_process_message_1(
         let method = EDHOCMethod::try_from(method)?;
 
         match method {
-            EDHOCMethod::SigSig | EDHOCMethod::StatStat | EDHOCMethod::PSK => {
+            EDHOCMethod::SigSig
+            | EDHOCMethod::StatStat
+            | EDHOCMethod::SigStat
+            | EDHOCMethod::StatSig
+            | EDHOCMethod::PSK => {
                 // Step 2: verify that the selected cipher suite is supported
                 if suites_i[suites_i.len() - 1] == EDHOC_SUPPORTED_SUITES[0] {
                     // hash message_1 and save the hash to the state to avoid saving the whole message
@@ -162,33 +166,35 @@ pub fn r_prepare_message_2(
     let prk_2e = compute_prk_2e(crypto, &state.y, &state.g_x, &th_2);
 
     let prepared = match (state.method, method_details) {
-        (EDHOCMethod::SigSig, PrepareMessage2Details::Signature { r, cred_transfer }) => {
-            r_prepare_message_2_sig(
-                crypto,
-                cred_r,
-                r,
-                c_r,
-                cred_transfer,
-                ead_2,
-                &th_2,
-                &prk_2e,
-                &state.method,
-            )?
-        }
-        (EDHOCMethod::StatStat, PrepareMessage2Details::StaticDh { r, cred_transfer }) => {
-            r_prepare_message_2_stat(
-                state,
-                crypto,
-                cred_r,
-                r,
-                c_r,
-                cred_transfer,
-                ead_2,
-                &th_2,
-                &prk_2e,
-                &state.method,
-            )?
-        }
+        (
+            EDHOCMethod::SigSig | EDHOCMethod::StatSig,
+            PrepareMessage2Details::Signature { r, cred_transfer },
+        ) => r_prepare_message_2_sig(
+            crypto,
+            cred_r,
+            r,
+            c_r,
+            cred_transfer,
+            ead_2,
+            &th_2,
+            &prk_2e,
+            &state.method,
+        )?,
+        (
+            EDHOCMethod::SigStat | EDHOCMethod::StatStat,
+            PrepareMessage2Details::StaticDh { r, cred_transfer },
+        ) => r_prepare_message_2_stat(
+            state,
+            crypto,
+            cred_r,
+            r,
+            c_r,
+            cred_transfer,
+            ead_2,
+            &th_2,
+            &prk_2e,
+            &state.method,
+        )?,
         (EDHOCMethod::PSK, PrepareMessage2Details::Psk) => {
             r_prepare_message_2_psk(crypto, cred_r, c_r, ead_2, &th_2, &prk_2e)?
         }
@@ -381,8 +387,8 @@ pub fn i_parse_message_2<'a>(
     let plaintext_2 = encrypt_decrypt_ciphertext_2(crypto, &prk_2e, &th_2, &ciphertext_2);
 
     let decoded = match state.method {
-        EDHOCMethod::SigSig => i_parse_message_2_sig(&plaintext_2),
-        EDHOCMethod::StatStat => i_parse_message_2_stat(&plaintext_2),
+        EDHOCMethod::SigSig | EDHOCMethod::StatSig => i_parse_message_2_sig(&plaintext_2),
+        EDHOCMethod::SigStat | EDHOCMethod::StatStat => i_parse_message_2_stat(&plaintext_2),
         EDHOCMethod::PSK => i_parse_message_2_psk(&plaintext_2),
         _ => Err(EDHOCError::UnsupportedMethod),
     }?;
