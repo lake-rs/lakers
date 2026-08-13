@@ -172,7 +172,7 @@ impl ProcessingM2C {
                 // `self.method_specifics.kind == ProcessingM2MethodSpecificsKindC::Pm2StatStat`,
                 // so `data.statstat` is the active variant.
                 let stat = unsafe { &self.method_specifics.data.statstat };
-                ProcessingM2MethodSpecifics::StatStat {
+                ProcessingM2MethodSpecifics::StaticDh {
                     mac_2: stat.mac_2,
                     id_cred_r: stat.id_cred_r.clone(),
                 }
@@ -209,7 +209,7 @@ impl ProcessingM2C {
         (*processing_m2_c).c_r = c_r[0];
 
         match processing_m2.method_specifics {
-            ProcessingM2MethodSpecifics::StatStat { mac_2, id_cred_r } => {
+            ProcessingM2MethodSpecifics::StaticDh { mac_2, id_cred_r } => {
                 (*processing_m2_c).method_specifics = ProcessingM2MethodSpecificsC {
                     kind: ProcessingM2MethodSpecificsKindC::Pm2StatStat,
                     data: ProcessingM2MethodSpecificsDataC {
@@ -229,7 +229,7 @@ impl ProcessingM2C {
                 };
             }
             // TODO: SigSig support for the C bindings
-            ProcessingM2MethodSpecifics::SigSig { .. } => todo!(),
+            ProcessingM2MethodSpecifics::Signature { .. } => todo!(),
         }
     }
 }
@@ -317,7 +317,7 @@ impl ProcessedM2C {
     pub fn to_rust(&self) -> ProcessedM2 {
         let method_specifics = match self.method_specifics.kind {
             ProcessedM2MethodSpecificsKindC::Prm2StatStat => {
-                ProcessedM2MethodSpecifics::StatStat {}
+                ProcessedM2MethodSpecifics::StaticDh {}
             }
             ProcessedM2MethodSpecificsKindC::Prm2Psk => {
                 // SAFETY: Accessing a union field is unsafe. We just matched on
@@ -348,7 +348,7 @@ impl ProcessedM2C {
         (*processed_m2_c).th_3 = processed_m2.th_3;
 
         match processed_m2.method_specifics {
-            ProcessedM2MethodSpecifics::StatStat {} => {
+            ProcessedM2MethodSpecifics::StaticDh {} => {
                 (*processed_m2_c).method_specifics = ProcessedM2MethodSpecificsC {
                     kind: ProcessedM2MethodSpecificsKindC::Prm2StatStat,
                     data: ProcessedM2MethodSpecificsDataC {
@@ -368,7 +368,7 @@ impl ProcessedM2C {
                 };
             }
             // TODO: SigSig support for the C bindings
-            ProcessedM2MethodSpecifics::SigSig { .. } => todo!(),
+            ProcessedM2MethodSpecifics::Signature { .. } => todo!(),
         }
     }
 }

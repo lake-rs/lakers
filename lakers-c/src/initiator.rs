@@ -177,12 +177,12 @@ pub unsafe extern "C" fn initiator_verify_message_2(
     };
 
     let valid_cred_r = match &state.method_specifics {
-        ProcessingM2MethodSpecifics::StatStat { id_cred_r, .. } => {
+        ProcessingM2MethodSpecifics::StaticDh { id_cred_r, .. } => {
             lakers::credential_check_or_fetch(cred_expected, id_cred_r.clone())
         }
         ProcessingM2MethodSpecifics::Psk {} => cred_expected.ok_or(EDHOCError::MissingIdentity),
         // TODO: SigSig support for the C bindings
-        ProcessingM2MethodSpecifics::SigSig { .. } => todo!(),
+        ProcessingM2MethodSpecifics::Signature { .. } => todo!(),
     };
 
     match valid_cred_r

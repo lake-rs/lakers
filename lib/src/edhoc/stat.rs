@@ -55,7 +55,7 @@ pub(crate) fn r_prepare_message_2_stat(
         plaintext_2,
         prk_3e2m,
         th_3,
-        method_specifics: WaitM3MethodSpecifics::StatStat {},
+        method_specifics: WaitM3MethodSpecifics::StaticDh {},
     })
 }
 
@@ -71,7 +71,7 @@ pub(crate) fn r_parse_message_3_stat(
 
         if let Ok((id_cred_i, mac_3, ead_3)) = decoded_p3_res {
             Ok(ParsedMessage3 {
-                method_specifics: ProcessingM3MethodSpecifics::StatStat {
+                method_specifics: ProcessingM3MethodSpecifics::StaticDh {
                     mac_3,
                     id_cred_i: id_cred_i.clone(), // needed for compute_mac_3
                 },
@@ -137,12 +137,12 @@ pub(crate) fn i_parse_message_2_stat(
     let (c_r, id_cred_r, mac_2, ead_2) = decode_plaintext_2(plaintext_2)?;
 
     Ok(DecodedMessage2 {
-        method_specifics: ProcessingM2MethodSpecifics::StatStat {
+        method_specifics: ProcessingM2MethodSpecifics::StaticDh {
             mac_2,
             id_cred_r: id_cred_r.clone(),
         },
         c_r,
-        parsed_details: ParsedMessage2Details::StatStat { id_cred_r },
+        parsed_details: ParsedMessage2Details::StaticDh { id_cred_r },
         ead_2,
     })
 }
@@ -165,7 +165,7 @@ pub(crate) fn i_verify_message_2_stat(
     };
 
     let (id_cred_r, mac_2) = match &state.method_specifics {
-        ProcessingM2MethodSpecifics::StatStat { id_cred_r, mac_2 } => (id_cred_r, *mac_2),
+        ProcessingM2MethodSpecifics::StaticDh { id_cred_r, mac_2 } => (id_cred_r, *mac_2),
         // FIXME: the error is not accurate. It is a lack of agreement between peers.
         _ => return Err(EDHOCError::UnsupportedMethod),
     };
@@ -193,7 +193,7 @@ pub(crate) fn i_verify_message_2_stat(
         let prk_4e3m = compute_prk_4e3m(crypto, &salt_4e3m, i, &state.g_y);
 
         Ok(VerifiedMessage2 {
-            method_specifics: ProcessedM2MethodSpecifics::StatStat {},
+            method_specifics: ProcessedM2MethodSpecifics::StaticDh {},
             prk_3e2m,
             prk_4e3m,
             th_3,

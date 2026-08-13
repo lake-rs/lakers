@@ -117,10 +117,10 @@ impl PyEdhocInitiator {
         let (state, c_r, details, ead_2) =
             i_parse_message_2(&self.take_wait_m2()?, &mut default_crypto(), &message_2)?;
         let id_cred_r = match details {
-            ParsedMessage2Details::StatStat { id_cred_r } => id_cred_r,
+            ParsedMessage2Details::StaticDh { id_cred_r } => id_cred_r,
             ParsedMessage2Details::Psk {} => IdCred::new(),
             // TODO: SigSig support for the Python bindings
-            ParsedMessage2Details::SigSig { .. } => todo!(),
+            ParsedMessage2Details::Signature { .. } => todo!(),
         };
         self.processing_m2 = Some(state);
         Ok((

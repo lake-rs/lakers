@@ -168,10 +168,10 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM1<Crypto> {
 
         let method_details = match (self.state.method, &self.r) {
             (EDHOCMethod::StatStat, ResponderIdentity::StatStat { r }) => {
-                PrepareMessage2Details::StatStat { r, cred_transfer }
+                PrepareMessage2Details::StaticDh { r, cred_transfer }
             }
             (EDHOCMethod::SigSig, ResponderIdentity::SigSig { r }) => {
-                PrepareMessage2Details::SigSig { r, cred_transfer }
+                PrepareMessage2Details::Signature { r, cred_transfer }
             }
             (EDHOCMethod::PSK, ResponderIdentity::Psk) => PrepareMessage2Details::Psk {},
             // FIXME: Distinguish `MissingIdentity` from `MethodIdentityMismatch` here;
@@ -420,8 +420,8 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessingM2<Crypto> {
         trace!("Enter verify_message_2");
         let i = self.i.ok_or(EDHOCError::MissingIdentity)?;
         let valid_cred_r = match &self.state.method_specifics {
-            ProcessingM2MethodSpecifics::SigSig { id_cred_r, .. }
-            | ProcessingM2MethodSpecifics::StatStat { id_cred_r, .. } => {
+            ProcessingM2MethodSpecifics::Signature { id_cred_r, .. }
+            | ProcessingM2MethodSpecifics::StaticDh { id_cred_r, .. } => {
                 credential_check_or_fetch(cred_expected, id_cred_r.clone())?
             }
             ProcessingM2MethodSpecifics::Psk {} => {

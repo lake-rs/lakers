@@ -126,7 +126,7 @@ impl PyEdhocResponder {
                     &mut default_crypto(),
                     // FIXME: take as reference rather than cloning
                     self.cred_r.clone(),
-                    PrepareMessage2Details::StatStat {
+                    PrepareMessage2Details::StaticDh {
                         r: &r,
                         cred_transfer,
                     },
@@ -180,10 +180,10 @@ impl PyEdhocResponder {
         // Message 3 parsing has already established which method is in use, so reuse that to
         // parse the initiator credential with the correct CCS vs symmetric-CCS parser.
         let method = match &self.as_ref_processing_m3()?.method_specifics {
-            ProcessingM3MethodSpecifics::StatStat { .. } => EDHOCMethod::StatStat,
+            ProcessingM3MethodSpecifics::StaticDh { .. } => EDHOCMethod::StatStat,
             ProcessingM3MethodSpecifics::Psk { .. } => EDHOCMethod::PSK,
             // TODO: SigSig support for the Python bindings
-            ProcessingM3MethodSpecifics::SigSig { .. } => EDHOCMethod::SigSig,
+            ProcessingM3MethodSpecifics::Signature { .. } => EDHOCMethod::SigSig,
         };
         let valid_cred_i = super::parse_credential(method, valid_cred_i)
             .with_cause(py, "Failed to ingest CRED_I")?;

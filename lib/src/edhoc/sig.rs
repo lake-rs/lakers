@@ -64,7 +64,7 @@ pub(crate) fn r_prepare_message_2_sig(
         plaintext_2,
         prk_3e2m,
         th_3,
-        method_specifics: WaitM3MethodSpecifics::SigSig {},
+        method_specifics: WaitM3MethodSpecifics::Signature {},
     })
 }
 
@@ -77,7 +77,7 @@ pub(crate) fn r_parse_message_3_sig(
 
     let (id_cred_i, signature_3, ead_3) = decode_plaintext_3_sig(&plaintext_3)?;
     Ok(ParsedMessage3 {
-        method_specifics: ProcessingM3MethodSpecifics::SigSig {
+        method_specifics: ProcessingM3MethodSpecifics::Signature {
             signature_3,
             id_cred_i: id_cred_i.clone(),
         },
@@ -144,12 +144,12 @@ pub(crate) fn i_parse_message_2_sig(
 ) -> Result<DecodedMessage2, EDHOCError> {
     let (c_r, id_cred_r, signature_2, ead_2) = decode_plaintext_2_sig(plaintext_2)?;
     Ok(DecodedMessage2 {
-        method_specifics: ProcessingM2MethodSpecifics::SigSig {
+        method_specifics: ProcessingM2MethodSpecifics::Signature {
             signature_2,
             id_cred_r: id_cred_r.clone(),
         },
         c_r,
-        parsed_details: ParsedMessage2Details::SigSig { id_cred_r },
+        parsed_details: ParsedMessage2Details::Signature { id_cred_r },
         ead_2,
     })
 }
@@ -167,7 +167,7 @@ pub(crate) fn i_verify_message_2_sig(
     };
 
     let (id_cred_r, signature_2) = match &state.method_specifics {
-        ProcessingM2MethodSpecifics::SigSig {
+        ProcessingM2MethodSpecifics::Signature {
             id_cred_r,
             signature_2,
         } => (id_cred_r, signature_2),
@@ -212,7 +212,7 @@ pub(crate) fn i_verify_message_2_sig(
 
         Ok(VerifiedMessage2 {
             // the initiator's signing key is needed again when producing Signature_or_MAC_3
-            method_specifics: ProcessedM2MethodSpecifics::SigSig { i },
+            method_specifics: ProcessedM2MethodSpecifics::Signature { i },
             // method_specifics: ProcessedM2MethodSpecifics::SigSig { i: i.clone() },
             prk_3e2m,
             prk_4e3m,
@@ -235,7 +235,7 @@ pub(crate) fn i_prepare_message_3_sig(
         CredentialTransfer::ByReference => cred_i.by_kid()?,
     };
 
-    let ProcessedM2MethodSpecifics::SigSig { i } = &state.method_specifics else {
+    let ProcessedM2MethodSpecifics::Signature { i } = &state.method_specifics else {
         return Err(EDHOCError::UnsupportedMethod);
     };
 

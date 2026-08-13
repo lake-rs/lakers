@@ -162,10 +162,10 @@ pub fn r_prepare_message_2(
     let prk_2e = compute_prk_2e(crypto, &state.y, &state.g_x, &th_2);
 
     let prepared = match (state.method, method_details) {
-        (EDHOCMethod::SigSig, PrepareMessage2Details::SigSig { r, cred_transfer }) => {
+        (EDHOCMethod::SigSig, PrepareMessage2Details::Signature { r, cred_transfer }) => {
             r_prepare_message_2_sig(crypto, cred_r, r, c_r, cred_transfer, ead_2, &th_2, &prk_2e)?
         }
-        (EDHOCMethod::StatStat, PrepareMessage2Details::StatStat { r, cred_transfer }) => {
+        (EDHOCMethod::StatStat, PrepareMessage2Details::StaticDh { r, cred_transfer }) => {
             r_prepare_message_2_stat(
                 state,
                 crypto,
@@ -210,8 +210,8 @@ pub fn r_parse_message_3(
     message_3: &BufferMessage3,
 ) -> Result<(ProcessingM3, IdCred, EadItems), EDHOCError> {
     let parsed = match &state.method_specifics {
-        WaitM3MethodSpecifics::SigSig {} => r_parse_message_3_sig(state, crypto, message_3)?,
-        WaitM3MethodSpecifics::StatStat {} => r_parse_message_3_stat(state, crypto, message_3)?,
+        WaitM3MethodSpecifics::Signature {} => r_parse_message_3_sig(state, crypto, message_3)?,
+        WaitM3MethodSpecifics::StaticDh {} => r_parse_message_3_stat(state, crypto, message_3)?,
         WaitM3MethodSpecifics::Psk { cred_r } => {
             r_parse_message_3_psk(state, crypto, message_3, cred_r)?
         }
@@ -241,8 +241,8 @@ where
     F: Fn(&IdCred) -> Result<Credential, EDHOCError>,
 {
     let parsed = match &state.method_specifics {
-        WaitM3MethodSpecifics::SigSig {} => r_parse_message_3_sig(state, crypto, message_3)?,
-        WaitM3MethodSpecifics::StatStat {} => r_parse_message_3_stat(state, crypto, message_3)?,
+        WaitM3MethodSpecifics::Signature {} => r_parse_message_3_sig(state, crypto, message_3)?,
+        WaitM3MethodSpecifics::StaticDh {} => r_parse_message_3_stat(state, crypto, message_3)?,
         WaitM3MethodSpecifics::Psk { cred_r } => r_parse_message_3_psk_with_cred_resolver(
             state,
             crypto,
@@ -272,11 +272,11 @@ pub fn r_verify_message_3(
     valid_cred_i: Credential,
 ) -> Result<(ProcessedM3, BytesHashLen), EDHOCError> {
     let verified = match &state.method_specifics {
-        ProcessingM3MethodSpecifics::SigSig {
+        ProcessingM3MethodSpecifics::Signature {
             signature_3,
             id_cred_i,
         } => r_verify_message_3_sig(state, crypto, valid_cred_i, signature_3, id_cred_i)?,
-        ProcessingM3MethodSpecifics::StatStat { mac_3, id_cred_i } => {
+        ProcessingM3MethodSpecifics::StaticDh { mac_3, id_cred_i } => {
             let salt_4e3m = compute_salt_4e3m(crypto, &state.prk_3e2m, &state.th_3);
             r_verify_message_3_stat(state, crypto, valid_cred_i, *mac_3, id_cred_i, &salt_4e3m)?
         }
@@ -404,10 +404,10 @@ pub fn i_verify_message_2(
     // the method-specific derivation in the child modules and only shares the final
     // `ProcessedM2` assembly here.
     let verified = match (&state.method_specifics, &i) {
-        (ProcessingM2MethodSpecifics::SigSig { .. }, InitiatorIdentity::SigSig { i }) => {
+        (ProcessingM2MethodSpecifics::Signature { .. }, InitiatorIdentity::SigSig { i }) => {
             i_verify_message_2_sig(state, crypto, valid_cred_r, *i)?
         }
-        (ProcessingM2MethodSpecifics::StatStat { .. }, InitiatorIdentity::StatStat { i }) => {
+        (ProcessingM2MethodSpecifics::StaticDh { .. }, InitiatorIdentity::StatStat { i }) => {
             i_verify_message_2_stat(state, crypto, valid_cred_r, i)?
         }
         (ProcessingM2MethodSpecifics::Psk { .. }, InitiatorIdentity::Psk) => {
@@ -433,10 +433,10 @@ pub fn i_prepare_message_3(
     ead_3: &EadItems,
 ) -> Result<(WaitM4, BufferMessage3, BytesHashLen), EDHOCError> {
     let prepared = match state.method_specifics {
-        ProcessedM2MethodSpecifics::SigSig { .. } => {
+        ProcessedM2MethodSpecifics::Signature { .. } => {
             i_prepare_message_3_sig(state, crypto, cred_i, cred_transfer, ead_3)?
         }
-        ProcessedM2MethodSpecifics::StatStat { .. } => {
+        ProcessedM2MethodSpecifics::StaticDh { .. } => {
             i_prepare_message_3_stat(state, crypto, cred_i, cred_transfer, ead_3)?
         }
         ProcessedM2MethodSpecifics::Psk { .. } => {
