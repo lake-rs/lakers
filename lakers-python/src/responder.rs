@@ -47,12 +47,12 @@ impl PyEdhocResponder {
         let r = r.unwrap_or_default();
 
         let cred_r = match parse_responder_identity(&r) {
-            Ok(ResponderIdentity::StatStat { .. }) => {
+            Ok(ResponderIdentity::StaticDh { .. }) => {
                 super::parse_credential(EDHOCMethod::StatStat, cred_r)
             }
             Ok(ResponderIdentity::Psk) => super::parse_credential(EDHOCMethod::PSK, cred_r),
             // TODO: SigSig support for the Python bindings
-            Ok(ResponderIdentity::SigSig { .. }) => todo!(),
+            Ok(ResponderIdentity::Signature { .. }) => todo!(),
             Err(err) => Err(err),
         }
         .with_cause(py, "Failed to ingest CRED_R")?;
@@ -380,6 +380,6 @@ fn parse_responder_identity(r: &[u8]) -> Result<ResponderIdentity, EDHOCError> {
     } else {
         // A present `r` means the Python caller wants the stat-stat responder identity.
         let identity: BytesP256ElemLen = r.try_into().map_err(|_| EDHOCError::ParsingError)?;
-        Ok(ResponderIdentity::StatStat { r: identity })
+        Ok(ResponderIdentity::StaticDh { r: identity })
     }
 }

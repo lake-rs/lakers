@@ -113,7 +113,7 @@ fn main() -> ! {
         );
         let responder = EdhocResponder::new(
             lakers_crypto::default_crypto(),
-            ResponderIdentity::StatStat {
+            ResponderIdentity::StaticDh {
                 r: R.try_into().expect("Wrong length of responder private key"),
             },
             cred_r.clone(),
@@ -129,7 +129,7 @@ fn main() -> ! {
         let (mut initiator, _c_r, _ead_2) = initiator.parse_message_2(&message_2).unwrap();
         initiator
             .set_identity(
-                InitiatorIdentity::StatStat {
+                InitiatorIdentity::StaticDh {
                     i: I.try_into().expect("Wrong length of initiator private key"),
                 },
                 cred_i.clone(),

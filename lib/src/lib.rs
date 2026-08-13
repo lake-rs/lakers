@@ -108,15 +108,15 @@ pub struct EdhocResponderDone<Crypto: CryptoTrait> {
 
 #[derive(Debug)]
 pub enum ResponderIdentity {
-    SigSig { r: BytesP256ElemLen },
-    StatStat { r: BytesP256ElemLen },
+    Signature { r: BytesP256ElemLen },
+    StaticDh { r: BytesP256ElemLen },
     Psk,
 }
 
 #[derive(Debug)]
 pub enum InitiatorIdentity {
-    SigSig { i: BytesP256ElemLen },
-    StatStat { i: BytesP256ElemLen },
+    Signature { i: BytesP256ElemLen },
+    StaticDh { i: BytesP256ElemLen },
     Psk,
 }
 
@@ -167,10 +167,10 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM1<Crypto> {
         };
 
         let method_details = match (self.state.method, &self.r) {
-            (EDHOCMethod::SigStat | EDHOCMethod::StatStat, ResponderIdentity::StaticDh { r }) => {
+            (EDHOCMethod::StatStat, ResponderIdentity::StaticDh { r }) => {
                 PrepareMessage2Details::StaticDh { r, cred_transfer }
             }
-            (EDHOCMethod::SigSig | EDHOCMethod::StatSig, ResponderIdentity::Signature { r }) => {
+            (EDHOCMethod::SigSig, ResponderIdentity::Signature { r }) => {
                 PrepareMessage2Details::Signature { r, cred_transfer }
             }
             (EDHOCMethod::PSK, ResponderIdentity::Psk) => PrepareMessage2Details::Psk {},
@@ -666,7 +666,7 @@ mod test {
     fn test_new_responder() {
         let _responder = EdhocResponder::new(
             default_crypto(),
-            ResponderIdentity::StatStat {
+            ResponderIdentity::StaticDh {
                 r: R.try_into().expect("Wrong length of responder private key"),
             },
             Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap(),
@@ -690,7 +690,7 @@ mod test {
     fn test_process_message_1() {
         let responder = EdhocResponder::new(
             default_crypto(),
-            ResponderIdentity::StatStat {
+            ResponderIdentity::StaticDh {
                 r: R.try_into().expect("Wrong length of responder private key"),
             },
             Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap(),
@@ -705,7 +705,7 @@ mod test {
         // responder or initiator
         let responder = EdhocResponder::new(
             default_crypto(),
-            ResponderIdentity::StatStat {
+            ResponderIdentity::StaticDh {
                 r: R.try_into().expect("Wrong length of responder private key"),
             },
             Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap(),
@@ -736,7 +736,7 @@ mod test {
 
         let responder = EdhocResponder::new(
             default_crypto(),
-            ResponderIdentity::StatStat {
+            ResponderIdentity::StaticDh {
                 r: R.try_into().expect("Wrong length of responder private key"),
             },
             cred_r.clone(),
@@ -760,7 +760,7 @@ mod test {
         let (mut initiator, _c_r, _ead_2) = initiator.parse_message_2(&message_2).unwrap();
         initiator
             .set_identity(
-                InitiatorIdentity::StatStat {
+                InitiatorIdentity::StaticDh {
                     i: I.try_into().expect("Wrong length of initiator private key"),
                 },
                 cred_i.clone(),
@@ -884,7 +884,7 @@ mod test {
 
         let responder = EdhocResponder::new(
             default_crypto(),
-            ResponderIdentity::SigSig {
+            ResponderIdentity::Signature {
                 r: R.try_into().expect("Wrong length of responder private key"),
             },
             cred_r.clone(),
@@ -900,7 +900,7 @@ mod test {
         let (mut initiator, _c_r, _ead_2) = initiator.parse_message_2(&message_2).unwrap();
         initiator
             .set_identity(
-                InitiatorIdentity::SigSig {
+                InitiatorIdentity::Signature {
                     i: I.try_into().expect("Wrong length of initiator private key"),
                 },
                 cred_i.clone(),
@@ -950,7 +950,7 @@ mod test {
 
         let responder = EdhocResponder::new(
             default_crypto(),
-            ResponderIdentity::SigSig {
+            ResponderIdentity::Signature {
                 r: R.try_into().expect("Wrong length of responder private key"),
             },
             cred_r.clone(),
@@ -972,7 +972,7 @@ mod test {
         let (mut initiator, _c_r, _ead_2) = initiator.parse_message_2(&message_2).unwrap();
         initiator
             .set_identity(
-                InitiatorIdentity::SigSig {
+                InitiatorIdentity::Signature {
                     i: I.try_into().expect("Wrong length of initiator private key"),
                 },
                 Credential::parse_ccs(CRED_I.try_into().unwrap()).unwrap(),
@@ -1045,7 +1045,7 @@ mod test_authz {
         );
         let responder = EdhocResponder::new(
             default_crypto(),
-            ResponderIdentity::StatStat {
+            ResponderIdentity::StaticDh {
                 r: R.try_into().expect("Wrong length of responder private key"),
             },
             cred_r.clone(),
@@ -1110,7 +1110,7 @@ mod test_authz {
         assert!(result.is_ok());
         initiator
             .set_identity(
-                InitiatorIdentity::StatStat {
+                InitiatorIdentity::StaticDh {
                     i: I.try_into().expect("Wrong length of initiator private key"),
                 },
                 cred_i.clone(),

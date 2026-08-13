@@ -164,7 +164,7 @@ pub unsafe extern "C" fn initiator_verify_message_2(
             if i.is_null() {
                 return -1;
             }
-            InitiatorIdentity::StatStat { i: *i }
+            InitiatorIdentity::StaticDh { i: *i }
         }
         EDHOCMethod::PSK => InitiatorIdentity::Psk {},
         _ => return -1,
@@ -369,7 +369,7 @@ mod tests {
         let responder = match method {
             EDHOCMethod::StatStat => EdhocResponder::new(
                 default_crypto(),
-                ResponderIdentity::StatStat { r: R_STATSTAT },
+                ResponderIdentity::StaticDh { r: R_STATSTAT },
                 Credential::parse_ccs(CRED_R_STATSTAT.try_into().unwrap()).unwrap(),
             ),
             EDHOCMethod::PSK => EdhocResponder::new(
@@ -520,7 +520,7 @@ mod tests {
 
         let responder = EdhocResponder::new(
             default_crypto(),
-            ResponderIdentity::StatStat { r: R_STATSTAT },
+            ResponderIdentity::StaticDh { r: R_STATSTAT },
             Credential::parse_ccs(CRED_R_STATSTAT.try_into().unwrap()).unwrap(),
         );
         let (responder, _c_i, _ead_1) = responder.process_message_1(&message_1).unwrap();

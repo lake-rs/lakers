@@ -154,7 +154,7 @@ impl PyEdhocInitiator {
                 let i = i.ok_or_else(|| {
                     PyValueError::new_err("StatStat requires initiator private key I")
                 })?;
-                InitiatorIdentity::StatStat {
+                InitiatorIdentity::StaticDh {
                     i: i.as_slice()
                         .try_into()
                         .map_err(|_| EDHOCError::ParsingError)?,

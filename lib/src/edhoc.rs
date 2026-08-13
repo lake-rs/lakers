@@ -421,10 +421,10 @@ pub fn i_verify_message_2(
     // the method-specific derivation in the child modules and only shares the final
     // `ProcessedM2` assembly here.
     let verified = match (&state.method_specifics, &i) {
-        (ProcessingM2MethodSpecifics::Signature { .. }, InitiatorIdentity::SigSig { i }) => {
+        (ProcessingM2MethodSpecifics::Signature { .. }, InitiatorIdentity::Signature { i }) => {
             i_verify_message_2_sig(state, crypto, valid_cred_r, *i)?
         }
-        (ProcessingM2MethodSpecifics::StaticDh { .. }, InitiatorIdentity::StatStat { i }) => {
+        (ProcessingM2MethodSpecifics::StaticDh { .. }, InitiatorIdentity::StaticDh { i }) => {
             i_verify_message_2_stat(state, crypto, valid_cred_r, i)?
         }
         (ProcessingM2MethodSpecifics::Psk { .. }, InitiatorIdentity::Psk) => {
