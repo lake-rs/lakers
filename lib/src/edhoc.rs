@@ -48,6 +48,12 @@ struct VerifiedMessage2 {
     prk_4e3m: BytesHashLen,
     th_3: BytesHashLen,
 }
+
+#[derive(Debug)]
+struct VerifiedPeerMessage2 {
+    prk_3e2m: BytesHashLen,
+    th_3: BytesHashLen,
+}
 #[derive(Debug)]
 struct PreparedMessage3 {
     message_3: BufferMessage3,
@@ -416,29 +422,52 @@ pub fn i_verify_message_2(
     valid_cred_r: Credential,
     i: InitiatorIdentity, // I's static private DH key when required by method
 ) -> Result<ProcessedM2, EDHOCError> {
-    // The overall verification flow is shared across methods, but `prk_3e2m`,
-    // `th_3`, and `prk_4e3m` still depend on the EDHOC method, so the match keeps
-    // the method-specific derivation in the child modules and only shares the final
-    // `ProcessedM2` assembly here.
-    let verified = match (&state.method_specifics, &i) {
-        (ProcessingM2MethodSpecifics::Signature { .. }, InitiatorIdentity::Signature { i }) => {
-            i_verify_message_2_sig(state, crypto, valid_cred_r, *i)?
-        }
-        (ProcessingM2MethodSpecifics::StaticDh { .. }, InitiatorIdentity::StaticDh { i }) => {
-            i_verify_message_2_stat(state, crypto, valid_cred_r, i)?
-        }
+    // Verifying Signature_or_MAC_2 and deriving PRK_3e2m and TH_3 depends on how the
+    // responder authenticates; PRK_4e3m and the way message_3 will be authenticated
+    // depend on the initiator instead. Methods 1 and 2 combine the two independently,
+    // so the two axes are resolved one after the other rather than as one pair.
+    let peer_verified = match (&state.method_specifics, &i) {
         (ProcessingM2MethodSpecifics::Psk { .. }, InitiatorIdentity::Psk) => {
-            i_verify_message_2_psk(state, crypto, valid_cred_r)?
+            let verified = i_verify_message_2_psk(state, crypto, valid_cred_r)?;
+            return Ok(ProcessedM2 {
+                method_specifics: verified.method_specifics,
+                prk_3e2m: verified.prk_3e2m,
+                prk_4e3m: verified.prk_4e3m,
+                th_3: verified.th_3,
+            });
+        }
+        (ProcessingM2MethodSpecifics::Signature { .. }, _) => {
+            i_verify_message_2_sig(state, crypto, valid_cred_r)?
+        }
+        (ProcessingM2MethodSpecifics::StaticDh { .. }, _) => {
+            i_verify_message_2_stat(state, crypto, valid_cred_r)?
         }
         // FIXME: it is not an error, but more a lack of agreement between peers.
         _ => return Err(EDHOCError::MissingIdentity), // or UnsupportedMethod
     };
 
+    let VerifiedPeerMessage2 { prk_3e2m, th_3 } = peer_verified;
+
+    let (prk_4e3m, method_specifics) = match &i {
+        InitiatorIdentity::Signature { i } => {
+            (prk_3e2m, ProcessedM2MethodSpecifics::Signature { i: *i })
+        }
+        InitiatorIdentity::StaticDh { i } => {
+            let salt_4e3m = compute_salt_4e3m(crypto, &prk_3e2m, &th_3);
+            (
+                compute_prk_4e3m(crypto, &salt_4e3m, i, &state.g_y),
+                ProcessedM2MethodSpecifics::StaticDh {},
+            )
+        }
+        // FIXME: it is not an error, but more a lack of agreement between peers.
+        InitiatorIdentity::Psk => return Err(EDHOCError::MissingIdentity),
+    };
+
     Ok(ProcessedM2 {
-        method_specifics: verified.method_specifics,
-        prk_3e2m: verified.prk_3e2m,
-        prk_4e3m: verified.prk_4e3m,
-        th_3: verified.th_3,
+        method_specifics,
+        prk_3e2m,
+        prk_4e3m,
+        th_3,
     })
 }
 

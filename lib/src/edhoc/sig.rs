@@ -11,7 +11,7 @@ use super::{
     Crypto as CryptoTrait, DecodedMessage2, EDHOCError, EDHOCMethod, EadItems, IdCred,
     ParsedMessage2Details, ParsedMessage3, PreparedMessage2, PreparedMessage3, ProcessedM2,
     ProcessedM2MethodSpecifics, ProcessingM2, ProcessingM2MethodSpecifics, ProcessingM3,
-    ProcessingM3MethodSpecifics, Th4Input, VerifiedMessage2, VerifiedMessage3, WaitM3,
+    ProcessingM3MethodSpecifics, Th4Input, VerifiedMessage3, VerifiedPeerMessage2, WaitM3,
     WaitM3MethodSpecifics,
 };
 
@@ -170,8 +170,7 @@ pub(crate) fn i_verify_message_2_sig(
     state: &ProcessingM2,
     crypto: &mut impl CryptoTrait,
     valid_cred_r: Credential,
-    i: BytesP256ElemLen,
-) -> Result<VerifiedMessage2, EDHOCError> {
+) -> Result<VerifiedPeerMessage2, EDHOCError> {
     let public_key = match valid_cred_r.key {
         CredentialKey::EC2Compact(public_key) => public_key,
         // FIXME: the error is not accurate. It is a lack of agreement between peers.
@@ -219,17 +218,8 @@ pub(crate) fn i_verify_message_2_sig(
             &state.plaintext_2,
             Some(valid_cred_r.bytes.as_slice()),
         );
-        // no static ECDH: PRK_4e3m is PRK_3e2m directly
-        let prk_4e3m = prk_3e2m;
 
-        Ok(VerifiedMessage2 {
-            // the initiator's signing key is needed again when producing Signature_or_MAC_3
-            method_specifics: ProcessedM2MethodSpecifics::Signature { i },
-            // method_specifics: ProcessedM2MethodSpecifics::SigSig { i: i.clone() },
-            prk_3e2m,
-            prk_4e3m,
-            th_3,
-        })
+        Ok(VerifiedPeerMessage2 { prk_3e2m, th_3 })
     } else {
         Err(EDHOCError::MacVerificationFailed)
     }
