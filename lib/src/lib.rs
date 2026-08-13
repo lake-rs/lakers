@@ -186,7 +186,7 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM1<Crypto> {
             (EDHOCMethod::StatStat, ResponderIdentity::StaticDh { r }) => {
                 PrepareMessage2Details::StaticDh { r, cred_transfer }
             }
-            (EDHOCMethod::SigSig, ResponderIdentity::Signature { r }) => {
+            (EDHOCMethod::SigSig | EDHOCMethod::StatSig, ResponderIdentity::Signature { r }) => {
                 PrepareMessage2Details::Signature { r, cred_transfer }
             }
             (EDHOCMethod::PSK, ResponderIdentity::Psk) => PrepareMessage2Details::Psk {},
