@@ -47,7 +47,7 @@ fn main() {
                 let cred_r: Credential = Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
                 let responder = EdhocResponder::new(
                     lakers_crypto::default_crypto(),
-                    ResponderIdentity::StatStat {
+                    ResponderIdentity::StaticDh {
                         r: R.try_into().unwrap(),
                     },
                     cred_r,

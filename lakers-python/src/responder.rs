@@ -47,10 +47,12 @@ impl PyEdhocResponder {
         let r = r.unwrap_or_default();
 
         let cred_r = match parse_responder_identity(&r) {
-            Ok(ResponderIdentity::StatStat { .. }) => {
+            Ok(ResponderIdentity::StaticDh { .. }) => {
                 super::parse_credential(EDHOCMethod::StatStat, cred_r)
             }
             Ok(ResponderIdentity::Psk) => super::parse_credential(EDHOCMethod::PSK, cred_r),
+            // TODO: SigSig support for the Python bindings
+            Ok(ResponderIdentity::Signature { .. }) => todo!(),
             Err(err) => Err(err),
         }
         .with_cause(py, "Failed to ingest CRED_R")?;
@@ -124,7 +126,7 @@ impl PyEdhocResponder {
                     &mut default_crypto(),
                     // FIXME: take as reference rather than cloning
                     self.cred_r.clone(),
-                    PrepareMessage2Details::StatStat {
+                    PrepareMessage2Details::StaticDh {
                         r: &r,
                         cred_transfer,
                     },
@@ -178,8 +180,10 @@ impl PyEdhocResponder {
         // Message 3 parsing has already established which method is in use, so reuse that to
         // parse the initiator credential with the correct CCS vs symmetric-CCS parser.
         let method = match &self.as_ref_processing_m3()?.method_specifics {
-            ProcessingM3MethodSpecifics::StatStat { .. } => EDHOCMethod::StatStat,
+            ProcessingM3MethodSpecifics::StaticDh { .. } => EDHOCMethod::StatStat,
             ProcessingM3MethodSpecifics::Psk { .. } => EDHOCMethod::PSK,
+            // TODO: SigSig support for the Python bindings
+            ProcessingM3MethodSpecifics::Signature { .. } => EDHOCMethod::SigSig,
         };
         let valid_cred_i = super::parse_credential(method, valid_cred_i)
             .with_cause(py, "Failed to ingest CRED_I")?;
@@ -376,6 +380,6 @@ fn parse_responder_identity(r: &[u8]) -> Result<ResponderIdentity, EDHOCError> {
     } else {
         // A present `r` means the Python caller wants the stat-stat responder identity.
         let identity: BytesP256ElemLen = r.try_into().map_err(|_| EDHOCError::ParsingError)?;
-        Ok(ResponderIdentity::StatStat { r: identity })
+        Ok(ResponderIdentity::StaticDh { r: identity })
     }
 }

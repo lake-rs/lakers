@@ -67,7 +67,7 @@ async fn main(_spawner: Spawner) {
         let cred_r = Credential::parse_ccs(lakers_nrf52840::CRED_R.try_into().unwrap()).unwrap();
         let responder = EdhocResponder::new(
             lakers_crypto::default_crypto(),
-            ResponderIdentity::StatStat {
+            ResponderIdentity::StaticDh {
                 r: lakers_nrf52840::R.try_into().unwrap(),
             },
             cred_r,

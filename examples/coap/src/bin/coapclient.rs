@@ -57,7 +57,7 @@ fn client_handshake() -> Result<(), EDHOCError> {
     let (mut initiator, c_r, ead_2) = initiator.parse_message_2(&message_2)?;
     ead_2.processed_critical_items().unwrap();
     initiator.set_identity(
-        InitiatorIdentity::StatStat {
+        InitiatorIdentity::StaticDh {
             i: I.try_into().unwrap(),
         },
         cred_i,

@@ -116,7 +116,7 @@ impl coap_handler::Handler for EdhocHandler {
 
             let (responder, _c_i, mut ead_1) = EdhocResponder::new(
                 lakers_crypto::default_crypto(),
-                ResponderIdentity::StatStat {
+                ResponderIdentity::StaticDh {
                     r: R.try_into().expect("Wrong length of responder private key"),
                 },
                 cred_r,

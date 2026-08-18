@@ -71,7 +71,7 @@ async fn main(_spawner: Spawner) {
     );
     initiator
         .set_identity(
-            InitiatorIdentity::StatStat {
+            InitiatorIdentity::StaticDh {
                 i: lakers_nrf52840::I.try_into().unwrap(),
             },
             cred_i,

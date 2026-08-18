@@ -1,16 +1,16 @@
 use super::{
     compute_mac_2, compute_mac_3, compute_prk_3e2m, compute_prk_4e3m, compute_salt_3e2m,
-    compute_salt_4e3m, compute_th_3, compute_th_4, decode_plaintext_2, decode_plaintext_3,
-    decrypt_message_3, encode_plaintext_2, encode_plaintext_3, encrypt_message_3, BufferMessage3,
-    BufferPlaintext2, BytesHashLen, BytesMac3, BytesP256ElemLen, ConnId, Credential, CredentialKey,
-    CredentialTransfer, DecodedMessage2, EDHOCError, EadItems, IdCred, ParsedMessage2Details,
-    ParsedMessage3, PreparedMessage2, PreparedMessage3, ProcessedM2, ProcessedM2MethodSpecifics,
+    compute_th_3, compute_th_4, decode_plaintext_2, decode_plaintext_3, decrypt_message_3,
+    encode_plaintext_2, encode_plaintext_3, encrypt_message_3, BufferMessage3, BufferPlaintext2,
+    BytesHashLen, BytesMac3, BytesP256ElemLen, ConnId, Credential, CredentialKey,
+    CredentialTransfer, DecodedMessage2, EDHOCError, EDHOCMethod, EadItems, IdCred,
+    ParsedMessage2Details, ParsedMessage3, PreparedMessage2, PreparedMessage3, ProcessedM2,
     ProcessingM1, ProcessingM2, ProcessingM2MethodSpecifics, ProcessingM3,
-    ProcessingM3MethodSpecifics, Th4Input, VerifiedMessage2, VerifiedMessage3, WaitM3,
+    ProcessingM3MethodSpecifics, Th4Input, VerifiedMessage3, VerifiedPeerMessage2, WaitM3,
     WaitM3MethodSpecifics,
 };
-use lakers_shared::Crypto as CryptoTrait;
-pub(crate) fn r_prepare_message_2_statstat(
+use lakers_shared::{BytesMac2, Crypto as CryptoTrait};
+pub(crate) fn r_prepare_message_2_stat(
     state: &ProcessingM1,
     crypto: &mut impl CryptoTrait,
     cred_r: Credential,
@@ -20,6 +20,7 @@ pub(crate) fn r_prepare_message_2_statstat(
     ead_2: &EadItems,
     th_2: &BytesHashLen,
     prk_2e: &BytesHashLen,
+    edhoc_method: &EDHOCMethod,
 ) -> Result<PreparedMessage2, EDHOCError> {
     // compute prk_3e2m
     let salt_3e2m = compute_salt_3e2m(crypto, &prk_2e, &th_2);
@@ -31,7 +32,7 @@ pub(crate) fn r_prepare_message_2_statstat(
     };
 
     // compute MAC_2
-    let mac_2 = compute_mac_2(
+    let mac_2: BytesMac2 = compute_mac_2(
         crypto,
         &prk_3e2m,
         c_r,
@@ -42,21 +43,30 @@ pub(crate) fn r_prepare_message_2_statstat(
     );
 
     // compute ciphertext_2
-    let plaintext_2 =
-        encode_plaintext_2(c_r, Some((id_cred_r.as_encoded_value(), &mac_2)), &ead_2)?;
+    let plaintext_2 = encode_plaintext_2(
+        c_r,
+        Some((id_cred_r.as_encoded_value(), &mac_2.into())),
+        &ead_2,
+    )?;
     // step is actually from processing of message_3
     // but we do it here to avoid storing plaintext_2 in State
     let th_3 = compute_th_3(crypto, &th_2, &plaintext_2, Some(cred_r.bytes.as_slice()));
+
+    let method_specifics = match edhoc_method {
+        EDHOCMethod::SigStat => WaitM3MethodSpecifics::Signature {},
+        EDHOCMethod::StatStat => WaitM3MethodSpecifics::StaticDh {},
+        _ => unreachable!("r_prepare_message_2_stat must be used only when r is stat"),
+    };
 
     Ok(PreparedMessage2 {
         plaintext_2,
         prk_3e2m,
         th_3,
-        method_specifics: WaitM3MethodSpecifics::StatStat {},
+        method_specifics,
     })
 }
 
-pub(crate) fn r_parse_message_3_statstat(
+pub(crate) fn r_parse_message_3_stat(
     state: &WaitM3,
     crypto: &mut impl CryptoTrait,
     message_3: &BufferMessage3,
@@ -68,7 +78,7 @@ pub(crate) fn r_parse_message_3_statstat(
 
         if let Ok((id_cred_i, mac_3, ead_3)) = decoded_p3_res {
             Ok(ParsedMessage3 {
-                method_specifics: ProcessingM3MethodSpecifics::StatStat {
+                method_specifics: ProcessingM3MethodSpecifics::StaticDh {
                     mac_3,
                     id_cred_i: id_cred_i.clone(), // needed for compute_mac_3
                 },
@@ -85,7 +95,7 @@ pub(crate) fn r_parse_message_3_statstat(
     }
 }
 
-pub(crate) fn r_verify_message_3_statstat(
+pub(crate) fn r_verify_message_3_stat(
     state: &ProcessingM3,
     crypto: &mut impl CryptoTrait,
     valid_cred_i: Credential,
@@ -128,28 +138,27 @@ pub(crate) fn r_verify_message_3_statstat(
     }
 }
 
-pub(crate) fn i_parse_message_2_statstat(
+pub(crate) fn i_parse_message_2_stat(
     plaintext_2: &BufferPlaintext2,
 ) -> Result<DecodedMessage2, EDHOCError> {
     let (c_r, id_cred_r, mac_2, ead_2) = decode_plaintext_2(plaintext_2)?;
 
     Ok(DecodedMessage2 {
-        method_specifics: ProcessingM2MethodSpecifics::StatStat {
+        method_specifics: ProcessingM2MethodSpecifics::StaticDh {
             mac_2,
             id_cred_r: id_cred_r.clone(),
         },
         c_r,
-        parsed_details: ParsedMessage2Details::StatStat { id_cred_r },
+        parsed_details: ParsedMessage2Details::StaticDh { id_cred_r },
         ead_2,
     })
 }
 
-pub(crate) fn i_verify_message_2_statstat(
+pub(crate) fn i_verify_message_2_stat(
     state: &ProcessingM2,
     crypto: &mut impl CryptoTrait,
     valid_cred_r: Credential,
-    i: &BytesP256ElemLen, // I's static private DH key
-) -> Result<VerifiedMessage2, EDHOCError> {
+) -> Result<VerifiedPeerMessage2, EDHOCError> {
     // verify mac_2
     let salt_3e2m = compute_salt_3e2m(crypto, &state.prk_2e, &state.th_2);
 
@@ -162,7 +171,7 @@ pub(crate) fn i_verify_message_2_statstat(
     };
 
     let (id_cred_r, mac_2) = match &state.method_specifics {
-        ProcessingM2MethodSpecifics::StatStat { id_cred_r, mac_2 } => (id_cred_r, *mac_2),
+        ProcessingM2MethodSpecifics::StaticDh { id_cred_r, mac_2 } => (id_cred_r, *mac_2),
         // FIXME: the error is not accurate. It is a lack of agreement between peers.
         _ => return Err(EDHOCError::UnsupportedMethod),
     };
@@ -186,21 +195,14 @@ pub(crate) fn i_verify_message_2_statstat(
             &state.plaintext_2,
             Some(valid_cred_r.bytes.as_slice()),
         );
-        let salt_4e3m = compute_salt_4e3m(crypto, &prk_3e2m, &th_3);
-        let prk_4e3m = compute_prk_4e3m(crypto, &salt_4e3m, i, &state.g_y);
 
-        Ok(VerifiedMessage2 {
-            method_specifics: ProcessedM2MethodSpecifics::StatStat {},
-            prk_3e2m,
-            prk_4e3m,
-            th_3,
-        })
+        Ok(VerifiedPeerMessage2 { prk_3e2m, th_3 })
     } else {
         Err(EDHOCError::MacVerificationFailed)
     }
 }
 
-pub(crate) fn i_prepare_message_3_statstat(
+pub(crate) fn i_prepare_message_3_stat(
     state: &ProcessedM2,
     crypto: &mut impl CryptoTrait,
     cred_i: Credential,
@@ -212,7 +214,7 @@ pub(crate) fn i_prepare_message_3_statstat(
         CredentialTransfer::ByReference => cred_i.by_kid()?,
     };
 
-    let mac_3 = compute_mac_3(
+    let mac_3: BytesMac3 = compute_mac_3(
         crypto,
         &state.prk_4e3m,
         &state.th_3,
@@ -221,7 +223,8 @@ pub(crate) fn i_prepare_message_3_statstat(
         ead_3,
     );
 
-    let plaintext_3 = encode_plaintext_3(Some((id_cred_i.as_encoded_value(), &mac_3)), &ead_3)?;
+    let plaintext_3 =
+        encode_plaintext_3(Some((id_cred_i.as_encoded_value(), &mac_3.into())), &ead_3)?;
     let message_3 = encrypt_message_3(crypto, &state.prk_3e2m, &state.th_3, &plaintext_3, None)?;
 
     let th_4 = compute_th_4(

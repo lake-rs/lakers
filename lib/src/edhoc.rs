@@ -2,15 +2,20 @@ use crate::InitiatorIdentity;
 use digest::Digest;
 use lakers_shared::{Crypto as CryptoTrait, *};
 mod psk;
-mod statstat;
+mod sig;
+mod stat;
 
 use psk::{
     i_parse_message_2_psk, i_prepare_message_3_psk, i_verify_message_2_psk, r_parse_message_3_psk,
     r_parse_message_3_psk_with_cred_resolver, r_prepare_message_2_psk, r_verify_message_3_psk,
 };
-use statstat::{
-    i_parse_message_2_statstat, i_prepare_message_3_statstat, i_verify_message_2_statstat,
-    r_parse_message_3_statstat, r_prepare_message_2_statstat, r_verify_message_3_statstat,
+use sig::{
+    i_parse_message_2_sig, i_prepare_message_3_sig, i_verify_message_2_sig, r_parse_message_3_sig,
+    r_prepare_message_2_sig, r_verify_message_3_sig,
+};
+use stat::{
+    i_parse_message_2_stat, i_prepare_message_3_stat, i_verify_message_2_stat,
+    r_parse_message_3_stat, r_prepare_message_2_stat, r_verify_message_3_stat,
 };
 //FIXME: maybe not the best place to put it. shared/src/lib?
 // Temporary result used by method-specific message_2 preparation before the
@@ -43,6 +48,12 @@ struct VerifiedMessage2 {
     prk_4e3m: BytesHashLen,
     th_3: BytesHashLen,
 }
+
+#[derive(Debug)]
+struct VerifiedPeerMessage2 {
+    prk_3e2m: BytesHashLen,
+    th_3: BytesHashLen,
+}
 #[derive(Debug)]
 struct PreparedMessage3 {
     message_3: BufferMessage3,
@@ -52,6 +63,32 @@ struct PreparedMessage3 {
 struct VerifiedMessage3 {
     prk_4e3m: BytesHashLen,
     th_4: BytesHashLen,
+}
+
+#[derive(Debug)]
+enum SignatureOrMac {
+    Mac(BytesMac),
+    Signature(BytesSignature),
+}
+
+impl SignatureOrMac {
+    fn as_slice(&self) -> &[u8] {
+        match self {
+            SignatureOrMac::Mac(mac) => mac.as_slice(),
+            SignatureOrMac::Signature(signature) => signature.as_slice(),
+        }
+    }
+}
+
+impl From<BytesMac> for SignatureOrMac {
+    fn from(value: BytesMac) -> Self {
+        SignatureOrMac::Mac(value)
+    }
+}
+impl From<BytesSignature> for SignatureOrMac {
+    fn from(value: BytesSignature) -> Self {
+        SignatureOrMac::Signature(value)
+    }
 }
 
 pub fn edhoc_exporter(
@@ -90,7 +127,11 @@ pub fn r_process_message_1(
         let method = EDHOCMethod::try_from(method)?;
 
         match method {
-            EDHOCMethod::StatStat | EDHOCMethod::PSK => {
+            EDHOCMethod::SigSig
+            | EDHOCMethod::StatStat
+            | EDHOCMethod::SigStat
+            | EDHOCMethod::StatSig
+            | EDHOCMethod::PSK => {
                 // Step 2: verify that the selected cipher suite is supported
                 if suites_i[suites_i.len() - 1] == EDHOC_SUPPORTED_SUITES[0] {
                     // hash message_1 and save the hash to the state to avoid saving the whole message
@@ -131,19 +172,35 @@ pub fn r_prepare_message_2(
     let prk_2e = compute_prk_2e(crypto, &state.y, &state.g_x, &th_2);
 
     let prepared = match (state.method, method_details) {
-        (EDHOCMethod::StatStat, PrepareMessage2Details::StatStat { r, cred_transfer }) => {
-            r_prepare_message_2_statstat(
-                state,
-                crypto,
-                cred_r,
-                r,
-                c_r,
-                cred_transfer,
-                ead_2,
-                &th_2,
-                &prk_2e,
-            )?
-        }
+        (
+            EDHOCMethod::SigSig | EDHOCMethod::StatSig,
+            PrepareMessage2Details::Signature { r, cred_transfer },
+        ) => r_prepare_message_2_sig(
+            crypto,
+            cred_r,
+            r,
+            c_r,
+            cred_transfer,
+            ead_2,
+            &th_2,
+            &prk_2e,
+            &state.method,
+        )?,
+        (
+            EDHOCMethod::SigStat | EDHOCMethod::StatStat,
+            PrepareMessage2Details::StaticDh { r, cred_transfer },
+        ) => r_prepare_message_2_stat(
+            state,
+            crypto,
+            cred_r,
+            r,
+            c_r,
+            cred_transfer,
+            ead_2,
+            &th_2,
+            &prk_2e,
+            &state.method,
+        )?,
         (EDHOCMethod::PSK, PrepareMessage2Details::Psk) => {
             r_prepare_message_2_psk(crypto, cred_r, c_r, ead_2, &th_2, &prk_2e)?
         }
@@ -176,9 +233,8 @@ pub fn r_parse_message_3(
     message_3: &BufferMessage3,
 ) -> Result<(ProcessingM3, IdCred, EadItems), EDHOCError> {
     let parsed = match &state.method_specifics {
-        WaitM3MethodSpecifics::StatStat { .. } => {
-            r_parse_message_3_statstat(state, crypto, message_3)?
-        }
+        WaitM3MethodSpecifics::Signature {} => r_parse_message_3_sig(state, crypto, message_3)?,
+        WaitM3MethodSpecifics::StaticDh {} => r_parse_message_3_stat(state, crypto, message_3)?,
         WaitM3MethodSpecifics::Psk { cred_r } => {
             r_parse_message_3_psk(state, crypto, message_3, cred_r)?
         }
@@ -208,9 +264,8 @@ where
     F: Fn(&IdCred) -> Result<Credential, EDHOCError>,
 {
     let parsed = match &state.method_specifics {
-        WaitM3MethodSpecifics::StatStat { .. } => {
-            r_parse_message_3_statstat(state, crypto, message_3)?
-        }
+        WaitM3MethodSpecifics::Signature {} => r_parse_message_3_sig(state, crypto, message_3)?,
+        WaitM3MethodSpecifics::StaticDh {} => r_parse_message_3_stat(state, crypto, message_3)?,
         WaitM3MethodSpecifics::Psk { cred_r } => r_parse_message_3_psk_with_cred_resolver(
             state,
             crypto,
@@ -239,16 +294,22 @@ pub fn r_verify_message_3(
     crypto: &mut impl CryptoTrait,
     valid_cred_i: Credential,
 ) -> Result<(ProcessedM3, BytesHashLen), EDHOCError> {
-    let salt_4e3m = compute_salt_4e3m(crypto, &state.prk_3e2m, &state.th_3);
-
     let verified = match &state.method_specifics {
-        ProcessingM3MethodSpecifics::StatStat { mac_3, id_cred_i } => {
-            r_verify_message_3_statstat(state, crypto, valid_cred_i, *mac_3, id_cred_i, &salt_4e3m)?
+        ProcessingM3MethodSpecifics::Signature {
+            signature_3,
+            id_cred_i,
+        } => r_verify_message_3_sig(state, crypto, valid_cred_i, signature_3, id_cred_i)?,
+        ProcessingM3MethodSpecifics::StaticDh { mac_3, id_cred_i } => {
+            let salt_4e3m = compute_salt_4e3m(crypto, &state.prk_3e2m, &state.th_3);
+            r_verify_message_3_stat(state, crypto, valid_cred_i, *mac_3, id_cred_i, &salt_4e3m)?
         }
         ProcessingM3MethodSpecifics::Psk {
             id_cred_psk,
             cred_r,
-        } => r_verify_message_3_psk(state, crypto, valid_cred_i, id_cred_psk, cred_r, &salt_4e3m)?,
+        } => {
+            let salt_4e3m = compute_salt_4e3m(crypto, &state.prk_3e2m, &state.th_3);
+            r_verify_message_3_psk(state, crypto, valid_cred_i, id_cred_psk, cred_r, &salt_4e3m)
+        }?,
     };
 
     let mut prk_out: BytesHashLen = Default::default();
@@ -332,7 +393,8 @@ pub fn i_parse_message_2<'a>(
     let plaintext_2 = encrypt_decrypt_ciphertext_2(crypto, &prk_2e, &th_2, &ciphertext_2);
 
     let decoded = match state.method {
-        EDHOCMethod::StatStat => i_parse_message_2_statstat(&plaintext_2),
+        EDHOCMethod::SigSig | EDHOCMethod::StatSig => i_parse_message_2_sig(&plaintext_2),
+        EDHOCMethod::SigStat | EDHOCMethod::StatStat => i_parse_message_2_stat(&plaintext_2),
         EDHOCMethod::PSK => i_parse_message_2_psk(&plaintext_2),
         _ => Err(EDHOCError::UnsupportedMethod),
     }?;
@@ -360,26 +422,52 @@ pub fn i_verify_message_2(
     valid_cred_r: Credential,
     i: InitiatorIdentity, // I's static private DH key when required by method
 ) -> Result<ProcessedM2, EDHOCError> {
-    // The overall verification flow is shared across methods, but `prk_3e2m`,
-    // `th_3`, and `prk_4e3m` still depend on the EDHOC method, so the match keeps
-    // the method-specific derivation in the child modules and only shares the final
-    // `ProcessedM2` assembly here.
-    let verified = match (&state.method_specifics, &i) {
-        (ProcessingM2MethodSpecifics::StatStat { .. }, InitiatorIdentity::StatStat { i }) => {
-            i_verify_message_2_statstat(state, crypto, valid_cred_r, i)?
-        }
+    // Verifying Signature_or_MAC_2 and deriving PRK_3e2m and TH_3 depends on how the
+    // responder authenticates; PRK_4e3m and the way message_3 will be authenticated
+    // depend on the initiator instead. Methods 1 and 2 combine the two independently,
+    // so the two axes are resolved one after the other rather than as one pair.
+    let peer_verified = match (&state.method_specifics, &i) {
         (ProcessingM2MethodSpecifics::Psk { .. }, InitiatorIdentity::Psk) => {
-            i_verify_message_2_psk(state, crypto, valid_cred_r)?
+            let verified = i_verify_message_2_psk(state, crypto, valid_cred_r)?;
+            return Ok(ProcessedM2 {
+                method_specifics: verified.method_specifics,
+                prk_3e2m: verified.prk_3e2m,
+                prk_4e3m: verified.prk_4e3m,
+                th_3: verified.th_3,
+            });
+        }
+        (ProcessingM2MethodSpecifics::Signature { .. }, _) => {
+            i_verify_message_2_sig(state, crypto, valid_cred_r)?
+        }
+        (ProcessingM2MethodSpecifics::StaticDh { .. }, _) => {
+            i_verify_message_2_stat(state, crypto, valid_cred_r)?
         }
         // FIXME: it is not an error, but more a lack of agreement between peers.
         _ => return Err(EDHOCError::MissingIdentity), // or UnsupportedMethod
     };
 
+    let VerifiedPeerMessage2 { prk_3e2m, th_3 } = peer_verified;
+
+    let (prk_4e3m, method_specifics) = match &i {
+        InitiatorIdentity::Signature { i } => {
+            (prk_3e2m, ProcessedM2MethodSpecifics::Signature { i: *i })
+        }
+        InitiatorIdentity::StaticDh { i } => {
+            let salt_4e3m = compute_salt_4e3m(crypto, &prk_3e2m, &th_3);
+            (
+                compute_prk_4e3m(crypto, &salt_4e3m, i, &state.g_y),
+                ProcessedM2MethodSpecifics::StaticDh {},
+            )
+        }
+        // FIXME: it is not an error, but more a lack of agreement between peers.
+        InitiatorIdentity::Psk => return Err(EDHOCError::MissingIdentity),
+    };
+
     Ok(ProcessedM2 {
-        method_specifics: verified.method_specifics,
-        prk_3e2m: verified.prk_3e2m,
-        prk_4e3m: verified.prk_4e3m,
-        th_3: verified.th_3,
+        method_specifics,
+        prk_3e2m,
+        prk_4e3m,
+        th_3,
     })
 }
 
@@ -391,8 +479,11 @@ pub fn i_prepare_message_3(
     ead_3: &EadItems,
 ) -> Result<(WaitM4, BufferMessage3, BytesHashLen), EDHOCError> {
     let prepared = match state.method_specifics {
-        ProcessedM2MethodSpecifics::StatStat { .. } => {
-            i_prepare_message_3_statstat(state, crypto, cred_i, cred_transfer, ead_3)?
+        ProcessedM2MethodSpecifics::Signature { .. } => {
+            i_prepare_message_3_sig(state, crypto, cred_i, cred_transfer, ead_3)?
+        }
+        ProcessedM2MethodSpecifics::StaticDh { .. } => {
+            i_prepare_message_3_stat(state, crypto, cred_i, cred_transfer, ead_3)?
         }
         ProcessedM2MethodSpecifics::Psk { .. } => {
             i_prepare_message_3_psk(state, crypto, cred_i, cred_transfer, ead_3)?
@@ -619,18 +710,17 @@ fn edhoc_kdf_owned<const N: usize>(
 }
 
 fn encode_plaintext_3(
-    stat_fields: Option<(&[u8], &BytesMac3)>,
+    stat_fields: Option<(&[u8], &SignatureOrMac)>,
     ead_3: &EadItems,
 ) -> Result<BufferPlaintext3, EDHOCError> {
     let mut plaintext_3 = match stat_fields {
-        Some((id_cred_i, mac_3)) => {
+        Some((id_cred_i, sig_or_mac_3)) => {
+            let sig_or_mac_3 = sig_or_mac_3.as_slice();
             let mut plaintext_3 =
                 BufferPlaintext3::new_from_slice(id_cred_i).or(Err(EDHOCError::EncodingError))?;
+            encode_bstr_header(&mut plaintext_3, sig_or_mac_3.len())?;
             plaintext_3
-                .push(CBOR_MAJOR_BYTE_STRING | MAC_LENGTH_3 as u8)
-                .or(Err(EDHOCError::EncodingError))?;
-            plaintext_3
-                .extend_from_slice(mac_3)
+                .extend_from_slice(sig_or_mac_3)
                 .or(Err(EDHOCError::EncodingError))?;
             plaintext_3
         }
@@ -711,6 +801,50 @@ fn encode_enc_structure(external_aad: &[u8]) -> Result<EdhocBuffer<MAX_BUFFER_LE
         .map_err(|_| EDHOCError::EncodingError)?;
 
     Ok(enc_structure)
+}
+
+// `[ "Signature1", << ID_CRED_x >>, << TH, CRED, ? EAD >>, MAC ]`
+fn encode_sig_structure(
+    id_cred: &[u8],
+    th: &BytesHashLen,
+    cred: &[u8],
+    ead: &EadItems,
+    mac: &[u8],
+) -> Result<EdhocBuffer<MAX_BUFFER_LEN>, EDHOCError> {
+    let signature1 = b"Signature1";
+    let mut sig_structure = EdhocBuffer::<MAX_BUFFER_LEN>::new();
+
+    sig_structure
+        .push(CBOR_MAJOR_ARRAY | 4)
+        .map_err(|_| EDHOCError::EncodingError)?;
+
+    sig_structure
+        .push(CBOR_MAJOR_TEXT_STRING | signature1.len() as u8)
+        .map_err(|_| EDHOCError::EncodingError)?;
+    sig_structure
+        .extend_from_slice(signature1)
+        .map_err(|_| EDHOCError::EncodingError)?;
+
+    // protected
+    encode_bstr_header(&mut sig_structure, id_cred.len())?;
+    sig_structure
+        .extend_from_slice(id_cred)
+        .map_err(|_| EDHOCError::EncodingError)?;
+
+    // external_aad, which is the same as the KDF context without ID_CRED_x and C_R
+    let external_aad = encode_kdf_context(None, &[], th, cred, ead);
+    encode_bstr_header(&mut sig_structure, external_aad.len())?;
+    sig_structure
+        .extend_from_slice(external_aad.as_slice())
+        .map_err(|_| EDHOCError::EncodingError)?;
+
+    // payload
+    encode_bstr_header(&mut sig_structure, mac.len())?;
+    sig_structure
+        .extend_from_slice(mac)
+        .map_err(|_| EDHOCError::EncodingError)?;
+
+    Ok(sig_structure)
 }
 
 fn encode_bstr_header<const N: usize>(
@@ -949,14 +1083,14 @@ fn encode_kdf_context(
     output
 }
 
-fn compute_mac_3(
+fn compute_mac_3<const N: usize>(
     crypto: &mut impl CryptoTrait,
     prk_4e3m: &BytesHashLen,
     th_3: &BytesHashLen,
     id_cred_i: &[u8],
     cred_i: &[u8],
     ead_3: &EadItems,
-) -> BytesMac3 {
+) -> [u8; N] {
     // MAC_3 = EDHOC-KDF( PRK_4e3m, 6, context_3, mac_length_3 )
     let context = encode_kdf_context(None, id_cred_i, th_3, cred_i, ead_3);
 
@@ -969,7 +1103,7 @@ fn compute_mac_3(
     )
 }
 
-fn compute_mac_2(
+fn compute_mac_2<const N: usize>(
     crypto: &mut impl CryptoTrait,
     prk_3e2m: &BytesHashLen,
     c_r: ConnId,
@@ -977,7 +1111,7 @@ fn compute_mac_2(
     cred_r: &[u8],
     th_2: &BytesHashLen,
     ead_2: &EadItems,
-) -> BytesMac2 {
+) -> [u8; N] {
     // compute MAC_2
     let context = encode_kdf_context(Some(c_r), id_cred_r, th_2, cred_r, ead_2);
 
@@ -987,7 +1121,7 @@ fn compute_mac_2(
 
 fn encode_plaintext_2(
     c_r: ConnId,
-    stat_fields: Option<(&[u8], &BytesMac2)>,
+    stat_fields: Option<(&[u8], &SignatureOrMac)>,
     ead_2: &EadItems,
 ) -> Result<BufferPlaintext2, EDHOCError> {
     let mut plaintext_2: BufferPlaintext2 = BufferPlaintext2::new();
@@ -997,15 +1131,14 @@ fn encode_plaintext_2(
         .extend_from_slice(c_r)
         .or(Err(EDHOCError::EncodingError))?;
 
-    if let Some((id_cred_r, mac_2)) = stat_fields {
+    if let Some((id_cred_r, sig_or_mac_2)) = stat_fields {
+        let sig_or_mac_2 = sig_or_mac_2.as_slice();
         plaintext_2
             .extend_from_slice(id_cred_r)
             .or(Err(EDHOCError::EncodingError))?;
 
-        plaintext_2
-            .push(CBOR_MAJOR_BYTE_STRING | MAC_LENGTH_2 as u8)
-            .unwrap();
-        plaintext_2.extend_from_slice(&mac_2[..]).unwrap();
+        encode_bstr_header(&mut plaintext_2, sig_or_mac_2.len())?;
+        plaintext_2.extend_from_slice(&sig_or_mac_2).unwrap();
     }
 
     // Encode optional EAD_2
@@ -1765,7 +1898,7 @@ mod tests {
                 IdCred::from_full_value(&ID_CRED_R_TV[..])
                     .unwrap()
                     .as_encoded_value(),
-                &MAC_2_TV,
+                &MAC_2_TV.into(),
             )),
             &EadItems::new(),
         )
@@ -1949,7 +2082,7 @@ mod tests {
                 IdCred::from_full_value(&ID_CRED_I_TV[..])
                     .unwrap()
                     .as_encoded_value(),
-                &MAC_3_TV,
+                &MAC_3_TV.into(),
             )),
             &EadItems::new(),
         )
@@ -2132,5 +2265,321 @@ mod tests {
         );
 
         assert_eq!(oscore_master_salt_buf, &OSCORE_MASTER_SALT_TV[..]);
+    }
+}
+
+/// Byte-exact conformance checks against the RFC 9529 Section 2 trace (METHOD 0, SIG-SIG).
+//
+// FIXME:
+// That trace uses cipher suite 0 (X25519 + EdDSA), which lakers does not implement YET.
+// Every value in the trace from PRK_2e onwards, however, is produced by SHA-256, HKDF and
+// AES-CCM-16-64-128 only, identical in suite 0 and suite 2. So change these tests when
+// cipher suite 0 is implemented
+//
+// Requires larger buffers than the default, because the RFC trace authenticates with X.509
+// certificates:
+#[cfg(all(test, feature = "large_buffers"))]
+mod rfc9529_method0 {
+    use super::*;
+    use hexlit::hex;
+    use lakers_crypto::default_crypto;
+
+    // --- suite-0 oracle values: lakers cannot compute these, they are taken as given ---
+    const G_XY: BytesP256ElemLen =
+        hex!("e5cdf3a986cdac5b7bf04691e2b07c08e71f53998d8f842b7c3fb4d839cf7b28");
+    const SIG_2: BytesSignature = hex!(
+        "c3b5bd44d1e44a085c03d3aede4e1e6c11c572a1968cc3629b505f98c681608d
+         3d1de793d1c40eb5dd5d89acf1966aea07022b48cdc99870ebc40374e8fa6e09"
+    );
+    const SIG_3: BytesSignature = hex!(
+        "96e1cd5fceadfac1b5af819443f70924f5719955957fd02655beb4775e1a7318
+         6a0d1d3ea683f08f8d03dcecb9cf154e1c6f555a1e12ca118ce42bdba6878907"
+    );
+
+    // --- message_2 ---
+    const TH_2: BytesHashLen =
+        hex!("c6405c154c567466ab1df20369500e540e9f14bd3a796a0652cae66c9061688d");
+    const PRK_2E: BytesHashLen =
+        hex!("d584ac2e5dad5a77d14b53ebe72ef1d5daa8860d399373bf2c240afa7ba804da");
+    const PRK_3E2M: BytesHashLen =
+        hex!("d584ac2e5dad5a77d14b53ebe72ef1d5daa8860d399373bf2c240afa7ba804da");
+    const ID_CRED_R: &[u8] = &hex!("a11822822e4879f2a41b510c1f9b");
+    const CRED_R: &[u8] = &hex!(
+        "58f13081ee3081a1a003020102020462319ec4300506032b6570301d311b301906035504030c1245
+         44484f4320526f6f742045643235353139301e170d3232303331363038323433365a170d32393132
+         33313233303030305a30223120301e06035504030c174544484f4320526573706f6e646572204564
+         3235353139302a300506032b6570032100a1db47b95184854ad12a0c1a354e418aace33aa0f2c662
+         c00b3ac55de92f9359300506032b6570034100b723bc01eab0928e8b2b6c98de19cc3823d46e7d69
+         87b032478fecfaf14537a1af14cc8be829c6b73044101837eb4abc949565d86dce51cfae52ab82c1
+         52cb02"
+    );
+    const CONTEXT_2: &[u8] = &hex!(
+        "4118a11822822e4879f2a41b510c1f9b5820c6405c154c567466ab1df20369500e540e9f14bd3a79
+         6a0652cae66c9061688d58f13081ee3081a1a003020102020462319ec4300506032b6570301d311b
+         301906035504030c124544484f4320526f6f742045643235353139301e170d323230333136303832
+         3433365a170d3239313233313233303030305a30223120301e06035504030c174544484f43205265
+         73706f6e6465722045643235353139302a300506032b6570032100a1db47b95184854ad12a0c1a35
+         4e418aace33aa0f2c662c00b3ac55de92f9359300506032b6570034100b723bc01eab0928e8b2b6c
+         98de19cc3823d46e7d6987b032478fecfaf14537a1af14cc8be829c6b73044101837eb4abc949565
+         d86dce51cfae52ab82c152cb02"
+    );
+    const MAC_2: BytesMacSig =
+        hex!("862a7e5ef147f9a5f4c512e1b6623cd66cd17a7272072bfe5b602ffe307ee0e9");
+    const SIG_STRUCTURE_2: &[u8] = &hex!(
+        "846a5369676e6174757265314ea11822822e4879f2a41b510c1f9b5901155820c6405c154c567466
+         ab1df20369500e540e9f14bd3a796a0652cae66c9061688d58f13081ee3081a1a003020102020462
+         319ec4300506032b6570301d311b301906035504030c124544484f4320526f6f7420456432353531
+         39301e170d3232303331363038323433365a170d3239313233313233303030305a30223120301e06
+         035504030c174544484f4320526573706f6e6465722045643235353139302a300506032b65700321
+         00a1db47b95184854ad12a0c1a354e418aace33aa0f2c662c00b3ac55de92f9359300506032b6570
+         034100b723bc01eab0928e8b2b6c98de19cc3823d46e7d6987b032478fecfaf14537a1af14cc8be8
+         29c6b73044101837eb4abc949565d86dce51cfae52ab82c152cb025820862a7e5ef147f9a5f4c512
+         e1b6623cd66cd17a7272072bfe5b602ffe307ee0e9"
+    );
+    const PLAINTEXT_2: &[u8] = &hex!(
+        "4118a11822822e4879f2a41b510c1f9b5840c3b5bd44d1e44a085c03d3aede4e1e6c11c572a1968c
+         c3629b505f98c681608d3d1de793d1c40eb5dd5d89acf1966aea07022b48cdc99870ebc40374e8fa
+         6e09"
+    );
+    const CIPHERTEXT_2: &[u8] = &hex!(
+        "bc26dd270fe9c02c44ce3934794b1cc62ba22f05459f8d358c8d12275ac42c5f96ded5f13cc9084e
+         5b201889a45e5a60a5562dc118619c3daa2fd9f4c9f4d6edad109dd4edf95962aafbaf9ab3f4a1f6
+         b98f"
+    );
+
+    // --- message_3 ---
+    const TH_3: BytesHashLen =
+        hex!("5b7df9b4f58f240ce0418e48191b5fff3a22b5ca57f669b16777996592e928bc");
+    const PRK_4E3M: BytesHashLen =
+        hex!("d584ac2e5dad5a77d14b53ebe72ef1d5daa8860d399373bf2c240afa7ba804da");
+    const ID_CRED_I: &[u8] = &hex!("a11822822e48c24ab2fd7643c79f");
+    const CRED_I: &[u8] = &hex!(
+        "58f13081ee3081a1a003020102020462319ea0300506032b6570301d311b301906035504030c1245
+         44484f4320526f6f742045643235353139301e170d3232303331363038323430305a170d32393132
+         33313233303030305a30223120301e06035504030c174544484f4320496e69746961746f72204564
+         3235353139302a300506032b6570032100ed06a8ae61a829ba5fa54525c9d07f48dd44a302f43e0f
+         23d8cc20b73085141e300506032b6570034100521241d8b3a770996bcfc9b9ead4e7e0a1c0db353a
+         3bdf2910b39275ae48b756015981850d27db6734e37f67212267dd05eeff27b9e7a813fa574b72a0
+         0b430b"
+    );
+    const CONTEXT_3: &[u8] = &hex!(
+        "a11822822e48c24ab2fd7643c79f58205b7df9b4f58f240ce0418e48191b5fff3a22b5ca57f669b1
+         6777996592e928bc58f13081ee3081a1a003020102020462319ea0300506032b6570301d311b3019
+         06035504030c124544484f4320526f6f742045643235353139301e170d32323033313630383234303
+         05a170d3239313233313233303030305a30223120301e06035504030c174544484f4320496e697469
+         61746f722045643235353139302a300506032b6570032100ed06a8ae61a829ba5fa54525c9d07f48d
+         d44a302f43e0f23d8cc20b73085141e300506032b6570034100521241d8b3a770996bcfc9b9ead4e7
+         e0a1c0db353a3bdf2910b39275ae48b756015981850d27db6734e37f67212267dd05eeff27b9e7a81
+         3fa574b72a00b430b"
+    );
+    const MAC_3: BytesMacSig =
+        hex!("39b127c130129afa30618c751329e637cc3734270d4b01258445a8ee02daa3bd");
+    const SIG_STRUCTURE_3: &[u8] = &hex!(
+        "846a5369676e6174757265314ea11822822e48c24ab2fd7643c79f59011558205b7df9b4f58f240c
+         e0418e48191b5fff3a22b5ca57f669b16777996592e928bc58f13081ee3081a1a003020102020462
+         319ea0300506032b6570301d311b301906035504030c124544484f4320526f6f7420456432353531
+         39301e170d3232303331363038323430305a170d3239313233313233303030305a30223120301e06
+         035504030c174544484f4320496e69746961746f722045643235353139302a300506032b65700321
+         00ed06a8ae61a829ba5fa54525c9d07f48dd44a302f43e0f23d8cc20b73085141e300506032b6570
+         034100521241d8b3a770996bcfc9b9ead4e7e0a1c0db353a3bdf2910b39275ae48b7560159818 50d
+         27db6734e37f67212267dd05eeff27b9e7a813fa574b72a00b430b582039b127c130129afa30618c
+         751329e637cc3734270d4b01258445a8ee02daa3bd"
+    );
+    const PLAINTEXT_3: &[u8] = &hex!(
+        "a11822822e48c24ab2fd7643c79f584096e1cd5fceadfac1b5af819443f70924f5719955957fd026
+         55beb4775e1a73186a0d1d3ea683f08f8d03dcecb9cf154e1c6f555a1e12ca118ce42bdba6878907"
+    );
+    const K_3: BytesCcmKeyLen = hex!("da195e5f648ac63b0e8fb0c455205139");
+    const IV_3: BytesCcmIvLen = hex!("38d8c64c56255affa449f4bed7");
+    const MESSAGE_3: &[u8] = &hex!(
+        "585825c345884aaaeb22c527f9b1d2b6787207e0163c69b62a0d43928150427203c31674e4514ea6
+         e383b566eb29763efeb0afa518776ae1c65f856d84bf32af3a7836970466dcb71f76745d39d3025e
+         7703e0c032ebad51947c"
+    );
+
+    // --- message_4 and key schedule ---
+    const TH_4: BytesHashLen =
+        hex!("0eb868f263cf3555dccd396dd8dec29d3750d599be42d5a41a5a37c896f294ac");
+    const PRK_OUT: BytesHashLen =
+        hex!("b744cb7d8a87cc0447c3350e165b250dab12ec453325abb922b30307e5c368f0");
+    const PRK_EXPORTER: BytesHashLen =
+        hex!("2aaec8fc4ab3bc3295def6b551051a2fa561424db301fa84f642f5578a6df51a");
+    const OSCORE_MASTER_SECRET: [u8; 16] = hex!("1e1c6beac3a8a1cac435de7e2f9ae7ff");
+    const OSCORE_MASTER_SALT: [u8; 8] = hex!("ce7ab844c0106d73");
+
+    fn c_r() -> ConnId {
+        ConnId::from_slice(&[0x18]).unwrap()
+    }
+
+    /// PRK_2e = EDHOC_Extract(TH_2, G_XY). Suite-independent given G_XY, so the ECDH that
+    /// `compute_prk_2e` would run internally is bypassed and G_XY injected from the RFC.
+    #[test]
+    fn prk_2e_matches() {
+        let prk_2e = default_crypto().hkdf_extract(&TH_2, &G_XY);
+        assert_eq!(prk_2e, PRK_2E);
+    }
+
+    /// RFC 9528 Section 4.1.1.2: with signature authentication PRK_3e2m = PRK_2e,
+    /// and Section 4.1.1.3: PRK_4e3m = PRK_3e2m.
+    #[test]
+    fn prk_chain_collapses_for_signatures() {
+        assert_eq!(PRK_3E2M, PRK_2E);
+        assert_eq!(PRK_4E3M, PRK_3E2M);
+    }
+
+    #[test]
+    fn context_2_matches() {
+        let context = encode_kdf_context(Some(c_r()), ID_CRED_R, &TH_2, CRED_R, &EadItems::new());
+        assert_eq!(context.as_slice(), CONTEXT_2);
+    }
+
+    /// mac_length_2 is the hash length (32) for METHOD 0, not 8 as for METHOD 3.
+    #[test]
+    fn mac_2_matches() {
+        let mac_2: BytesMacSig = compute_mac_2(
+            &mut default_crypto(),
+            &PRK_3E2M,
+            c_r(),
+            ID_CRED_R,
+            CRED_R,
+            &TH_2,
+            &EadItems::new(),
+        );
+        assert_eq!(mac_2, MAC_2);
+    }
+
+    /// The COSE_Sign1 Sig_structure that Signature_or_MAC_2 signs.
+    #[test]
+    fn sig_structure_2_matches() {
+        let sig_structure =
+            encode_sig_structure(ID_CRED_R, &TH_2, CRED_R, &EadItems::new(), &MAC_2).unwrap();
+        assert_eq!(sig_structure.as_slice(), SIG_STRUCTURE_2);
+    }
+
+    #[test]
+    fn plaintext_2_matches() {
+        let plaintext_2 =
+            encode_plaintext_2(c_r(), Some((ID_CRED_R, &SIG_2.into())), &EadItems::new()).unwrap();
+        assert_eq!(plaintext_2.as_slice(), PLAINTEXT_2);
+    }
+
+    #[test]
+    fn ciphertext_2_matches() {
+        let plaintext_2 = BufferCiphertext2::new_from_slice(PLAINTEXT_2).unwrap();
+        let ciphertext_2 =
+            encrypt_decrypt_ciphertext_2(&mut default_crypto(), &PRK_2E, &TH_2, &plaintext_2);
+        assert_eq!(ciphertext_2.as_slice(), CIPHERTEXT_2);
+    }
+
+    #[test]
+    fn plaintext_2_x5t_is_unsupported() {
+        let plaintext_2 = BufferPlaintext2::new_from_slice(PLAINTEXT_2).unwrap();
+        assert!(matches!(
+            decode_plaintext_2_sig(&plaintext_2),
+            Err(EDHOCError::ParsingError)
+        ));
+    }
+
+    #[test]
+    fn th_3_matches() {
+        let plaintext_2 = BufferPlaintext2::new_from_slice(PLAINTEXT_2).unwrap();
+        let th_3 = compute_th_3(&mut default_crypto(), &TH_2, &plaintext_2, Some(CRED_R));
+        assert_eq!(th_3, TH_3);
+    }
+
+    #[test]
+    fn context_3_matches() {
+        let context = encode_kdf_context(None, ID_CRED_I, &TH_3, CRED_I, &EadItems::new());
+        assert_eq!(context.as_slice(), CONTEXT_3);
+    }
+
+    #[test]
+    fn mac_3_matches() {
+        let mac_3: BytesMacSig = compute_mac_3(
+            &mut default_crypto(),
+            &PRK_4E3M,
+            &TH_3,
+            ID_CRED_I,
+            CRED_I,
+            &EadItems::new(),
+        );
+        assert_eq!(mac_3, MAC_3);
+    }
+
+    #[test]
+    fn sig_structure_3_matches() {
+        let sig_structure =
+            encode_sig_structure(ID_CRED_I, &TH_3, CRED_I, &EadItems::new(), &MAC_3).unwrap();
+        assert_eq!(sig_structure.as_slice(), SIG_STRUCTURE_3);
+    }
+
+    #[test]
+    fn plaintext_3_matches() {
+        let plaintext_3 =
+            encode_plaintext_3(Some((ID_CRED_I, &SIG_3.into())), &EadItems::new()).unwrap();
+        assert_eq!(plaintext_3.as_slice(), PLAINTEXT_3);
+    }
+
+    /// See [`plaintext_2_x5t_is_unsupported`].
+    #[test]
+    fn plaintext_3_x5t_is_unsupported() {
+        let plaintext_3 = BufferPlaintext3::new_from_slice(PLAINTEXT_3).unwrap();
+        assert!(matches!(
+            decode_plaintext_3_sig(&plaintext_3),
+            Err(EDHOCError::ParsingError)
+        ));
+    }
+
+    #[test]
+    fn k_3_iv_3_match() {
+        let (k_3, iv_3) = compute_k_3_iv_3(&mut default_crypto(), &PRK_3E2M, &TH_3);
+        assert_eq!(k_3, K_3);
+        assert_eq!(iv_3, IV_3);
+    }
+
+    #[test]
+    fn message_3_matches() {
+        let plaintext_3 = BufferPlaintext3::new_from_slice(PLAINTEXT_3).unwrap();
+        let message_3 =
+            encrypt_message_3(&mut default_crypto(), &PRK_3E2M, &TH_3, &plaintext_3, None).unwrap();
+        assert_eq!(message_3.as_slice(), MESSAGE_3);
+    }
+
+    #[test]
+    fn message_3_decrypts() {
+        let message_3 = BufferMessage3::new_from_slice(MESSAGE_3).unwrap();
+        let plaintext_3 =
+            decrypt_message_3(&mut default_crypto(), &PRK_3E2M, &TH_3, &message_3, None).unwrap();
+        assert_eq!(plaintext_3.as_slice(), PLAINTEXT_3);
+    }
+
+    #[test]
+    fn th_4_matches() {
+        let plaintext_3 = BufferPlaintext3::new_from_slice(PLAINTEXT_3).unwrap();
+        let th_4 = compute_th_4(
+            &mut default_crypto(),
+            &TH_3,
+            CRED_I,
+            Th4Input::Stat {
+                plaintext_3: &plaintext_3,
+            },
+        );
+        assert_eq!(th_4, TH_4);
+    }
+
+    #[test]
+    fn prk_out_and_exporter_match() {
+        let mut crypto = default_crypto();
+        let prk_out: BytesHashLen = edhoc_kdf_owned(&mut crypto, &PRK_4E3M, 7u8, &TH_4);
+        assert_eq!(prk_out, PRK_OUT);
+
+        let prk_exporter: BytesHashLen = edhoc_kdf_owned(&mut crypto, &prk_out, 10u8, &[]);
+        assert_eq!(prk_exporter, PRK_EXPORTER);
+
+        let master_secret: [u8; 16] = edhoc_kdf_owned(&mut crypto, &prk_exporter, 0u8, &[]);
+        assert_eq!(master_secret, OSCORE_MASTER_SECRET);
+
+        let master_salt: [u8; 8] = edhoc_kdf_owned(&mut crypto, &prk_exporter, 1u8, &[]);
+        assert_eq!(master_salt, OSCORE_MASTER_SALT);
     }
 }
