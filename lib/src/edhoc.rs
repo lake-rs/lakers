@@ -78,6 +78,38 @@ pub fn edhoc_key_update(
     state.prk_out
 }
 
+// TODO: complete the derivation
+pub fn derive_resumption_psk(
+    state: &Completed,
+    crypto: &mut impl CryptoTrait,
+) -> Result<ResumptionPsk, EDHOCError> {
+    let mut rpsk: BytesResumptionPsk = Default::default();
+    edhoc_kdf(
+        crypto,
+        &state.prk_exporter,
+        RESUMPTION_PSK_LABEL,
+        &[],
+        &mut rpsk,
+    );
+
+    let mut kid = [0; RESUMPTION_PSK_KID_LEN];
+    edhoc_kdf(
+        crypto,
+        &state.prk_exporter,
+        RESUMPTION_PSK_KID_LABEL,
+        &[],
+        &mut kid,
+    );
+
+    // then build id_cred_psk
+    let rid_cred_psk = IdCred::from_kid(kid.as_slice())?;
+
+    Ok(ResumptionPsk {
+        rpsk,
+        kid,
+        rid_cred_psk,
+    })
+}
 pub fn r_process_message_1(
     state: &ResponderStart,
     crypto: &mut impl CryptoTrait,

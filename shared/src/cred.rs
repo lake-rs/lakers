@@ -179,6 +179,29 @@ impl IdCred {
     fn bstr_representable_as_int(value: u8) -> bool {
         (0x0..=0x17).contains(&value) || (0x20..=0x37).contains(&value)
     }
+
+    pub fn from_kid(value: &[u8]) -> Result<Self, EDHOCError> {
+        let mut id_cred = IdCred::new();
+        if value.len() > 0 && value.len() <= 23 {
+            id_cred
+                .bytes
+                .extend_from_slice(&[
+                    CBOR_MAJOR_MAP + 1,
+                    KID_LABEL,
+                    CBOR_MAJOR_BYTE_STRING | value.len() as u8,
+                ])
+                .map_err(|_| EDHOCError::CredentialTooLongError)?;
+
+            id_cred
+                .bytes
+                .extend_from_slice(value)
+                .map_err(|_| EDHOCError::CredentialTooLongError)?;
+        } else {
+            return Err(EDHOCError::ParsingError);
+        }
+
+        Ok(id_cred)
+    }
 }
 
 /// A credential for use in EDHOC.

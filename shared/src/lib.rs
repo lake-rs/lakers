@@ -127,7 +127,9 @@ pub const KCCS_LABEL: u8 = 14;
 #[deprecated(note = "Typo for KCCS_LABEL")]
 pub const KCSS_LABEL: u8 = KCCS_LABEL;
 pub const KID_LABEL: u8 = 4;
-
+pub const RESUMPTION_PSK_KID_LEN: usize = 2;
+pub const RESUMPTION_PSK_LABEL: u8 = 15; // TODO : to be defined
+pub const RESUMPTION_PSK_KID_LABEL: u8 = 16; // TODO: to be defined
 pub const ENC_STRUCTURE_LEN: usize = 8 + 5 + SHA256_DIGEST_LEN; // 8 for ENCRYPT0
 pub const ENC_STRUCTURE_PSK_LEN: usize = 1 + 1 + 8 + 1 + EXTERNAL_AAD_PSK_LEN; //
 pub const EXTERNAL_AAD_PSK_LEN: usize = 1 + 1 + 2 + 32 + 2 + 38 + 2 + 38 + 1;
@@ -183,6 +185,7 @@ pub type BufferCiphertext4 = EdhocMessageBuffer;
 pub type BytesHashLen = [u8; SHA256_DIGEST_LEN];
 pub type BytesP256ElemLen = [u8; P256_ELEM_LEN];
 pub type BytesElemLenPSK = [u8; ELEM_LEN_PSK];
+pub type BytesResumptionPsk = [u8; SHA256_DIGEST_LEN];
 pub type BufferMessage2 = EdhocMessageBuffer;
 /// Generic buffer type (soft-deprecated).
 ///
@@ -376,6 +379,12 @@ impl ConnId {
 pub enum EDHOCMethod {
     StatStat = 3,
     PSK = 4,
+}
+
+pub struct ResumptionPsk {
+    pub rpsk: BytesResumptionPsk,
+    pub kid: [u8; RESUMPTION_PSK_KID_LEN],
+    pub rid_cred_psk: IdCred,
 }
 
 impl TryFrom<u8> for EDHOCMethod {
