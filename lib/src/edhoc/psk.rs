@@ -168,7 +168,7 @@ pub(crate) fn i_verify_message_2_psk(
     // message 3 processing
     let salt_4e3m = compute_salt_4e3m(crypto, &prk_3e2m, &th_3);
 
-    let psk = match valid_cred_r.key {
+    let psk = match &valid_cred_r.key {
         CredentialKey::Symmetric(psk) => psk,
         // FIXME: find a good definition of error
         _ => return Err(EDHOCError::UnsupportedMethod),

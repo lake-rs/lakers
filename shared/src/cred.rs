@@ -6,10 +6,10 @@ pub type BufferIdCred = EdhocBuffer<192>; // variable size, can contain either t
 pub type BytesKeyAES128 = [u8; 16];
 pub type BytesKeyEC2 = [u8; 32];
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 #[repr(C)]
 pub enum CredentialKey {
-    Symmetric(BytesKeyAES128),
+    Symmetric(BufferPsk),
     EC2Compact(BytesKeyEC2),
     // Add other key types as needed
 }
@@ -194,7 +194,7 @@ impl Credential {
     /// Creates a new CCS credential with the given bytes and a pre-shared key
     ///
     /// NOTE: For now this is only useful for the experimental PSK method.
-    pub fn new_ccs_symmetric(bytes: BufferCred, symmetric_key: BytesKeyAES128) -> Self {
+    pub fn new_ccs_symmetric(bytes: BufferCred, symmetric_key: BufferPsk) -> Self {
         Self {
             bytes,
             key: CredentialKey::Symmetric(symmetric_key),
@@ -273,16 +273,9 @@ impl Credential {
     pub fn parse_ccs_symmetric(value: &[u8]) -> Result<Self, EDHOCError> {
         const CCS_PREFIX_LEN: usize = 3;
         const CNF_AND_COSE_KEY_PREFIX_LEN: usize = 8;
-        const COSE_KEY_FIRST_ITEMS_LEN: usize = 3; //COSE for symmetric key
-        const SYMMETRIC_KEY_LEN: usize = 16; // Assuming a 128-bit symmetric key
+        const COSE_KEY_ITEMS_BEFORE_PSK_HEADER_LEN: usize = 2;
 
-        if value.len()
-            < CCS_PREFIX_LEN
-                + 1
-                + CNF_AND_COSE_KEY_PREFIX_LEN
-                + COSE_KEY_FIRST_ITEMS_LEN
-                + SYMMETRIC_KEY_LEN
-        {
+        if value.len() < CCS_PREFIX_LEN {
             Err(EDHOCError::ParsingError)
         } else {
             let subject_len = CBORDecoder::info_of(value[2]) as usize;
@@ -292,18 +285,45 @@ impl Credential {
                 .and_then(|x| x.checked_add(CNF_AND_COSE_KEY_PREFIX_LEN))
                 .ok_or(EDHOCError::ParsingError)?;
 
-            let symmetric_key_offset: usize = id_cred_offset
-                .checked_add(COSE_KEY_FIRST_ITEMS_LEN)
+            let psk_header_offset: usize = id_cred_offset
+                .checked_add(COSE_KEY_ITEMS_BEFORE_PSK_HEADER_LEN) // to get the PSK byte string header
                 .ok_or(EDHOCError::ParsingError)?;
 
-            if symmetric_key_offset
-                .checked_add(SYMMETRIC_KEY_LEN)
-                .map_or(false, |end| end <= value.len())
-            {
-                let symmetric_key: [u8; SYMMETRIC_KEY_LEN] = value
-                    [symmetric_key_offset..symmetric_key_offset + SYMMETRIC_KEY_LEN]
-                    .try_into()
-                    .map_err(|_| EDHOCError::ParsingError)?;
+            if value.len() <= psk_header_offset {
+                return Err(EDHOCError::ParsingError);
+            }
+
+            let header = value[psk_header_offset];
+
+            let (psk_len, psk_start) =
+                if header >= CBOR_MAJOR_BYTE_STRING && header <= CBOR_MAJOR_BYTE_STRING_MAX {
+                    (CBORDecoder::info_of(header) as usize, psk_header_offset + 1)
+                } else if header == CBOR_BYTE_STRING {
+                    let len_offset = psk_header_offset
+                        .checked_add(1)
+                        .ok_or(EDHOCError::ParsingError)?;
+
+                    if value.len() <= len_offset {
+                        return Err(EDHOCError::ParsingError);
+                    }
+
+                    (value[len_offset] as usize, psk_header_offset + 2)
+                } else {
+                    return Err(EDHOCError::ParsingError);
+                };
+
+            if psk_len == 0 || psk_len > MAX_PSK_LEN {
+                return Err(EDHOCError::ParsingError);
+            }
+            let psk_end = psk_start
+                .checked_add(psk_len)
+                .ok_or(EDHOCError::ParsingError)?;
+            if psk_end > value.len() {
+                return Err(EDHOCError::ParsingError);
+            } else {
+                let psk_bytes = &value[psk_start..psk_end];
+                let symmetric_key =
+                    BufferPsk::new_from_slice(psk_bytes).map_err(|_| EDHOCError::ParsingError)?;
 
                 let kid = value[id_cred_offset];
 
@@ -314,8 +334,6 @@ impl Credential {
                     kid: Some(BufferKid::new_from_slice(&[kid]).unwrap()),
                     cred_type: CredentialType::CCS_PSK,
                 })
-            } else {
-                Err(EDHOCError::ParsingError)
             }
         }
     }
@@ -476,7 +494,6 @@ mod test {
     const ID_CRED_BY_REF_TV: &[u8] = &hex!("a1044132");
     const ID_CRED_BY_VALUE_TV: &[u8] = &hex!("A10EA2026B6578616D706C652E65647508A101A501020241322001215820BBC34960526EA4D32E940CAD2A234148DDC21791A12AFBCBAC93622046DD44F02258204519E257236B2A0CE2023F0931F1F386CA7AFDA64FCDE0108C224C51EABF6072");
     const KID_VALUE_TV: &[u8] = &hex!("32");
-
     #[test]
     fn test_new_cred_ccs() {
         let cred = Credential::new_ccs(CRED_TV.try_into().unwrap(), G_A_TV.try_into().unwrap());
@@ -542,10 +559,13 @@ mod test_experimental {
     use super::*;
     use hexlit::hex;
 
-    const CRED_PSK: &[u8] =
+    const CRED_PSK_16: &[u8] =
         &hex!("A202686D79646F74626F7408A101A30104024132205050930FF462A77A3540CF546325DEA214");
-    const K: &[u8] = &hex!("50930FF462A77A3540CF546325DEA214");
+    const K_16: &[u8] = &hex!("50930FF462A77A3540CF546325DEA214");
     const KID_VALUE_PSK: &[u8] = &hex!("32");
+    const K_32: &[u8] = &hex!("50930FF462A77A3540CF546325DEA21450930FF462A77A3540CF546325DEA214");
+    const CRED_PSK_32: &[u8] =
+        &hex!("A202686D79646F74626F7408A101A3010402413220582050930FF462A77A3540CF546325DEA21450930FF462A77A3540CF546325DEA214");
 
     #[test]
     fn test_cred_ccs_symmetric_by_value_or_reference() {
@@ -553,17 +573,45 @@ mod test_experimental {
     }
 
     #[test]
-    fn test_new_cred_ccs_symmetric() {
-        let cred =
-            Credential::new_ccs_symmetric(CRED_PSK.try_into().unwrap(), K.try_into().unwrap());
-        assert_eq!(cred.bytes.as_slice(), CRED_PSK);
+    fn test_new_cred_ccs_symmetric_16() {
+        let k = BufferPsk::new_from_slice(&K_16)
+            .map_err(|_| EDHOCError::ParsingError)
+            .unwrap();
+        let cred = Credential::new_ccs_symmetric(CRED_PSK_16.try_into().unwrap(), k.clone());
+        assert_eq!(cred.bytes.as_slice(), CRED_PSK_16);
+        assert_eq!(cred.key, CredentialKey::Symmetric(k));
     }
 
     #[test]
-    fn test_parse_ccs_symmetric() {
-        let cred = Credential::parse_ccs_symmetric(CRED_PSK).unwrap();
-        assert_eq!(cred.bytes.as_slice(), CRED_PSK);
-        assert_eq!(cred.key, CredentialKey::Symmetric(K.try_into().unwrap()));
+    fn test_new_cred_ccs_symmetric_32() {
+        let k = BufferPsk::new_from_slice(&K_32)
+            .map_err(|_| EDHOCError::ParsingError)
+            .unwrap();
+        let cred = Credential::new_ccs_symmetric(CRED_PSK_32.try_into().unwrap(), k.clone());
+        assert_eq!(cred.bytes.as_slice(), CRED_PSK_32);
+        assert_eq!(cred.key, CredentialKey::Symmetric(k));
+    }
+
+    #[test]
+    fn test_parse_ccs_symmetric_16() {
+        let k = BufferPsk::new_from_slice(&K_16)
+            .map_err(|_| EDHOCError::ParsingError)
+            .unwrap();
+        let cred = Credential::parse_ccs_symmetric(CRED_PSK_16).unwrap();
+        assert_eq!(cred.bytes.as_slice(), CRED_PSK_16);
+        assert_eq!(cred.key, CredentialKey::Symmetric(k));
+        assert_eq!(cred.kid.unwrap().as_slice(), KID_VALUE_PSK);
+        assert_eq!(cred.cred_type, CredentialType::CCS_PSK);
+    }
+
+    #[test]
+    fn test_parse_ccs_symmetric_32() {
+        let k = BufferPsk::new_from_slice(&K_32)
+            .map_err(|_| EDHOCError::ParsingError)
+            .unwrap();
+        let cred = Credential::parse_ccs_symmetric(CRED_PSK_32).unwrap();
+        assert_eq!(cred.bytes.as_slice(), CRED_PSK_32);
+        assert_eq!(cred.key, CredentialKey::Symmetric(k));
         assert_eq!(cred.kid.unwrap().as_slice(), KID_VALUE_PSK);
         assert_eq!(cred.cred_type, CredentialType::CCS_PSK);
     }

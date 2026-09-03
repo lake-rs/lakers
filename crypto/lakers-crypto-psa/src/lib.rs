@@ -89,10 +89,10 @@ impl CryptoTrait for Crypto {
     }
 
     // added for PSK
-    fn hkdf_extract_psk(&mut self, salt: &BytesHashLen, ikm: &BytesElemLenPSK) -> BytesHashLen {
+    fn hkdf_extract_psk(&mut self, salt: &BytesHashLen, ikm: &BufferPsk) -> BytesHashLen {
         // TODO
         // TODO generalize if salt is not provided
-        let output = self.hmac_sha256(ikm, salt);
+        let output = self.hmac_sha256(ikm.as_slice(), salt);
 
         output
     }

@@ -80,10 +80,12 @@ impl CryptoTrait for Crypto {
         output
     }
 
-    fn hkdf_extract_psk(&mut self, salt: &BytesHashLen, ikm: &BytesElemLenPSK) -> BytesHashLen {
+    fn hkdf_extract_psk(&mut self, salt: &BytesHashLen, ikm: &BufferPsk) -> BytesHashLen {
         // TODO
         // TODO generalize if salt is not provided
-        let output = self.hmac_sha256(&mut ikm.clone()[..], *salt);
+        let mut psk = [0u8; MAX_PSK_LEN];
+        psk[..ikm.len()].copy_from_slice(ikm.as_slice());
+        let output = self.hmac_sha256(&mut psk[..ikm.len()], *salt);
 
         output
     }
