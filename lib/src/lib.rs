@@ -868,46 +868,6 @@ mod test {
 
         assert_eq!(i_oscore_secret, r_oscore_secret);
         assert_eq!(i_oscore_salt, r_oscore_salt);
-    }
-    #[cfg(feature = "test-ead-none")]
-    #[test]
-    fn test_resumption() {
-        let cred_i = Credential::parse_ccs_symmetric(CRED_I_PSK.try_into().unwrap()).unwrap();
-        let cred_r = Credential::parse_ccs_symmetric(CRED_R_PSK.try_into().unwrap()).unwrap();
-
-        let initiator =
-            EdhocInitiator::new(default_crypto(), EDHOCMethod::PSK, EDHOCSuite::CipherSuite2);
-
-        let responder =
-            EdhocResponder::new(default_crypto(), ResponderIdentity::Psk, cred_r.clone());
-
-        let (initiator, message_1) = initiator.prepare_message_1(None, &EadItems::new()).unwrap();
-
-        let (responder, _c_i, _ead_1) = responder.process_message_1(&message_1).unwrap();
-        let (responder, message_2) = responder
-            .prepare_message_2(CredentialTransfer::ByReference, None, &EadItems::new())
-            .unwrap();
-
-        let (mut initiator, _c_r, _ead_2) = initiator.parse_message_2(&message_2).unwrap();
-        initiator
-            .set_identity(InitiatorIdentity::Psk, cred_i.clone())
-            .unwrap();
-        let initiator = initiator.verify_message_2(Some(cred_r)).unwrap();
-
-        let (initiator, message_3, _i_prk_out) = initiator
-            .prepare_message_3(CredentialTransfer::ByReference, &EadItems::new())
-            .unwrap();
-
-        let (responder, id_cred_i, _ead_3) = responder
-            .parse_message_3_with_credential_lookup(&message_3, |id| {
-                credential_check_or_fetch(Some(cred_i.clone()), id.clone())
-            })
-            .unwrap();
-        assert!(id_cred_i.reference_only());
-        let (responder, _r_prk_out) = responder.verify_message_3(cred_i.clone()).unwrap();
-
-        let (mut responder, message_4) = responder.prepare_message_4(&EadItems::new()).unwrap();
-        let (mut initiator, _ead_4) = initiator.process_message_4(&message_4).unwrap();
 
         let i_resumption = initiator.derive_resumption_psk().unwrap();
         let r_resumption = responder.derive_resumption_psk().unwrap();
