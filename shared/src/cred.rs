@@ -259,82 +259,27 @@ impl Credential {
             return Err(EDHOCError::ParsingError);
         }
 
+        let cred_type = match x {
+            CredentialKey::EC2Compact(_) => CredentialType::CCS,
+            CredentialKey::Symmetric(_) => CredentialType::CCS_PSK,
+        };
+
         Ok(Self {
             bytes: BufferCred::new_from_slice(value).map_err(|_| EDHOCError::ParsingError)?,
             key: x,
             kid,
-            cred_type: CredentialType::CCS,
+            cred_type,
         })
     }
 
     /// Parse a CCS style credential, but the key is a symmetric key.
-    ///
-    /// NOTE: For now this is only useful for the experimental PSK method.
     pub fn parse_ccs_symmetric(value: &[u8]) -> Result<Self, EDHOCError> {
-        const CCS_PREFIX_LEN: usize = 3;
-        const CNF_AND_COSE_KEY_PREFIX_LEN: usize = 8;
-        const COSE_KEY_ITEMS_BEFORE_PSK_HEADER_LEN: usize = 2;
-
-        if value.len() < CCS_PREFIX_LEN {
-            Err(EDHOCError::ParsingError)
-        } else {
-            let subject_len = CBORDecoder::info_of(value[2]) as usize;
-
-            let id_cred_offset: usize = CCS_PREFIX_LEN
-                .checked_add(subject_len)
-                .and_then(|x| x.checked_add(CNF_AND_COSE_KEY_PREFIX_LEN))
-                .ok_or(EDHOCError::ParsingError)?;
-
-            let psk_header_offset: usize = id_cred_offset
-                .checked_add(COSE_KEY_ITEMS_BEFORE_PSK_HEADER_LEN) // to get the PSK byte string header
-                .ok_or(EDHOCError::ParsingError)?;
-
-            if value.len() <= psk_header_offset {
-                return Err(EDHOCError::ParsingError);
-            }
-
-            let header = value[psk_header_offset];
-
-            let (psk_len, psk_start) =
-                if header >= CBOR_MAJOR_BYTE_STRING && header <= CBOR_MAJOR_BYTE_STRING_MAX {
-                    (CBORDecoder::info_of(header) as usize, psk_header_offset + 1)
-                } else if header == CBOR_BYTE_STRING {
-                    let len_offset = psk_header_offset
-                        .checked_add(1)
-                        .ok_or(EDHOCError::ParsingError)?;
-
-                    if value.len() <= len_offset {
-                        return Err(EDHOCError::ParsingError);
-                    }
-
-                    (value[len_offset] as usize, psk_header_offset + 2)
-                } else {
-                    return Err(EDHOCError::ParsingError);
-                };
-
-            if psk_len == 0 || psk_len > MAX_PSK_LEN {
-                return Err(EDHOCError::ParsingError);
-            }
-            let psk_end = psk_start
-                .checked_add(psk_len)
-                .ok_or(EDHOCError::ParsingError)?;
-            if psk_end > value.len() {
-                return Err(EDHOCError::ParsingError);
-            } else {
-                let psk_bytes = &value[psk_start..psk_end];
-                let symmetric_key =
-                    BufferPsk::new_from_slice(psk_bytes).map_err(|_| EDHOCError::ParsingError)?;
-
-                let kid = value[id_cred_offset];
-
-                Ok(Self {
-                    bytes: BufferCred::new_from_slice(value)
-                        .map_err(|_| EDHOCError::ParsingError)?,
-                    key: CredentialKey::Symmetric(symmetric_key),
-                    kid: Some(BufferKid::new_from_slice(&[kid]).unwrap()),
-                    cred_type: CredentialType::CCS_PSK,
-                })
-            }
+        // This function  checks whether the parsed credential actually contains a symmetric key
+        let cred = Self::parse_ccs(value)?;
+        match cred.cred_type {
+            CredentialType::CCS_PSK => Ok(cred),
+            // Anything that is not CCS_PSK is not a symmetric credential
+            _ => Err(EDHOCError::UnexpectedCredential),
         }
     }
 
@@ -343,21 +288,25 @@ impl Credential {
     /// This takes a decoder rather than a slice because this enables a naked decoder to assert that
     /// the decoder is done, and others to continue.
     ///
-    /// This function does not try to require deterministic encoding, as that is not exposed by the
-    /// decoder. (Adding it would be possible, but would not just mean asserting monotony, but also
-    /// requiring it integer encodings etc).
+    /// This function requires deterministic encoding, since kty has to appear before
+    /// -1 in order to decode adequately
     fn parse_cosekey<'data>(
         decoder: &mut CBORDecoder<'data>,
     ) -> Result<(CredentialKey, Option<BufferKid>), EDHOCError> {
         let items = decoder.map()?;
         let mut x = None;
         let mut kid = None;
+        let mut kty = None;
+        let mut k = None;
         for _ in 0..items {
             match decoder.i8()? {
                 // kty: EC2
                 1 => {
-                    if decoder.u8()? != 2 {
+                    let temp = decoder.u8()?;
+                    if temp != 2 && temp != 4 {
                         return Err(EDHOCError::ParsingError);
+                    } else {
+                        kty = Some(temp)
                     }
                 }
                 // kid: bytes. Note that this is always a byte string, even if in other places it's used
@@ -369,12 +318,22 @@ impl Credential {
                             .map_err(|_| EDHOCError::ParsingError)?,
                     );
                 }
-                // crv: p-256
-                -1 => {
-                    if decoder.u8()? != 1 {
-                        return Err(EDHOCError::ParsingError);
+                // Label -1 depends on kty: `crv` for EC2 keys, `k` (the key material
+                // itself) for symmetric keys. This is why kty has to be known by now.
+                -1 => match kty {
+                    Some(2) => {
+                        if decoder.u8()? != 1 {
+                            return Err(EDHOCError::ParsingError);
+                        }
                     }
-                }
+                    Some(4) => {
+                        k = Some(
+                            BufferPsk::new_from_slice(decoder.bytes()?)
+                                .map_err(|_| EDHOCError::ParsingError)?,
+                        );
+                    }
+                    _ => return Err(EDHOCError::ParsingError),
+                },
                 // x
                 -2 => {
                     x = Some(CredentialKey::EC2Compact(
@@ -394,7 +353,13 @@ impl Credential {
                 }
             }
         }
-        Ok((x.ok_or(EDHOCError::ParsingError)?, kid))
+        match (kty, x, k) {
+            (Some(2), Some(x), None) => Ok((x, kid)),
+            (Some(4), None, Some(k)) if k.len() >= MIN_PSK_LEN => {
+                Ok((CredentialKey::Symmetric(k), kid))
+            }
+            _ => Err(EDHOCError::ParsingError),
+        }
     }
 
     /// Dress a naked COSE_Key as a CCS by prepending 0xA108A101 as specified in Section 3.5.2 of
@@ -543,7 +508,8 @@ mod test {
     }
 
     #[rstest]
-    #[case(&[0x0D], &[0xa1, 0x04, 0x41, 0x0D])] // two optimizations: omit kid label and encode as CBOR integer
+    #[case(&[0x0D], &[0xa1, 0x04, 0x41, 0x0D]
+    )] // two optimizations: omit kid label and encode as CBOR integer
     #[case(&[0x41, 0x18], &[0xa1, 0x04, 0x41, 0x18])] // one optimization: omit kid label
     #[case(ID_CRED_BY_VALUE_TV, ID_CRED_BY_VALUE_TV)] // regular credential by value
     fn test_id_cred_from_encoded_plaintext(#[case] input: &[u8], #[case] expected: &[u8]) {
@@ -570,6 +536,15 @@ mod test_experimental {
     #[test]
     fn test_cred_ccs_symmetric_by_value_or_reference() {
         // TODO
+    }
+
+    #[test]
+    fn test_parse_ccs_psk_via_parse_ccs() {
+        let cred = Credential::parse_ccs(CRED_PSK_16).unwrap();
+        assert_eq!(cred.bytes.as_slice(), CRED_PSK_16);
+        assert_eq!(cred.key, CredentialKey::Symmetric(K_16.try_into().unwrap()));
+        assert_eq!(cred.kid.unwrap().as_slice(), KID_VALUE_PSK);
+        assert_eq!(cred.cred_type, CredentialType::CCS_PSK);
     }
 
     #[test]
@@ -614,5 +589,37 @@ mod test_experimental {
         assert_eq!(cred.key, CredentialKey::Symmetric(k));
         assert_eq!(cred.kid.unwrap().as_slice(), KID_VALUE_PSK);
         assert_eq!(cred.cred_type, CredentialType::CCS_PSK);
+    }
+
+    /// `CRED_PSK_16` with four trailing bytes that are not part of the CBOR item.
+    ///
+    /// The credential itself is well-formed; only the trailing data makes it invalid.
+    const CRED_PSK_16_TRAILING_GARBAGE: &[u8] = &hex!(
+        "A202686D79646F74626F7408A101A30104024132205050930FF462A77A3540CF546325DEA214DEADBEEF"
+    );
+
+    /// `CRED_PSK_16` with the COSE_Key entries reordered so that `-1` (k) precedes `1` (kty).
+    ///
+    /// This is valid CBOR, but not deterministically encoded: RFC 8949 orders map keys by their
+    /// encoded bytes, which puts `0x01` (kty) before `0x20` (-1).
+    const CRED_PSK_16_KTY_LAST: &[u8] =
+        &hex!("A202686D79646F74626F7408A101A3205050930FF462A77A3540CF546325DEA2140104024132");
+
+    /// `CRED_PSK_16` whose PSK is an empty byte string (`0x40`).
+    const CRED_PSK_EMPTY: &[u8] = &hex!("A202686D79646F74626F7408A101A301040241322040");
+
+    #[test]
+    fn test_parse_ccs_symmetric_rejects_trailing_garbage() {
+        Credential::parse_ccs_symmetric(CRED_PSK_16_TRAILING_GARBAGE).unwrap_err();
+    }
+
+    #[test]
+    fn test_parse_ccs_symmetric_rejects_kty_after_k() {
+        Credential::parse_ccs_symmetric(CRED_PSK_16_KTY_LAST).unwrap_err();
+    }
+
+    #[test]
+    fn test_parse_ccs_symmetric_rejects_empty_psk() {
+        Credential::parse_ccs_symmetric(CRED_PSK_EMPTY).unwrap_err();
     }
 }

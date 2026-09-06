@@ -117,7 +117,8 @@ pub const MAX_INFO_LEN: usize = 2 + SHA256_DIGEST_LEN + // 32-byte digest as bst
     1 + MAX_KDF_LABEL_LEN +     // label <24 bytes as tstr
     1 + MAX_KDF_CONTEXT_LEN +   // context <24 bytes as bstr
     1; // length as u8
-pub const MAX_PSK_LEN: usize = SHA256_DIGEST_LEN;
+pub const MAX_PSK_LEN: usize = SHA256_DIGEST_LEN; // arbitrary chosen number
+pub const MIN_PSK_LEN: usize = 16; // Each external PSK MUST be derived from at least 128 bits of entropy, and MUST be at least 128 bits long
 pub const KCCS_LABEL: u8 = 14;
 #[deprecated(note = "Typo for KCCS_LABEL")]
 pub const KCSS_LABEL: u8 = KCCS_LABEL;
@@ -174,7 +175,7 @@ pub type BufferMessage3 = EdhocMessageBuffer;
 pub type BufferMessage4 = EdhocMessageBuffer;
 pub type BufferCiphertext2 = EdhocMessageBuffer;
 pub type BufferCiphertext3 = EdhocMessageBuffer;
-pub type BufferPsk = EdhocBuffer<MAX_PSK_LEN>;
+pub type BufferPsk = EdhocBuffer<MAX_PSK_LEN>; // TODO: is a secret, and EdhocBuffer implements Debug. To change
 pub type BufferCiphertext4 = EdhocMessageBuffer;
 pub type BytesHashLen = [u8; SHA256_DIGEST_LEN];
 pub type BytesP256ElemLen = [u8; P256_ELEM_LEN];
