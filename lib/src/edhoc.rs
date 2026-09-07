@@ -1939,11 +1939,8 @@ mod tests {
     // }
     #[test]
     fn test_symmetric_32_bytes() {
-        let mut psk_32 = BufferPsk::new();
-        let mut psk_16 = BufferPsk::new();
-        psk_32.fill_with_slice(&[0xAB; 32]).unwrap();
-        psk_16.fill_with_slice(&[0xAB; 16]).unwrap();
-
+        let psk_32 = BufferPsk::new_from_slice(&[0xAB; 32]).unwrap();
+        let psk_16 = BufferPsk::new_from_slice(&[0xAB; 16]).unwrap();
         let prk_32 = compute_prk_4e3m_psk(&mut default_crypto(), &SALT_4E3M_PSK_TV, &psk_32);
         let prk_16 = compute_prk_4e3m_psk(&mut default_crypto(), &SALT_4E3M_PSK_TV, &psk_16);
 

@@ -29,6 +29,8 @@ pub use buffer::*;
 
 #[cfg(feature = "python-bindings")]
 use pyo3::prelude::*;
+mod psk;
+pub use psk::*;
 #[cfg(feature = "python-bindings")]
 mod python_bindings;
 
@@ -117,7 +119,9 @@ pub const MAX_INFO_LEN: usize = 2 + SHA256_DIGEST_LEN + // 32-byte digest as bst
     1 + MAX_KDF_LABEL_LEN +     // label <24 bytes as tstr
     1 + MAX_KDF_CONTEXT_LEN +   // context <24 bytes as bstr
     1; // length as u8
-pub const MAX_PSK_LEN: usize = SHA256_DIGEST_LEN; // arbitrary chosen number
+       // The PSK is the IKM of an HKDF-SHA-256 extract, whose output is a 256-bit PRK, so entropy beyond
+       // 32 bytes cannot be carried into the key schedule and a longer PSK buys no additional security.
+pub const MAX_PSK_LEN: usize = SHA256_DIGEST_LEN;
 pub const MIN_PSK_LEN: usize = 16; // Each external PSK MUST be derived from at least 128 bits of entropy, and MUST be at least 128 bits long
 pub const KCCS_LABEL: u8 = 14;
 #[deprecated(note = "Typo for KCCS_LABEL")]
@@ -175,7 +179,6 @@ pub type BufferMessage3 = EdhocMessageBuffer;
 pub type BufferMessage4 = EdhocMessageBuffer;
 pub type BufferCiphertext2 = EdhocMessageBuffer;
 pub type BufferCiphertext3 = EdhocMessageBuffer;
-pub type BufferPsk = EdhocBuffer<MAX_PSK_LEN>; // TODO: is a secret, and EdhocBuffer implements Debug. To change
 pub type BufferCiphertext4 = EdhocMessageBuffer;
 pub type BytesHashLen = [u8; SHA256_DIGEST_LEN];
 pub type BytesP256ElemLen = [u8; P256_ELEM_LEN];
@@ -214,6 +217,7 @@ pub type EADBuffer = EdhocBuffer<MAX_EAD_LEN>;
 /// string or a number in -24..=23, all in preferred encoding.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct ConnId([u8; MAX_CONNID_ENCODED_LEN]);
+// Secret key material and must not be printable or comparable
 
 /// Classifier for the content of [`ConnId`]; used internally in its implementation.
 enum ConnIdType {

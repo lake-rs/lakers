@@ -6,7 +6,7 @@ pub type BufferIdCred = EdhocBuffer<192>; // variable size, can contain either t
 pub type BytesKeyAES128 = [u8; 16];
 pub type BytesKeyEC2 = [u8; 32];
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 #[repr(C)]
 pub enum CredentialKey {
     Symmetric(BufferPsk),
@@ -167,7 +167,7 @@ impl IdCred {
 /// Experimental support for CCS_PSK credentials is also available.
 // TODO: add back support for C and Python bindings
 #[cfg_attr(feature = "python-bindings", pyclass(from_py_object))]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 #[repr(C)]
 pub struct Credential {
     /// Original bytes of the credential, CBOR-encoded
@@ -355,9 +355,7 @@ impl Credential {
         }
         match (kty, x, k) {
             (Some(2), Some(x), None) => Ok((x, kid)),
-            (Some(4), None, Some(k)) if k.len() >= MIN_PSK_LEN => {
-                Ok((CredentialKey::Symmetric(k), kid))
-            }
+            (Some(4), None, Some(k)) => Ok((CredentialKey::Symmetric(k), kid)),
             _ => Err(EDHOCError::ParsingError),
         }
     }
@@ -382,6 +380,10 @@ impl Credential {
     pub fn parse_and_dress_naked_cosekey(cosekey: &[u8]) -> Result<Self, EDHOCError> {
         let mut decoder = CBORDecoder::new(cosekey);
         let (key, kid) = Self::parse_cosekey(&mut decoder)?;
+        let CredentialKey::EC2Compact(key) = key else {
+            return Err(EDHOCError::UnexpectedCredential);
+        };
+
         if !decoder.finished() {
             return Err(EDHOCError::ParsingError);
         }
@@ -394,7 +396,7 @@ impl Credential {
             .map_err(|_| EDHOCError::CredentialTooLongError)?;
         Ok(Self {
             bytes,
-            key,
+            key: CredentialKey::EC2Compact(key),
             kid,
             cred_type: CredentialType::CCS,
         })
@@ -481,10 +483,10 @@ mod test {
     fn test_parse_ccs() {
         let cred = Credential::parse_ccs(CRED_TV).unwrap();
         assert_eq!(cred.bytes.as_slice(), CRED_TV);
-        assert_eq!(
-            cred.key,
-            CredentialKey::EC2Compact(G_A_TV.try_into().unwrap())
-        );
+        let CredentialKey::EC2Compact(key) = cred.key else {
+            panic!("Expected EC2Compact credential");
+        };
+        assert_eq!(key.as_slice(), G_A_TV);
         assert_eq!(cred.kid.unwrap().as_slice(), KID_VALUE_TV);
         assert_eq!(cred.cred_type, CredentialType::CCS);
 
@@ -542,7 +544,10 @@ mod test_experimental {
     fn test_parse_ccs_psk_via_parse_ccs() {
         let cred = Credential::parse_ccs(CRED_PSK_16).unwrap();
         assert_eq!(cred.bytes.as_slice(), CRED_PSK_16);
-        assert_eq!(cred.key, CredentialKey::Symmetric(K_16.try_into().unwrap()));
+        let CredentialKey::Symmetric(key) = cred.key else {
+            panic!("Expected symmetric key")
+        };
+        assert_eq!(key.as_slice(), K_16);
         assert_eq!(cred.kid.unwrap().as_slice(), KID_VALUE_PSK);
         assert_eq!(cred.cred_type, CredentialType::CCS_PSK);
     }
@@ -554,7 +559,10 @@ mod test_experimental {
             .unwrap();
         let cred = Credential::new_ccs_symmetric(CRED_PSK_16.try_into().unwrap(), k.clone());
         assert_eq!(cred.bytes.as_slice(), CRED_PSK_16);
-        assert_eq!(cred.key, CredentialKey::Symmetric(k));
+        let CredentialKey::Symmetric(key) = cred.key else {
+            panic!("Expected symmetric key")
+        };
+        assert_eq!(key.as_slice(), k.as_slice());
     }
 
     #[test]
@@ -564,7 +572,10 @@ mod test_experimental {
             .unwrap();
         let cred = Credential::new_ccs_symmetric(CRED_PSK_32.try_into().unwrap(), k.clone());
         assert_eq!(cred.bytes.as_slice(), CRED_PSK_32);
-        assert_eq!(cred.key, CredentialKey::Symmetric(k));
+        let CredentialKey::Symmetric(key) = cred.key else {
+            panic!("Expected symmetric key")
+        };
+        assert_eq!(key.as_slice(), k.as_slice());
     }
 
     #[test]
@@ -574,7 +585,10 @@ mod test_experimental {
             .unwrap();
         let cred = Credential::parse_ccs_symmetric(CRED_PSK_16).unwrap();
         assert_eq!(cred.bytes.as_slice(), CRED_PSK_16);
-        assert_eq!(cred.key, CredentialKey::Symmetric(k));
+        let CredentialKey::Symmetric(key) = cred.key else {
+            panic!("Expected symmetric key")
+        };
+        assert_eq!(key.as_slice(), k.as_slice());
         assert_eq!(cred.kid.unwrap().as_slice(), KID_VALUE_PSK);
         assert_eq!(cred.cred_type, CredentialType::CCS_PSK);
     }
@@ -586,7 +600,10 @@ mod test_experimental {
             .unwrap();
         let cred = Credential::parse_ccs_symmetric(CRED_PSK_32).unwrap();
         assert_eq!(cred.bytes.as_slice(), CRED_PSK_32);
-        assert_eq!(cred.key, CredentialKey::Symmetric(k));
+        let CredentialKey::Symmetric(key) = cred.key else {
+            panic!("Expected symmetric key")
+        };
+        assert_eq!(key.as_slice(), k.as_slice());
         assert_eq!(cred.kid.unwrap().as_slice(), KID_VALUE_PSK);
         assert_eq!(cred.cred_type, CredentialType::CCS_PSK);
     }

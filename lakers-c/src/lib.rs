@@ -232,7 +232,7 @@ impl ProcessingM2C {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 #[repr(C)]
 pub struct CredentialC {
     pub bytes: BufferCred,
