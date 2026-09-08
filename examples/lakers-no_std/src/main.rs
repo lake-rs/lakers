@@ -206,8 +206,10 @@ fn main() -> ! {
         let valid_cred_i = credential_check_or_fetch(Some(cred_i), id_cred_i).unwrap();
         let (responder, r_prk_out) = responder.verify_message_3(valid_cred_i).unwrap();
 
-        let mut initiator = initiator.completed_without_message_4().unwrap();
-        let mut responder = responder.completed_without_message_4().unwrap();
+        // message_4 is mandatory in the PSK method: it is the Responder's only proof of
+        // possession of the PSK, so neither peer may complete the exchange without it.
+        let (mut responder, message_4) = responder.prepare_message_4(&EadItems::new()).unwrap();
+        let (mut initiator, _ead_4) = initiator.process_message_4(&message_4).unwrap();
 
         // check that prk_out is equal at initiator and responder side
         assert_eq!(i_prk_out, r_prk_out);

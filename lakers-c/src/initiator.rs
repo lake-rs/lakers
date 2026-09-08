@@ -319,7 +319,6 @@ mod tests {
 
     fn make_ffi_initiator() -> EdhocInitiator {
         EdhocInitiator {
-            method: EDHOCMethod::StatStat,
             start: InitiatorStart {
                 suites_i: Default::default(),
                 method: EDHOCMethod::StatStat,
@@ -338,6 +337,7 @@ mod tests {
                 th_4: Default::default(),
                 prk_out: Default::default(),
                 prk_exporter: Default::default(),
+                method: EDHOCMethod::StatStat,
             },
             cred_i: core::ptr::null_mut(),
             completed: Completed {
@@ -396,14 +396,13 @@ mod tests {
 
     #[test]
     // initiator_new_stores_requested_method creates an FFI initiator struct,
-    // calls initiator_new, and checks that both initiator.method and
-    // initiator.start.method were set to the requested method.
+    // calls initiator_new, and checks that the requested method was stored in
+    // initiator.start, which is the only field initiator_new writes.
     fn initiator_new_stores_requested_method() {
         let mut initiator = make_ffi_initiator();
         unsafe {
             assert_eq!(initiator_new(&mut initiator, EDHOCMethod::PSK), 0);
         }
-        assert!(matches!(initiator.method, EDHOCMethod::PSK));
         assert!(matches!(initiator.start.method, EDHOCMethod::PSK));
     }
 
