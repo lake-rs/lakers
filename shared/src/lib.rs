@@ -624,6 +624,7 @@ pub struct ProcessedM3 {
     pub th_4: BytesHashLen,
     pub prk_out: BytesHashLen,
     pub prk_exporter: BytesHashLen,
+    pub method: EDHOCMethod, // Added to reject complete_without_message_4 for PSK
 }
 
 #[derive(Debug)]
@@ -633,6 +634,7 @@ pub struct WaitM4 {
     pub th_4: BytesHashLen,
     pub prk_out: BytesHashLen,
     pub prk_exporter: BytesHashLen,
+    pub method: EDHOCMethod, // Added to reject complete_without_message_4 for PSK
 }
 
 #[derive(Debug)]
