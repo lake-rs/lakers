@@ -121,7 +121,7 @@ pub const MAX_INFO_LEN: usize = 2 + SHA256_DIGEST_LEN + // 32-byte digest as bst
     1; // length as u8
        // The PSK is the IKM of an HKDF-SHA-256 extract, whose output is a 256-bit PRK, so entropy beyond
        // 32 bytes cannot be carried into the key schedule and a longer PSK buys no additional security.
-pub const MAX_PSK_LEN: usize = SHA256_DIGEST_LEN;
+pub const MAX_PSK_LEN: usize = 32; // arbitrary chosen number
 pub const MIN_PSK_LEN: usize = 16; // Each external PSK MUST be derived from at least 128 bits of entropy, and MUST be at least 128 bits long
 pub const KCCS_LABEL: u8 = 14;
 #[deprecated(note = "Typo for KCCS_LABEL")]
