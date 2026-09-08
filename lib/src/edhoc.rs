@@ -1332,7 +1332,7 @@ mod tests {
         hex!("e87f51f53e3dd57195fe5ce5f3ed038abcc5ca6bf00f3a1c4a9bfc614ae87a0a");
     // === kid of the resumption PSK, exported with RESUMPTION_PSK_KID_LABEL ===
     const R_KID_TV: [u8; RESUMPTION_PSK_KID_LEN] = hex!("f38c");
-    // === ID_CRED_PSK of the resumption PSK: {4: h'F38C'} ===
+    // === ID_CRED_PSK of the resumption PSK, full value: {4: h'F38C'} ===
     const R_ID_CRED_PSK_TV: [u8; 5] = hex!("a10442f38c");
     const _ENC_STRUCURE_MESSAGE_3: EdhocBuffer<MAX_BUFFER_LEN> =
         EdhocBuffer::new_from_array(&hex!(
@@ -2211,6 +2211,10 @@ mod tests {
 
         assert_eq!(resumption.rpsk.as_slice(), &R_PSK_TV);
         assert_eq!(resumption.kid, R_KID_TV);
+        // The kid is wrapped as ID_CRED_PSK = {4: h'F38C'}, a reference to a credential rather
+        // than a credential by value.
+        assert!(resumption.rid_cred_psk.reference_only());
+        assert_eq!(resumption.rid_cred_psk.as_full_value(), &R_ID_CRED_PSK_TV);
     }
 
     #[test]
