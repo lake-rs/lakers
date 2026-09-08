@@ -417,6 +417,14 @@ pub enum EDHOCError {
     /// error: When the application sets the expected credential, that process should be informed
     /// by the known details.
     UnexpectedCredential,
+    /// A credential was well formed, but of a type that may not be used the way it was presented:
+    /// in particular a credential carrying a symmetric key (a PSK), sent by value rather than
+    /// identified by reference.
+    ///
+    /// Unlike [`EDHOCError::UnexpectedCredential`] this does not depend on what the application
+    /// was expecting. Such a credential is refused unconditionally, because honouring it would
+    /// mean deriving key material from the peer's own message.
+    WrongCredentialType,
     MissingIdentity,
     IdentityAlreadySet,
     MacVerificationFailed,
@@ -456,6 +464,7 @@ impl EDHOCError {
         use EDHOCError::*;
         match self {
             UnexpectedCredential => ErrCode::UNSPECIFIED,
+            WrongCredentialType => ErrCode::UNSPECIFIED,
             MissingIdentity => ErrCode::UNSPECIFIED,
             IdentityAlreadySet => ErrCode::UNSPECIFIED,
             MacVerificationFailed => ErrCode::UNSPECIFIED,

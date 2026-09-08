@@ -148,11 +148,31 @@ impl IdCred {
         self.bytes.as_slice()[1].into()
     }
 
-    pub fn get_ccs(&self) -> Option<Credential> {
+    /// Extract the credential this ID_CRED carries by value.
+    ///
+    /// A credential carrying a symmetric key (`CCS_PSK`) is never returned. Doing so would take
+    /// key material from the peer's own message instead of from local storage, letting the peer
+    /// choose the PSK that the handshake then "authenticates" with. This is the receive-side half
+    /// of the rule that [`Credential::by_value`] already enforces when sending.
+    ///
+    /// Errors with `MissingIdentity` if the ID_CRED is a reference (such as a `kid`) and so
+    /// carries no credential at all, `ParsingError` if the CCS is malformed, and
+    /// `WrongCredentialType` if it carries a symmetric key.
+    ///
+    /// Note that for the PSK method the same rule is enforced earlier, in
+    /// `r_parse_message_3_psk_with_cred_resolver`, which rejects a by-value `ID_CRED_PSK` before
+    /// any resolver runs. Neither check subsumes the other: that one protects handshakes that use
+    /// an application-supplied resolver, this one protects direct callers of
+    /// `credential_lookup_or_fetch` and `credential_check_or_fetch`.
+    pub fn get_ccs(&self) -> Result<Credential, EDHOCError> {
         if self.item_type() == IdCredType::KCCS {
-            Credential::parse_ccs(&self.bytes.as_slice()[2..]).ok()
+            let cred = Credential::parse_ccs(&self.bytes.as_slice()[2..])?;
+            match cred.cred_type {
+                CredentialType::CCS => Ok(cred),
+                _ => Err(EDHOCError::WrongCredentialType),
+            }
         } else {
-            None
+            Err(EDHOCError::MissingIdentity)
         }
     }
 

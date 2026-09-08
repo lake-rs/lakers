@@ -5,7 +5,7 @@ mod psk;
 mod statstat;
 
 use psk::{
-    i_parse_message_2_psk, i_prepare_message_3_psk, i_verify_message_2_psk, r_parse_message_3_psk,
+    i_parse_message_2_psk, i_prepare_message_3_psk, i_verify_message_2_psk,
     r_parse_message_3_psk_with_cred_resolver, r_prepare_message_2_psk, r_verify_message_3_psk,
 };
 use statstat::{
@@ -179,9 +179,7 @@ pub fn r_parse_message_3(
         WaitM3MethodSpecifics::StatStat { .. } => {
             r_parse_message_3_statstat(state, crypto, message_3)?
         }
-        WaitM3MethodSpecifics::Psk { cred_r } => {
-            r_parse_message_3_psk(state, crypto, message_3, cred_r)?
-        }
+        WaitM3MethodSpecifics::Psk { .. } => return Err(EDHOCError::UnsupportedMethod),
     };
 
     Ok((
