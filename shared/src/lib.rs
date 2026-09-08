@@ -382,7 +382,7 @@ pub enum EDHOCMethod {
 }
 
 pub struct ResumptionPsk {
-    pub rpsk: BytesResumptionPsk,
+    pub rpsk: BufferPsk,
     pub kid: [u8; RESUMPTION_PSK_KID_LEN],
     pub rid_cred_psk: IdCred,
 }

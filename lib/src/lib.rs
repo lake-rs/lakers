@@ -872,13 +872,13 @@ mod test {
         let i_resumption = initiator.derive_resumption_psk().unwrap();
         let r_resumption = responder.derive_resumption_psk().unwrap();
 
-        assert_eq!(i_resumption.rpsk, r_resumption.rpsk);
+        assert_eq!(i_resumption.rpsk.as_slice(), r_resumption.rpsk.as_slice());
         assert_eq!(i_resumption.kid, r_resumption.kid);
         assert_eq!(
             i_resumption.rid_cred_psk.as_full_value(),
             r_resumption.rid_cred_psk.as_full_value()
         );
-        assert_eq!(i_resumption.rpsk.len(), SHA256_DIGEST_LEN);
+        assert_eq!(i_resumption.rpsk.as_slice().len(), SHA256_DIGEST_LEN);
         assert_eq!(i_resumption.kid.len(), RESUMPTION_PSK_KID_LEN);
 
         assert_eq!(

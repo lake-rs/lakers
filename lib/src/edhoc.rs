@@ -83,14 +83,15 @@ pub fn derive_resumption_psk(
     state: &Completed,
     crypto: &mut impl CryptoTrait,
 ) -> Result<ResumptionPsk, EDHOCError> {
-    let mut rpsk: BytesResumptionPsk = Default::default();
+    let mut rpsk_bytes: BytesResumptionPsk = Default::default();
     edhoc_kdf(
         crypto,
         &state.prk_exporter,
         RESUMPTION_PSK_LABEL,
         &[],
-        &mut rpsk,
+        &mut rpsk_bytes,
     );
+    let rpsk = BufferPsk::new_from_slice(&rpsk_bytes).map_err(|_| EDHOCError::EncodingError)?;
 
     let mut kid = [0; RESUMPTION_PSK_KID_LEN];
     edhoc_kdf(
