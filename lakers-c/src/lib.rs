@@ -232,7 +232,7 @@ impl ProcessingM2C {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 #[repr(C)]
 pub struct CredentialC {
     pub bytes: BufferCred,
@@ -248,7 +248,7 @@ impl CredentialC {
     pub fn to_rust(&self) -> Credential {
         Credential {
             bytes: self.bytes.clone(),
-            key: self.key,
+            key: self.key.clone(),
             kid: Some(self.kid.clone()),
             cred_type: self.cred_type,
         }

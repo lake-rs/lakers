@@ -194,6 +194,11 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM1<Crypto> {
 }
 
 impl<'a, Crypto: CryptoTrait> EdhocResponderWaitM3<Crypto> {
+    /// Parse message 3, recovering `ID_CRED_I` without any credential lookup.
+    ///
+    /// Not supported for the PSK method, where it fails with `UnsupportedMethod`: resolving
+    /// `ID_CRED_PSK` requires a lookup against locally stored credentials, which this entry point
+    /// has no way to perform. Use [`Self::parse_message_3_with_credential_lookup`] instead.
     pub fn parse_message_3(
         mut self,
         message_3: &'a BufferMessage3,
@@ -574,11 +579,7 @@ pub fn credential_check_or_fetch(
         // 7. Store CRED_X as valid and trusted.
         //   Pair it with consistent credential identifiers, for each supported type of credential identifier.
 
-        if let Some(cred) = id_cred_received.get_ccs() {
-            Ok(cred)
-        } else {
-            Err(EDHOCError::ParsingError)
-        }
+        id_cred_received.get_ccs()
     }
 
     // 8. Is this authentication credential good to use in the context of this EDHOC session?
@@ -608,11 +609,7 @@ pub fn credential_lookup_or_fetch(
         }
     }
 
-    if let Some(cred) = id_cred_received.get_ccs() {
-        Ok(cred)
-    } else {
-        Err(EDHOCError::MissingIdentity)
-    }
+    id_cred_received.get_ccs()
 }
 
 #[cfg(test)]
@@ -641,11 +638,12 @@ mod test {
     use hexlit::hex;
     use lakers_crypto::default_crypto;
     use test_vectors_common::*;
-    #[cfg(feature = "test-ead-none")]
     const CRED_I_PSK: &[u8] =
         &hex!("A20269696E69746961746F7208A101A30104024110205050930FF462A77A3540CF546325DEA214");
     const CRED_R_PSK: &[u8] =
         &hex!("A20269726573706F6E64657208A101A30104024110205050930FF462A77A3540CF546325DEA214");
+    const CRED_I_PSK_FORGED: &[u8] =
+        &hex!("A20269696E69746961746F7208A101A301040241102050AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
 
     #[test]
     fn test_new_initiator() {
@@ -865,6 +863,61 @@ mod test {
     }
 
     #[test]
+    fn test_forged_cred_i_psk_credential_lookup_or_fetch() {
+        let cred_i = Credential::parse_ccs_symmetric(CRED_I_PSK.try_into().unwrap()).unwrap();
+
+        let mut id_cred_attacker = IdCred::new();
+        id_cred_attacker
+            .bytes
+            .extend_from_slice(&[CBOR_MAJOR_MAP + 1, KCCS_LABEL])
+            .map_err(|_| EDHOCError::CredentialTooLongError)
+            .unwrap();
+        id_cred_attacker
+            .bytes
+            .extend_from_slice(CRED_I_PSK_FORGED)
+            .unwrap();
+
+        let cred_fetch = credential_lookup_or_fetch(&[cred_i], id_cred_attacker);
+        assert!(matches!(cred_fetch, Err(EDHOCError::WrongCredentialType)))
+    }
+
+    #[test]
+    fn test_forged_cred_i_psk_credential_check_or_fetch() {
+        let cred_i = Credential::parse_ccs_symmetric(CRED_I_PSK.try_into().unwrap()).unwrap();
+
+        let mut id_cred_attacker = IdCred::new();
+        id_cred_attacker
+            .bytes
+            .extend_from_slice(&[CBOR_MAJOR_MAP + 1, KCCS_LABEL])
+            .map_err(|_| EDHOCError::CredentialTooLongError)
+            .unwrap();
+        id_cred_attacker
+            .bytes
+            .extend_from_slice(CRED_I_PSK_FORGED)
+            .unwrap();
+
+        let cred_fetch = credential_check_or_fetch(Some(cred_i), id_cred_attacker);
+        assert!(matches!(cred_fetch, Err(EDHOCError::UnexpectedCredential)))
+    }
+
+    #[test]
+    fn test_forged_cred_i_psk_credential_check_or_fetch_none() {
+        let mut id_cred_attacker = IdCred::new();
+        id_cred_attacker
+            .bytes
+            .extend_from_slice(&[CBOR_MAJOR_MAP + 1, KCCS_LABEL])
+            .map_err(|_| EDHOCError::CredentialTooLongError)
+            .unwrap();
+        id_cred_attacker
+            .bytes
+            .extend_from_slice(CRED_I_PSK_FORGED)
+            .unwrap();
+
+        let cred_fetch = credential_check_or_fetch(None, id_cred_attacker);
+        assert!(matches!(cred_fetch, Err(EDHOCError::WrongCredentialType)))
+    }
+
+    #[test]
     fn test_parse_message_3_empty_returns_error() {
         let cred_r = Credential::parse_ccs_symmetric(CRED_R_PSK.try_into().unwrap()).unwrap();
 
@@ -880,7 +933,9 @@ mod test {
             .unwrap();
 
         let empty_message_3 = BufferMessage3::new();
-        let err = responder.parse_message_3(&empty_message_3).unwrap_err();
+        let err = responder
+            .parse_message_3_with_credential_lookup(&empty_message_3, |_| unreachable!())
+            .unwrap_err();
         assert_eq!(err, EDHOCError::ParsingError);
     }
 }

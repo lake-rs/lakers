@@ -29,6 +29,8 @@ pub use buffer::*;
 
 #[cfg(feature = "python-bindings")]
 use pyo3::prelude::*;
+mod psk;
+pub use psk::*;
 #[cfg(feature = "python-bindings")]
 mod python_bindings;
 
@@ -114,10 +116,13 @@ pub const CBOR_MAJOR_ARRAY: u8 = 0x80u8;
 pub const CBOR_MAJOR_ARRAY_MAX: u8 = 0x97u8;
 pub const CBOR_MAJOR_MAP: u8 = 0xA0;
 pub const MAX_INFO_LEN: usize = 2 + SHA256_DIGEST_LEN + // 32-byte digest as bstr
-				            1 + MAX_KDF_LABEL_LEN +     // label <24 bytes as tstr
-						    1 + MAX_KDF_CONTEXT_LEN +   // context <24 bytes as bstr
-						    1; // length as u8
-
+    1 + MAX_KDF_LABEL_LEN +     // label <24 bytes as tstr
+    1 + MAX_KDF_CONTEXT_LEN +   // context <24 bytes as bstr
+    1; // length as u8
+       // The PSK is the IKM of an HKDF-SHA-256 extract, whose output is a 256-bit PRK, so entropy beyond
+       // 32 bytes cannot be carried into the key schedule and a longer PSK buys no additional security.
+pub const MAX_PSK_LEN: usize = SHA256_DIGEST_LEN;
+pub const MIN_PSK_LEN: usize = 16; // Each external PSK MUST be derived from at least 128 bits of entropy, and MUST be at least 128 bits long
 pub const KCCS_LABEL: u8 = 14;
 #[deprecated(note = "Typo for KCCS_LABEL")]
 pub const KCSS_LABEL: u8 = KCCS_LABEL;
@@ -212,6 +217,7 @@ pub type EADBuffer = EdhocBuffer<MAX_EAD_LEN>;
 /// string or a number in -24..=23, all in preferred encoding.
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct ConnId([u8; MAX_CONNID_ENCODED_LEN]);
+// Secret key material and must not be printable or comparable
 
 /// Classifier for the content of [`ConnId`]; used internally in its implementation.
 enum ConnIdType {
@@ -411,6 +417,14 @@ pub enum EDHOCError {
     /// error: When the application sets the expected credential, that process should be informed
     /// by the known details.
     UnexpectedCredential,
+    /// A credential was well formed, but of a type that may not be used the way it was presented:
+    /// in particular a credential carrying a symmetric key (a PSK), sent by value rather than
+    /// identified by reference.
+    ///
+    /// Unlike [`EDHOCError::UnexpectedCredential`] this does not depend on what the application
+    /// was expecting. Such a credential is refused unconditionally, because honouring it would
+    /// mean deriving key material from the peer's own message.
+    WrongCredentialType,
     MissingIdentity,
     IdentityAlreadySet,
     MacVerificationFailed,
@@ -450,6 +464,7 @@ impl EDHOCError {
         use EDHOCError::*;
         match self {
             UnexpectedCredential => ErrCode::UNSPECIFIED,
+            WrongCredentialType => ErrCode::UNSPECIFIED,
             MissingIdentity => ErrCode::UNSPECIFIED,
             IdentityAlreadySet => ErrCode::UNSPECIFIED,
             MacVerificationFailed => ErrCode::UNSPECIFIED,

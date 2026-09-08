@@ -5,7 +5,7 @@ mod psk;
 mod statstat;
 
 use psk::{
-    i_parse_message_2_psk, i_prepare_message_3_psk, i_verify_message_2_psk, r_parse_message_3_psk,
+    i_parse_message_2_psk, i_prepare_message_3_psk, i_verify_message_2_psk,
     r_parse_message_3_psk_with_cred_resolver, r_prepare_message_2_psk, r_verify_message_3_psk,
 };
 use statstat::{
@@ -179,9 +179,7 @@ pub fn r_parse_message_3(
         WaitM3MethodSpecifics::StatStat { .. } => {
             r_parse_message_3_statstat(state, crypto, message_3)?
         }
-        WaitM3MethodSpecifics::Psk { cred_r } => {
-            r_parse_message_3_psk(state, crypto, message_3, cred_r)?
-        }
+        WaitM3MethodSpecifics::Psk { .. } => return Err(EDHOCError::UnsupportedMethod),
     };
 
     Ok((
@@ -1097,7 +1095,7 @@ fn compute_prk_4e3m(
 fn compute_prk_4e3m_psk(
     crypto: &mut impl CryptoTrait,
     salt_4e3m: &BytesHashLen,
-    cred: &BytesElemLenPSK,
+    cred: &BufferPsk,
 ) -> BytesHashLen {
     crypto.hkdf_extract_psk(salt_4e3m, &cred)
 }
@@ -1926,8 +1924,25 @@ mod tests {
 
     #[test]
     fn test_compute_prk_4e3m_psk() {
-        let prk_4e3m = compute_prk_4e3m_psk(&mut default_crypto(), &SALT_4E3M_PSK_TV, &PSK_TV);
+        let psk = BufferPsk::new_from_slice(&PSK_TV)
+            .map_err(|_| EDHOCError::ParsingError)
+            .unwrap();
+        let prk_4e3m = compute_prk_4e3m_psk(&mut default_crypto(), &SALT_4E3M_PSK_TV, &psk);
         assert_eq!(prk_4e3m, PRK_4E3M_PSK_TV);
+    }
+
+    // fn test_compute_prk_4e3m_rpsk() {
+    //     let prk_4e3m = compute_prk_4e3m_psk(&mut default_crypto(), &SALT_4E3M_PSK_TV, &R_PSK_TV);
+    //     assert_eq!(prk_4e3m, PRK_4E3M_R_PSK_TV);
+    // }
+    #[test]
+    fn test_symmetric_32_bytes() {
+        let psk_32 = BufferPsk::new_from_slice(&[0xAB; 32]).unwrap();
+        let psk_16 = BufferPsk::new_from_slice(&[0xAB; 16]).unwrap();
+        let prk_32 = compute_prk_4e3m_psk(&mut default_crypto(), &SALT_4E3M_PSK_TV, &psk_32);
+        let prk_16 = compute_prk_4e3m_psk(&mut default_crypto(), &SALT_4E3M_PSK_TV, &psk_16);
+
+        assert_ne!(prk_32, prk_16);
     }
 
     #[test]

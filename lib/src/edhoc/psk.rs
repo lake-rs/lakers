@@ -35,26 +35,10 @@ pub(crate) fn r_prepare_message_2_psk(
     })
 }
 
-/// Parse PSK message 3 without external credential lookup.
+/// Parse PSK message 3, resolving `ID_CRED_PSK` through the caller-supplied `resolve_cred_i`.
 ///
-/// This succeeds when `ID_CRED_I` is sent by value.
-/// If the peer sends `ID_CRED_I` by reference, use
-/// `r_parse_message_3_psk_with_cred_resolver`.
-pub(crate) fn r_parse_message_3_psk(
-    state: &WaitM3,
-    crypto: &mut impl CryptoTrait,
-    message_3: &BufferMessage3,
-    cred_r: &Credential,
-) -> Result<ParsedMessage3, EDHOCError> {
-    r_parse_message_3_psk_with_cred_resolver(
-        state,
-        crypto,
-        message_3,
-        cred_r,
-        recover_cred_i_from_id_cred_psk,
-    )
-}
-
+/// PSK mode deliberately has no resolver-free variant: the PSK can only come from local storage,
+/// so the application has to supply the lookup.
 pub(crate) fn r_parse_message_3_psk_with_cred_resolver<F>(
     state: &WaitM3,
     crypto: &mut impl CryptoTrait,
@@ -72,6 +56,15 @@ where
         .any_as_encoded()
         .map_err(|_| EDHOCError::ParsingError)?;
     let id_cred_psk = IdCred::from_encoded_value(id_cred_psk_encoded)?;
+    // ID_CRED_PSK must merely *identify* a PSK we already hold; it may never carry the credential
+    // by value. Such a message would put the shared secret itself on the wire, and accepting it
+    // would let the peer pick the key this handshake authenticates with. Checked here, before
+    // `resolve_cred_i` runs, so that an application-supplied resolver cannot reintroduce the
+    // problem; `IdCred::get_ccs` enforces the same rule for direct callers of the credential
+    // lookup helpers.
+    if !id_cred_psk.reference_only() {
+        return Err(EDHOCError::WrongCredentialType);
+    }
     let ciphertext_3b_bytes = decoder
         .remaining_buffer()
         .map_err(|_| EDHOCError::ParsingError)?;
@@ -168,7 +161,7 @@ pub(crate) fn i_verify_message_2_psk(
     // message 3 processing
     let salt_4e3m = compute_salt_4e3m(crypto, &prk_3e2m, &th_3);
 
-    let psk = match valid_cred_r.key {
+    let psk = match &valid_cred_r.key {
         CredentialKey::Symmetric(psk) => psk,
         // FIXME: find a good definition of error
         _ => return Err(EDHOCError::UnsupportedMethod),
@@ -245,18 +238,4 @@ pub(crate) fn i_prepare_message_3_psk(
         },
     );
     Ok(PreparedMessage3 { message_3, th_4 })
-}
-
-/// Recover `CRED_I` directly from `ID_CRED_I` in PSK mode.
-///
-/// This only works when `ID_CRED_I` carries the credential by value.
-/// If `ID_CRED_I` is sent by reference (for example `kid`), callers need an
-/// external credential resolver and should use
-/// `r_parse_message_3_psk_with_cred_resolver`.
-fn recover_cred_i_from_id_cred_psk(id_cred_psk: &IdCred) -> Result<Credential, EDHOCError> {
-    if let Some(cred_i) = id_cred_psk.get_ccs() {
-        Ok(cred_i)
-    } else {
-        Err(EDHOCError::MissingIdentity)
-    }
 }

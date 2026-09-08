@@ -47,6 +47,7 @@ const fn copy_into_longer(long: &mut [u8], short: &[u8]) {
 pub enum EdhocBufferError {
     BufferAlreadyFull,
     SliceTooLong,
+    SliceTooShort,
 }
 
 /// A fixed-size (but parameterized) buffer for EDHOC messages.
