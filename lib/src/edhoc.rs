@@ -1327,6 +1327,13 @@ mod tests {
     // === PRK_exporter ===
     const PRK_EXPORTER_PSK_TV: BytesHashLen =
         hex!("2fcd08c0c01077c6d6486b9f9b677020e8d68f04bcdcce715dd277ed25931bef");
+    // === Resumption PSK, exported from PRK_exporter with RESUMPTION_PSK_LABEL ===
+    const R_PSK_TV: BytesResumptionPsk =
+        hex!("e87f51f53e3dd57195fe5ce5f3ed038abcc5ca6bf00f3a1c4a9bfc614ae87a0a");
+    // === kid of the resumption PSK, exported with RESUMPTION_PSK_KID_LABEL ===
+    const R_KID_TV: [u8; RESUMPTION_PSK_KID_LEN] = hex!("f38c");
+    // === ID_CRED_PSK of the resumption PSK: {4: h'F38C'} ===
+    const R_ID_CRED_PSK_TV: [u8; 5] = hex!("a10442f38c");
     const _ENC_STRUCURE_MESSAGE_3: EdhocBuffer<MAX_BUFFER_LEN> =
         EdhocBuffer::new_from_array(&hex!(
         "8368456e637279707430405871105820386a9d052b255992eee5ffb594347d327418a2ea5183486c0c9e204
@@ -2005,10 +2012,6 @@ mod tests {
         assert_eq!(prk_4e3m, PRK_4E3M_PSK_TV);
     }
 
-    // fn test_compute_prk_4e3m_rpsk() {
-    //     let prk_4e3m = compute_prk_4e3m_psk(&mut default_crypto(), &SALT_4E3M_PSK_TV, &R_PSK_TV);
-    //     assert_eq!(prk_4e3m, PRK_4E3M_R_PSK_TV);
-    // }
     #[test]
     fn test_symmetric_32_bytes() {
         let psk_32 = BufferPsk::new_from_slice(&[0xAB; 32]).unwrap();
@@ -2195,6 +2198,19 @@ mod tests {
         let prk_exporter = edhoc_kdf_owned(&mut default_crypto(), &PRK_OUT_PSK_TV, 10u8, &[]);
 
         assert_eq!(prk_exporter, PRK_EXPORTER_PSK_TV);
+    }
+
+    #[test]
+    fn test_derive_resumption_psk() {
+        let completed = Completed {
+            prk_out: PRK_OUT_PSK_TV,
+            prk_exporter: PRK_EXPORTER_PSK_TV,
+        };
+
+        let resumption = derive_resumption_psk(&completed, &mut default_crypto()).unwrap();
+
+        assert_eq!(resumption.rpsk.as_slice(), &R_PSK_TV);
+        assert_eq!(resumption.kid, R_KID_TV);
     }
 
     #[test]

@@ -128,8 +128,10 @@ pub const KCCS_LABEL: u8 = 14;
 pub const KCSS_LABEL: u8 = KCCS_LABEL;
 pub const KID_LABEL: u8 = 4;
 pub const RESUMPTION_PSK_KID_LEN: usize = 2;
-pub const RESUMPTION_PSK_LABEL: u8 = 15; // TODO : to be defined
-pub const RESUMPTION_PSK_KID_LABEL: u8 = 16; // TODO: to be defined
+/// EDHOC-Exporter label for the resumption PSK, applied to PRK_exporter.
+pub const RESUMPTION_PSK_LABEL: u8 = 2;
+/// EDHOC-Exporter label for the resumption PSK's `kid`, applied to PRK_exporter.
+pub const RESUMPTION_PSK_KID_LABEL: u8 = 3;
 pub const ENC_STRUCTURE_LEN: usize = 8 + 5 + SHA256_DIGEST_LEN; // 8 for ENCRYPT0
 pub const ENC_STRUCTURE_PSK_LEN: usize = 1 + 1 + 8 + 1 + EXTERNAL_AAD_PSK_LEN; //
 pub const EXTERNAL_AAD_PSK_LEN: usize = 1 + 1 + 2 + 32 + 2 + 38 + 2 + 38 + 1;
