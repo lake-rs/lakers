@@ -57,7 +57,6 @@ pub const SUITES_LEN: usize = 9;
 pub const SUPPORTED_SUITES_LEN: usize = 1;
 pub const EDHOC_METHOD: u8 = 3u8; // stat-stat is the only supported method
 pub const P256_ELEM_LEN: usize = 32;
-pub const ELEM_LEN_PSK: usize = 16;
 pub const SHA256_DIGEST_LEN: usize = 32;
 pub const AES_CCM_KEY_LEN: usize = 16;
 pub const AES_CCM_IV_LEN: usize = 13;
@@ -182,7 +181,6 @@ pub type BufferCiphertext3 = EdhocMessageBuffer;
 pub type BufferCiphertext4 = EdhocMessageBuffer;
 pub type BytesHashLen = [u8; SHA256_DIGEST_LEN];
 pub type BytesP256ElemLen = [u8; P256_ELEM_LEN];
-pub type BytesElemLenPSK = [u8; ELEM_LEN_PSK];
 pub type BufferMessage2 = EdhocMessageBuffer;
 /// Generic buffer type (soft-deprecated).
 ///
