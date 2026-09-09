@@ -54,6 +54,9 @@ pub trait Crypto: core::fmt::Debug {
     /// hash.finalize().into()
     /// ```
     fn sha256_digest(&mut self, message: &[u8]) -> BytesHashLen;
+    /// This is in process of being moved to something more embeddec-cal friendly.
+    ///
+    /// You can use the type, but don't rely on it being `Default`, for that may panic.
     type HashInProcess<'a>: digest::Digest
         + digest::OutputSizeUser<OutputSize = digest::typenum::U32>
     where
@@ -98,6 +101,78 @@ impl CcmTagLen for CcmTagLen8 {
 pub struct CcmTagLen16;
 impl CcmTagLen for CcmTagLen16 {
     const LEN: usize = 16;
+}
+
+// Blanket implementation because it is never used ownedly
+//
+// ("region parameter `'a/#1` out of range when instantiating args=[&'_/#0 mut T/#1]").
+// https://github.com/cryspen/hax/issues/1907
+#[cfg(not(hax))]
+impl<T: Crypto> Crypto for &mut T {
+    type HashInProcess<'a>
+        = T::HashInProcess<'a>
+    where
+        Self: 'a;
+
+    fn supported_suites(&self) -> EdhocBuffer<MAX_SUITES_LEN> {
+        T::supported_suites(self)
+    }
+
+    fn sha256_digest(&mut self, message: &[u8]) -> BytesHashLen {
+        T::sha256_digest(self, message)
+    }
+
+    fn sha256_start<'a>(&'a mut self) -> Self::HashInProcess<'a> {
+        T::sha256_start(self)
+    }
+
+    fn hkdf_expand(&mut self, prk: &BytesHashLen, info: &[u8], result: &mut [u8]) {
+        T::hkdf_expand(self, prk, info, result)
+    }
+
+    fn hkdf_extract(&mut self, salt: &BytesHashLen, ikm: &BytesP256ElemLen) -> BytesHashLen {
+        T::hkdf_extract(self, salt, ikm)
+    }
+
+    fn hkdf_extract_psk(&mut self, salt: &BytesHashLen, ikm: &BytesElemLenPSK) -> BytesHashLen {
+        T::hkdf_extract_psk(self, salt, ikm)
+    }
+
+    fn aes_ccm_encrypt<const N: usize, TagLen: CcmTagLen>(
+        &mut self,
+        key: &BytesCcmKeyLen,
+        iv: &BytesCcmIvLen,
+        ad: &[u8],
+        plaintext: &[u8],
+    ) -> EdhocBuffer<N> {
+        T::aes_ccm_encrypt::<N, TagLen>(self, key, iv, ad, plaintext)
+    }
+
+    fn aes_ccm_decrypt<const N: usize, TagLen: CcmTagLen>(
+        &mut self,
+        key: &BytesCcmKeyLen,
+        iv: &BytesCcmIvLen,
+        ad: &[u8],
+        ciphertext: &[u8],
+    ) -> Result<EdhocBuffer<N>, EDHOCError> {
+        T::aes_ccm_decrypt::<N, TagLen>(self, key, iv, ad, ciphertext)
+    }
+
+    fn p256_ecdh(
+        &mut self,
+        private_key: &BytesP256ElemLen,
+        public_key: &BytesP256ElemLen,
+    ) -> BytesP256ElemLen {
+        T::p256_ecdh(self, private_key, public_key)
+    }
+
+    fn get_random_byte(&mut self) -> u8 {
+        T::get_random_byte(self)
+    }
+
+    fn p256_generate_key_pair(&mut self) -> (BytesP256ElemLen, BytesP256ElemLen) {
+        T::p256_generate_key_pair(self)
+    }
 }
 
 pub mod test_helper {

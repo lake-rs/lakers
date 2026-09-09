@@ -25,9 +25,27 @@ cfg_if::cfg_if!(
         pub const fn default_crypto() -> Crypto {
             lakers_crypto_cryptocell310::Crypto
         }
+    } else if #[cfg(feature = "nrf54l15")] {
+        pub struct Nrf54l15ExtConfig;
+        impl embedded_cal_software_demo::ExtenderConfig for Nrf54l15ExtConfig {
+            const IMPLEMENT_SHA2SHORT: bool = true;
+            type Base = embedded_cal_nrf54l15::Nrf54l15Cal;
+        }
+        pub type Crypto = lakers_crypto_embedded_cal::Crypto<
+            embedded_cal_software_demo::Extender<Nrf54l15ExtConfig>,
+        >;
+    } else if #[cfg(feature = "stm32wba55")] {
+        pub struct Stm32wba55ExtConfig;
+        impl embedded_cal_software_demo::ExtenderConfig for Stm32wba55ExtConfig {
+            const IMPLEMENT_SHA2SHORT: bool = true;
+            type Base = embedded_cal_stm32wba55::Stm32wba55Cal;
+        }
+        pub type Crypto = lakers_crypto_embedded_cal::Crypto<
+            embedded_cal_software_demo::Extender<Stm32wba55ExtConfig>,
+        >;
     }
     else {
-        compile_error!("Either feature `psa` or `rustcrypto` or `cryptocell310` must be enabled.");
+        compile_error!("One of the features `psa`, `rustcrypto`, `cryptocell310`, `nrf54l15` or `stm32wba55` must be enabled.");
     }
 );
 
@@ -45,7 +63,7 @@ fn test_implements_crypto() {
 #[cfg(test)]
 mod tests {
     use hexlit::hex;
-    use lakers_shared::*;
+    use lakers_shared::{MAX_INFO_LEN, SHA256_DIGEST_LEN};
     use rstest::rstest;
 
     use super::*;
