@@ -7,9 +7,11 @@ members = [
   "crypto/lakers-crypto-psa",
   "crypto/lakers-crypto-rustcrypto",
   "crypto/lakers-crypto-cryptocell310-sys",
+  "crypto/lakers-crypto-embedded-cal",
   "examples/coap",
   "examples/lakers-no_std",
   "examples/lakers-nrf52840",
+  "examples/lakers-nrf54l15",
   "lakers-c",
   "lakers-python",
 ]
@@ -48,6 +50,7 @@ lakers-crypto = { path = "crypto/" }
 lakers-crypto-cryptocell310 = { path = "crypto/lakers-crypto-cryptocell310-sys/" }
 lakers-crypto-psa = { path = "crypto/lakers-crypto-psa/" }
 lakers-crypto-rustcrypto = { package = "lakers-crypto-rustcrypto", path = "crypto/lakers-crypto-rustcrypto/", version = "^0.8.0" }
+lakers-crypto-embedded-cal = { package = "lakers-crypto-embedded-cal", path = "crypto/lakers-crypto-embedded-cal/" }
 
 lakers = { package = "lakers", path = "lib/", version = "^0.8.0", default-features = false }
 

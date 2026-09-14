@@ -11,6 +11,9 @@ readme.workspace = true
 keywords.workspace = true
 categories.workspace = true
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(hax)'] }
+
 [dependencies]
 pyo3 = { version = "0.28", features = ["extension-module"], optional = true }
 hex = { version = "0.4.3", optional = true }
