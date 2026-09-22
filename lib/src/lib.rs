@@ -309,6 +309,10 @@ impl<Crypto: CryptoTrait> EdhocResponderDone<Crypto> {
     pub fn edhoc_key_update(&mut self, context: &[u8]) -> [u8; SHA256_DIGEST_LEN] {
         edhoc_key_update(&mut self.state, &mut self.crypto, context)
     }
+
+    pub fn derive_resumption_psk(&mut self) -> Result<ResumptionPsk, EDHOCError> {
+        derive_resumption_psk(&mut self.state, &mut self.crypto)
+    }
 }
 
 impl<'a, Crypto: CryptoTrait> EdhocInitiator<Crypto> {
@@ -493,10 +497,10 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorWaitM4<Crypto> {
         }
     }
 
-    pub fn completed_without_message_4(self) -> Result<EdhocResponderDone<Crypto>, EDHOCError> {
+    pub fn completed_without_message_4(self) -> Result<EdhocInitiatorDone<Crypto>, EDHOCError> {
         trace!("Enter completed");
         match i_complete_without_message_4(&self.state) {
-            Ok(state) => Ok(EdhocResponderDone {
+            Ok(state) => Ok(EdhocInitiatorDone {
                 state,
                 crypto: self.crypto,
             }),
@@ -512,6 +516,10 @@ impl<Crypto: CryptoTrait> EdhocInitiatorDone<Crypto> {
 
     pub fn edhoc_key_update(&mut self, context: &[u8]) -> [u8; SHA256_DIGEST_LEN] {
         edhoc_key_update(&mut self.state, &mut self.crypto, context)
+    }
+
+    pub fn derive_resumption_psk(&mut self) -> Result<ResumptionPsk, EDHOCError> {
+        derive_resumption_psk(&mut self.state, &mut self.crypto)
     }
 }
 
@@ -860,6 +868,85 @@ mod test {
 
         assert_eq!(i_oscore_secret, r_oscore_secret);
         assert_eq!(i_oscore_salt, r_oscore_salt);
+
+        let i_resumption = initiator.derive_resumption_psk().unwrap();
+        let r_resumption = responder.derive_resumption_psk().unwrap();
+
+        assert_eq!(i_resumption.rpsk.as_slice(), r_resumption.rpsk.as_slice());
+        assert_eq!(i_resumption.kid, r_resumption.kid);
+        assert_eq!(
+            i_resumption.rid_cred_psk.as_full_value(),
+            r_resumption.rid_cred_psk.as_full_value()
+        );
+        assert_eq!(i_resumption.rpsk.as_slice().len(), SHA256_DIGEST_LEN);
+        assert_eq!(i_resumption.kid.len(), RESUMPTION_PSK_KID_LEN);
+
+        assert_eq!(
+            &i_resumption.rid_cred_psk.as_full_value()[..3],
+            &[
+                CBOR_MAJOR_MAP + 1,
+                KID_LABEL,
+                CBOR_MAJOR_BYTE_STRING | RESUMPTION_PSK_KID_LEN as u8,
+            ],
+        );
+
+        assert_eq!(
+            &i_resumption.rid_cred_psk.as_full_value()[3..],
+            i_resumption.kid.as_slice(),
+        );
+    }
+
+    /// message_4 is mandatory in the PSK method: it is the Responder's only proof of possession of
+    /// the PSK, so neither peer may reach a Completed state without it. See
+    /// [`i_complete_without_message_4`] and [`r_complete_without_message_4`].
+    #[cfg(feature = "test-ead-none")]
+    #[test]
+    fn test_psk_rejects_completing_without_message_4() {
+        let cred_i = Credential::parse_ccs_symmetric(CRED_I_PSK.try_into().unwrap()).unwrap();
+        let cred_r = Credential::parse_ccs_symmetric(CRED_R_PSK.try_into().unwrap()).unwrap();
+
+        let initiator =
+            EdhocInitiator::new(default_crypto(), EDHOCMethod::PSK, EDHOCSuite::CipherSuite2);
+        let responder =
+            EdhocResponder::new(default_crypto(), ResponderIdentity::Psk, cred_r.clone());
+
+        let (initiator, message_1) = initiator.prepare_message_1(None, &EadItems::new()).unwrap();
+
+        let (responder, _c_i, _ead_1) = responder.process_message_1(&message_1).unwrap();
+        let (responder, message_2) = responder
+            .prepare_message_2(CredentialTransfer::ByReference, None, &EadItems::new())
+            .unwrap();
+
+        let (mut initiator, _c_r, _ead_2) = initiator.parse_message_2(&message_2).unwrap();
+        initiator
+            .set_identity(InitiatorIdentity::Psk, cred_i.clone())
+            .unwrap();
+        let initiator = initiator.verify_message_2(Some(cred_r)).unwrap();
+
+        let (initiator, message_3, _i_prk_out) = initiator
+            .prepare_message_3(CredentialTransfer::ByReference, &EadItems::new())
+            .unwrap();
+
+        let (responder, _id_cred_i, _ead_3) = responder
+            .parse_message_3_with_credential_lookup(&message_3, |id| {
+                credential_check_or_fetch(Some(cred_i.clone()), id.clone())
+            })
+            .unwrap();
+        let (responder, _r_prk_out) = responder.verify_message_3(cred_i.clone()).unwrap();
+
+        // The Responder has authenticated the Initiator and already holds PRK_exporter, but it
+        // still owes the Initiator message_4.
+        assert_eq!(
+            responder.completed_without_message_4().unwrap_err(),
+            EDHOCError::UnsupportedMethod,
+        );
+
+        // The Initiator's PRK_out is fixed at this point too, so skipping message_4 would yield
+        // keys for a peer it never authenticated.
+        assert_eq!(
+            initiator.completed_without_message_4().unwrap_err(),
+            EDHOCError::UnsupportedMethod,
+        );
     }
 
     #[test]

@@ -78,6 +78,39 @@ pub fn edhoc_key_update(
     state.prk_out
 }
 
+// TODO: complete the derivation
+pub fn derive_resumption_psk(
+    state: &Completed,
+    crypto: &mut impl CryptoTrait,
+) -> Result<ResumptionPsk, EDHOCError> {
+    let mut rpsk_bytes: BytesResumptionPsk = Default::default();
+    edhoc_kdf(
+        crypto,
+        &state.prk_exporter,
+        RESUMPTION_PSK_LABEL,
+        &[],
+        &mut rpsk_bytes,
+    );
+    let rpsk = BufferPsk::new_from_slice(&rpsk_bytes).map_err(|_| EDHOCError::EncodingError)?;
+
+    let mut kid = [0; RESUMPTION_PSK_KID_LEN];
+    edhoc_kdf(
+        crypto,
+        &state.prk_exporter,
+        RESUMPTION_PSK_KID_LABEL,
+        &[],
+        &mut kid,
+    );
+
+    // then build id_cred_psk
+    let rid_cred_psk = IdCred::from_kid(kid.as_slice())?;
+
+    Ok(ResumptionPsk {
+        rpsk,
+        kid,
+        rid_cred_psk,
+    })
+}
 pub fn r_process_message_1(
     state: &ResponderStart,
     crypto: &mut impl CryptoTrait,
@@ -239,14 +272,25 @@ pub fn r_verify_message_3(
 ) -> Result<(ProcessedM3, BytesHashLen), EDHOCError> {
     let salt_4e3m = compute_salt_4e3m(crypto, &state.prk_3e2m, &state.th_3);
 
-    let verified = match &state.method_specifics {
-        ProcessingM3MethodSpecifics::StatStat { mac_3, id_cred_i } => {
-            r_verify_message_3_statstat(state, crypto, valid_cred_i, *mac_3, id_cred_i, &salt_4e3m)?
-        }
+    let (verified, method) = match &state.method_specifics {
+        ProcessingM3MethodSpecifics::StatStat { mac_3, id_cred_i } => (
+            r_verify_message_3_statstat(
+                state,
+                crypto,
+                valid_cred_i,
+                *mac_3,
+                id_cred_i,
+                &salt_4e3m,
+            )?,
+            EDHOCMethod::StatStat,
+        ),
         ProcessingM3MethodSpecifics::Psk {
             id_cred_psk,
             cred_r,
-        } => r_verify_message_3_psk(state, crypto, valid_cred_i, id_cred_psk, cred_r, &salt_4e3m)?,
+        } => (
+            r_verify_message_3_psk(state, crypto, valid_cred_i, id_cred_psk, cred_r, &salt_4e3m)?,
+            EDHOCMethod::PSK,
+        ),
     };
 
     let mut prk_out: BytesHashLen = Default::default();
@@ -267,6 +311,7 @@ pub fn r_verify_message_3(
             th_4: verified.th_4,
             prk_out,
             prk_exporter,
+            method,
         },
         prk_out,
     ))
@@ -290,11 +335,24 @@ pub fn r_prepare_message_4(
     ))
 }
 
+/// Completes the exchange on the Responder side without sending message_4.
+///
+/// This is only allowed for method StatStat, where the Responder is authenticated to the Initiator
+/// by Signature_or_MAC_2 in message_2, so key confirmation may instead be provided by a subsequent
+/// OSCORE request.
+///
+/// In the PSK method there is no authenticator in message_2: the PSK enters the key schedule only
+/// at PRK_4e3m, and message_4 is the Responder's sole proof of possession of it. Skipping message_4
+/// would therefore leave the Responder unauthenticated, so PSK is rejected here.
 pub fn r_complete_without_message_4(state: &ProcessedM3) -> Result<Completed, EDHOCError> {
-    Ok(Completed {
-        prk_out: state.prk_out,
-        prk_exporter: state.prk_exporter,
-    })
+    match state.method {
+        EDHOCMethod::PSK => Err(EDHOCError::UnsupportedMethod),
+        EDHOCMethod::StatStat => Ok(Completed {
+            prk_out: state.prk_out,
+            prk_exporter: state.prk_exporter,
+        }),
+        _ => Err(EDHOCError::UnsupportedMethod),
+    }
 }
 
 pub fn i_prepare_message_1(
@@ -388,13 +446,15 @@ pub fn i_prepare_message_3(
     cred_transfer: CredentialTransfer,
     ead_3: &EadItems,
 ) -> Result<(WaitM4, BufferMessage3, BytesHashLen), EDHOCError> {
-    let prepared = match state.method_specifics {
-        ProcessedM2MethodSpecifics::StatStat { .. } => {
-            i_prepare_message_3_statstat(state, crypto, cred_i, cred_transfer, ead_3)?
-        }
-        ProcessedM2MethodSpecifics::Psk { .. } => {
-            i_prepare_message_3_psk(state, crypto, cred_i, cred_transfer, ead_3)?
-        }
+    let (prepared, method) = match state.method_specifics {
+        ProcessedM2MethodSpecifics::StatStat { .. } => (
+            i_prepare_message_3_statstat(state, crypto, cred_i, cred_transfer, ead_3)?,
+            EDHOCMethod::StatStat,
+        ),
+        ProcessedM2MethodSpecifics::Psk { .. } => (
+            i_prepare_message_3_psk(state, crypto, cred_i, cred_transfer, ead_3)?,
+            EDHOCMethod::PSK,
+        ),
     };
 
     let mut prk_out: BytesHashLen = Default::default();
@@ -409,6 +469,7 @@ pub fn i_prepare_message_3(
             th_4: prepared.th_4,
             prk_out,
             prk_exporter,
+            method,
         },
         prepared.message_3,
         prk_out,
@@ -436,11 +497,24 @@ pub fn i_process_message_4(
     }
 }
 
+/// Completes the exchange on the Initiator side without processing message_4.
+///
+/// This is only allowed for method StatStat, where the Responder was already authenticated by
+/// Signature_or_MAC_2 in message_2.
+///
+/// In the PSK method message_4 is the only point at which the Initiator learns that its peer knows
+/// the PSK. Note that PRK_out and PRK_exporter are fully determined before message_4 arrives, so
+/// skipping it would silently yield usable-looking keys (and a usable-looking resumption PSK) for a
+/// peer that was never authenticated. PSK is therefore rejected here.
 pub fn i_complete_without_message_4(state: &WaitM4) -> Result<Completed, EDHOCError> {
-    Ok(Completed {
-        prk_out: state.prk_out,
-        prk_exporter: state.prk_exporter,
-    })
+    match state.method {
+        EDHOCMethod::PSK => Err(EDHOCError::UnsupportedMethod),
+        EDHOCMethod::StatStat => Ok(Completed {
+            prk_out: state.prk_out,
+            prk_exporter: state.prk_exporter,
+        }),
+        _ => Err(EDHOCError::UnsupportedMethod),
+    }
 }
 
 fn encode_message_1(
@@ -1253,6 +1327,13 @@ mod tests {
     // === PRK_exporter ===
     const PRK_EXPORTER_PSK_TV: BytesHashLen =
         hex!("2fcd08c0c01077c6d6486b9f9b677020e8d68f04bcdcce715dd277ed25931bef");
+    // === Resumption PSK, exported from PRK_exporter with RESUMPTION_PSK_LABEL ===
+    const R_PSK_TV: BytesResumptionPsk =
+        hex!("e87f51f53e3dd57195fe5ce5f3ed038abcc5ca6bf00f3a1c4a9bfc614ae87a0a");
+    // === kid of the resumption PSK, exported with RESUMPTION_PSK_KID_LABEL ===
+    const R_KID_TV: [u8; RESUMPTION_PSK_KID_LEN] = hex!("f38c");
+    // === ID_CRED_PSK of the resumption PSK, full value: {4: h'F38C'} ===
+    const R_ID_CRED_PSK_TV: [u8; 5] = hex!("a10442f38c");
     const _ENC_STRUCURE_MESSAGE_3: EdhocBuffer<MAX_BUFFER_LEN> =
         EdhocBuffer::new_from_array(&hex!(
         "8368456e637279707430405871105820386a9d052b255992eee5ffb594347d327418a2ea5183486c0c9e204
@@ -1931,10 +2012,6 @@ mod tests {
         assert_eq!(prk_4e3m, PRK_4E3M_PSK_TV);
     }
 
-    // fn test_compute_prk_4e3m_rpsk() {
-    //     let prk_4e3m = compute_prk_4e3m_psk(&mut default_crypto(), &SALT_4E3M_PSK_TV, &R_PSK_TV);
-    //     assert_eq!(prk_4e3m, PRK_4E3M_R_PSK_TV);
-    // }
     #[test]
     fn test_symmetric_32_bytes() {
         let psk_32 = BufferPsk::new_from_slice(&[0xAB; 32]).unwrap();
@@ -2121,6 +2198,23 @@ mod tests {
         let prk_exporter = edhoc_kdf_owned(&mut default_crypto(), &PRK_OUT_PSK_TV, 10u8, &[]);
 
         assert_eq!(prk_exporter, PRK_EXPORTER_PSK_TV);
+    }
+
+    #[test]
+    fn test_derive_resumption_psk() {
+        let completed = Completed {
+            prk_out: PRK_OUT_PSK_TV,
+            prk_exporter: PRK_EXPORTER_PSK_TV,
+        };
+
+        let resumption = derive_resumption_psk(&completed, &mut default_crypto()).unwrap();
+
+        assert_eq!(resumption.rpsk.as_slice(), &R_PSK_TV);
+        assert_eq!(resumption.kid, R_KID_TV);
+        // The kid is wrapped as ID_CRED_PSK = {4: h'F38C'}, a reference to a credential rather
+        // than a credential by value.
+        assert!(resumption.rid_cred_psk.reference_only());
+        assert_eq!(resumption.rid_cred_psk.as_full_value(), &R_ID_CRED_PSK_TV);
     }
 
     #[test]
