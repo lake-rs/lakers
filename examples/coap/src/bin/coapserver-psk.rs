@@ -28,16 +28,14 @@ fn main() {
 
         let path = request.get_path();
         let mut response = request.response.unwrap();
-        let cred_r: Credential =
-            Credential::parse_ccs_symmetric(CRED_R.try_into().unwrap()).unwrap();
+        let cred_r: PskCredential = PskCredential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
         if path == ".well-known/edhoc" {
             println!("Received message from {}", src);
             // This is an EDHOC message
             if request.message.payload[0] == 0xf5 {
                 let responder = EdhocResponder::new(
                     lakers_crypto::default_crypto(),
-                    ResponderIdentity::Psk,
-                    cred_r,
+                    ResponderIdentity::Psk { cred_r },
                 );
                 // println!("cred:{:?}", cred_psk);
 
@@ -81,12 +79,12 @@ fn main() {
                 let message_3 =
                     EdhocMessageBuffer::new_from_slice(&request.message.payload[1..]).unwrap();
                 println!("message_3: {:02x?}", message_3.as_slice());
-                let cred_i: Credential =
-                    Credential::parse_ccs_symmetric(CRED_I.try_into().unwrap()).unwrap();
+                let cred_i: PskCredential =
+                    PskCredential::parse_ccs(CRED_I.try_into().unwrap()).unwrap();
                 let cred_table = [cred_i.clone()];
                 let Ok((responder, id_cred_i, _ead_3)) = responder
                     .parse_message_3_with_credential_lookup(&message_3, |id| {
-                        credential_lookup_or_fetch(&cred_table, id.clone())
+                        psk_credential_lookup(&[cred_i.clone()], id).map(PskCredential::from)
                     })
                 else {
                     println!("EDHOC error at parse_message_3: {:?}", message_3);
@@ -95,10 +93,13 @@ fn main() {
                     continue;
                 };
                 println!("message_3 parsed");
-                let valid_cred_i = credential_lookup_or_fetch(&cred_table, id_cred_i).unwrap();
+                let valid_cred_i = psk_credential_lookup(&cred_table[..], &id_cred_i)
+                    .map(PskCredential::from)
+                    .unwrap();
                 // println!("valid_cred_i: 0x{}", encode(valid_cred_i.bytes.as_slice()));
 
-                let Ok((responder, prk_out)) = responder.verify_message_3(valid_cred_i.clone())
+                let Ok((responder, prk_out)) =
+                    responder.verify_message_3(PeerCredential::Psk(valid_cred_i.clone()))
                 else {
                     println!("EDHOC error at verify_message_3: {:?}", valid_cred_i);
                     continue;

@@ -312,7 +312,7 @@ impl Default for ProcessedM2C {
 }
 
 impl ProcessedM2C {
-    pub fn to_rust(&self) -> ProcessedM2 {
+    pub fn to_rust(&self) -> Result<ProcessedM2, EDHOCError> {
         let method_specifics = match self.method_specifics.kind {
             ProcessedM2MethodSpecificsKindC::Prm2StatStat => {
                 ProcessedM2MethodSpecifics::StatStat {}
@@ -323,17 +323,19 @@ impl ProcessedM2C {
                 // so `data.psk` is the active variant.
                 let psk = unsafe { &self.method_specifics.data.psk };
                 ProcessedM2MethodSpecifics::Psk {
-                    cred_r: psk.cred_r.to_rust(),
+                    // TEMPORARY (#435): the C struct still holds a legacy `CredentialC`. C owns
+                    // this memory, so the key type is checked here rather than trusted.
+                    cred_r: psk.cred_r.to_rust().try_into()?,
                 }
             }
         };
 
-        ProcessedM2 {
+        Ok(ProcessedM2 {
             method_specifics,
             prk_3e2m: self.prk_3e2m,
             prk_4e3m: self.prk_4e3m,
             th_3: self.th_3,
-        }
+        })
     }
 
     pub unsafe fn copy_into_c(processed_m2: ProcessedM2, processed_m2_c: *mut ProcessedM2C) {
@@ -356,7 +358,8 @@ impl ProcessedM2C {
             }
             ProcessedM2MethodSpecifics::Psk { cred_r } => {
                 let mut cred_r_c = core::mem::MaybeUninit::<CredentialC>::uninit();
-                CredentialC::copy_into_c(cred_r, cred_r_c.as_mut_ptr());
+                // TEMPORARY (#435)
+                CredentialC::copy_into_c(cred_r.into(), cred_r_c.as_mut_ptr());
                 let cred_r_c = cred_r_c.assume_init();
                 (*processed_m2_c).method_specifics = ProcessedM2MethodSpecificsC {
                     kind: ProcessedM2MethodSpecificsKindC::Prm2Psk,
@@ -414,9 +417,16 @@ pub unsafe extern "C" fn credential_check_or_fetch(
     };
 
     let id_cred_received_value = (*id_cred_received).clone();
-    match credential_check_or_fetch_rust(cred_expected, id_cred_received_value) {
+    // TEMPORARY (#435): the C API still passes a `CredentialC`, which maps to `Credential`, while the
+    // Rust function now takes a `PublicCredential`. A symmetric credential fails the conversion
+    // and is reported to C as an error code, like any other error below.
+    let result = cred_expected
+        .map(PublicCredential::try_from)
+        .transpose()
+        .and_then(|cred| credential_check_or_fetch_rust(cred, id_cred_received_value));
+    match result {
         Ok(valid_cred) => {
-            CredentialC::copy_into_c(valid_cred, cred_out);
+            CredentialC::copy_into_c(valid_cred.into(), cred_out);
             0
         }
         Err(err) => err as i8,

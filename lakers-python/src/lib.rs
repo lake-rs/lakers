@@ -89,8 +89,13 @@ pub fn py_credential_check_or_fetch<'a>(
     id_cred_received: Vec<u8>,
     cred_expected: Option<AutoCredential>,
 ) -> PyResult<Bound<'a, PyBytes>> {
+    let cred_expected = cred_expected.map(|c| c.to_credential()).transpose()?;
+    // TEMPORARY (#435): the Python API still yields a `Credential`, while the Rust function now
+    // takes a `PublicCredential`. A symmetric credential fails the conversion and is raised to
+    // Python as an exception, like any other error here.
+    let cred_expected = cred_expected.map(PublicCredential::try_from).transpose()?;
     let valid_cred = credential_check_or_fetch(
-        cred_expected.map(|c| c.to_credential()).transpose()?,
+        cred_expected,
         IdCred::from_full_value(id_cred_received.as_slice())?,
     )?;
 

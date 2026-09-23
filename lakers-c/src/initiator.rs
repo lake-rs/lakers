@@ -11,6 +11,7 @@ use crate::*;
 #[repr(C)]
 pub struct EdhocInitiator {
     pub start: InitiatorStart,
+    pub i: BytesP256ElemLen,
     pub wait_m2: WaitM2,
     pub processing_m2: ProcessingM2C,
     pub processed_m2: ProcessedM2C,
@@ -159,14 +160,22 @@ pub unsafe extern "C" fn initiator_verify_message_2(
 
     let state = core::ptr::read(&(*initiator_c).processing_m2).to_rust();
 
+    let cred_i_rust = (*cred_i).to_rust(); // CredentialC -> Credential
     let identity = match (*initiator_c).start.method {
         EDHOCMethod::StatStat => {
             if i.is_null() {
                 return -1;
             }
-            InitiatorIdentity::StatStat { i: *i }
+            (*initiator_c).i = *i;
+            match PublicCredential::try_from(cred_i_rust) {
+                Ok(cred_i) => InitiatorIdentity::StatStat { i: *i, cred_i },
+                Err(err) => return err as i8,
+            }
         }
-        EDHOCMethod::PSK => InitiatorIdentity::Psk {},
+        EDHOCMethod::PSK => match PskCredential::try_from(cred_i_rust) {
+            Ok(cred_i) => InitiatorIdentity::Psk { cred_i },
+            Err(err) => return err as i8,
+        },
         _ => return -1,
     };
 
@@ -175,16 +184,22 @@ pub unsafe extern "C" fn initiator_verify_message_2(
     } else {
         Some((*cred_expected).to_rust())
     };
-
-    let valid_cred_r = match &state.method_specifics {
-        ProcessingM2MethodSpecifics::StatStat { id_cred_r, .. } => {
-            lakers::credential_check_or_fetch(cred_expected, id_cred_r.clone())
-        }
-        ProcessingM2MethodSpecifics::Psk {} => cred_expected.ok_or(EDHOCError::MissingIdentity),
+    // TEMPORARY (#435): C still hands us a `CredentialC`; build the method-specific
+    // credential here. Errors stay in the `Result`: this function must not panic.
+    let valid_cred_r: Result<PeerCredential, EDHOCError> = match &state.method_specifics {
+        ProcessingM2MethodSpecifics::StatStat { id_cred_r, .. } => cred_expected
+            .map(PublicCredential::try_from)
+            .transpose()
+            .and_then(|cred| lakers::credential_check_or_fetch(cred, id_cred_r.clone()))
+            .map(|cred| PeerCredential::StatStat(Some(cred))),
+        ProcessingM2MethodSpecifics::Psk {} => cred_expected
+            .ok_or(EDHOCError::MissingIdentity)
+            .and_then(PskCredential::try_from)
+            .map(PeerCredential::Psk),
     };
 
     match valid_cred_r
-        .and_then(|valid_cred_r| i_verify_message_2(&state, crypto, valid_cred_r, identity))
+        .and_then(|valid_cred_r| i_verify_message_2(&state, crypto, valid_cred_r, &identity))
     {
         Ok(state) => {
             ProcessedM2C::copy_into_c(state, &mut (*initiator_c).processed_m2);
@@ -210,7 +225,10 @@ pub unsafe extern "C" fn initiator_prepare_message_3(
     }
     let crypto = &mut default_crypto();
 
-    let state = core::ptr::read(&(*initiator_c).processed_m2).to_rust();
+    let state = match core::ptr::read(&(*initiator_c).processed_m2).to_rust() {
+        Ok(state) => state,
+        Err(err) => return err as i8,
+    };
 
     let ead_3 = if ead_3_c.is_null() {
         EadItems::new()
@@ -218,13 +236,23 @@ pub unsafe extern "C" fn initiator_prepare_message_3(
         (*ead_3_c).to_rust()
     };
 
-    match i_prepare_message_3(
-        &state,
-        crypto,
-        (*(*initiator_c).cred_i).to_rust(),
-        cred_transfer,
-        &ead_3,
-    ) {
+    let cred_i_rust = (*(*initiator_c).cred_i).to_rust();
+    let identity = match (*initiator_c).start.method {
+        EDHOCMethod::StatStat => match PublicCredential::try_from(cred_i_rust) {
+            Ok(cred_i) => InitiatorIdentity::StatStat {
+                i: (*initiator_c).i,
+                cred_i,
+            },
+            Err(err) => return err as i8,
+        },
+        EDHOCMethod::PSK => match PskCredential::try_from(cred_i_rust) {
+            Ok(cred_i) => InitiatorIdentity::Psk { cred_i },
+            Err(err) => return err as i8,
+        },
+        _ => return -1,
+    };
+
+    match i_prepare_message_3(&state, crypto, identity, cred_transfer, &ead_3) {
         Ok((state, msg_3, prk_out)) => {
             (*initiator_c).wait_m4 = state;
             *message_3 = msg_3;
@@ -319,13 +347,13 @@ mod tests {
 
     fn make_ffi_initiator() -> EdhocInitiator {
         EdhocInitiator {
-            method: EDHOCMethod::StatStat,
             start: InitiatorStart {
                 suites_i: Default::default(),
                 method: EDHOCMethod::StatStat,
                 x: Default::default(),
                 g_x: Default::default(),
             },
+            i: BytesP256ElemLen::default(),
             wait_m2: WaitM2 {
                 method: EDHOCMethod::StatStat,
                 x: Default::default(),
@@ -367,13 +395,17 @@ mod tests {
         let responder = match method {
             EDHOCMethod::StatStat => EdhocResponder::new(
                 default_crypto(),
-                ResponderIdentity::StatStat { r: R_STATSTAT },
-                Credential::parse_ccs(CRED_R_STATSTAT.try_into().unwrap()).unwrap(),
+                ResponderIdentity::StatStat {
+                    r: R_STATSTAT,
+                    cred_r: PublicCredential::parse_ccs(CRED_R_STATSTAT.try_into().unwrap())
+                        .unwrap(),
+                },
             ),
             EDHOCMethod::PSK => EdhocResponder::new(
                 default_crypto(),
-                ResponderIdentity::Psk,
-                Credential::parse_ccs_symmetric(CRED_R_PSK.try_into().unwrap()).unwrap(),
+                ResponderIdentity::Psk {
+                    cred_r: PskCredential::parse_ccs(CRED_R_PSK.try_into().unwrap()).unwrap(),
+                },
             ),
             _ => panic!("unexpected method"),
         };
@@ -403,7 +435,6 @@ mod tests {
         unsafe {
             assert_eq!(initiator_new(&mut initiator, EDHOCMethod::PSK), 0);
         }
-        assert!(matches!(initiator.method, EDHOCMethod::PSK));
         assert!(matches!(initiator.start.method, EDHOCMethod::PSK));
     }
 
@@ -494,7 +525,7 @@ mod tests {
 
         assert_eq!(verify_rc, 0);
         assert!(matches!(
-            initiator.processed_m2.to_rust().method_specifics,
+            initiator.processed_m2.to_rust().unwrap().method_specifics,
             ProcessedM2MethodSpecifics::Psk { .. }
         ));
     }
@@ -518,8 +549,10 @@ mod tests {
 
         let responder = EdhocResponder::new(
             default_crypto(),
-            ResponderIdentity::StatStat { r: R_STATSTAT },
-            Credential::parse_ccs(CRED_R_STATSTAT.try_into().unwrap()).unwrap(),
+            ResponderIdentity::StatStat {
+                r: R_STATSTAT,
+                cred_r: PublicCredential::parse_ccs(CRED_R_STATSTAT.try_into().unwrap()).unwrap(),
+            },
         );
         let (responder, _c_i, _ead_1) = responder.process_message_1(&message_1).unwrap();
         let (_responder, message_2) = responder
