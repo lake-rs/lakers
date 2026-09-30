@@ -9,8 +9,8 @@ use super::{
     ProcessingM3MethodSpecifics, Th4Input, VerifiedMessage2, VerifiedMessage3, WaitM3,
     WaitM3MethodSpecifics,
 };
-use lakers_shared::Crypto as CryptoTrait;
-pub(crate) fn r_prepare_message_2_statstat(
+use lakers_shared::{BytesMac2, Crypto as CryptoTrait};
+pub(crate) fn r_prepare_message_2_stat(
     state: &ProcessingM1,
     crypto: &mut impl CryptoTrait,
     cred_r: Credential,
@@ -31,7 +31,7 @@ pub(crate) fn r_prepare_message_2_statstat(
     };
 
     // compute MAC_2
-    let mac_2 = compute_mac_2(
+    let mac_2: BytesMac2 = compute_mac_2(
         crypto,
         &prk_3e2m,
         c_r,
@@ -42,8 +42,11 @@ pub(crate) fn r_prepare_message_2_statstat(
     );
 
     // compute ciphertext_2
-    let plaintext_2 =
-        encode_plaintext_2(c_r, Some((id_cred_r.as_encoded_value(), &mac_2)), &ead_2)?;
+    let plaintext_2 = encode_plaintext_2(
+        c_r,
+        Some((id_cred_r.as_encoded_value(), &mac_2.into())),
+        &ead_2,
+    )?;
     // step is actually from processing of message_3
     // but we do it here to avoid storing plaintext_2 in State
     let th_3 = compute_th_3(crypto, &th_2, &plaintext_2, Some(cred_r.bytes.as_slice()));
@@ -56,7 +59,7 @@ pub(crate) fn r_prepare_message_2_statstat(
     })
 }
 
-pub(crate) fn r_parse_message_3_statstat(
+pub(crate) fn r_parse_message_3_stat(
     state: &WaitM3,
     crypto: &mut impl CryptoTrait,
     message_3: &BufferMessage3,
@@ -85,7 +88,7 @@ pub(crate) fn r_parse_message_3_statstat(
     }
 }
 
-pub(crate) fn r_verify_message_3_statstat(
+pub(crate) fn r_verify_message_3_stat(
     state: &ProcessingM3,
     crypto: &mut impl CryptoTrait,
     valid_cred_i: Credential,
@@ -128,7 +131,7 @@ pub(crate) fn r_verify_message_3_statstat(
     }
 }
 
-pub(crate) fn i_parse_message_2_statstat(
+pub(crate) fn i_parse_message_2_stat(
     plaintext_2: &BufferPlaintext2,
 ) -> Result<DecodedMessage2, EDHOCError> {
     let (c_r, id_cred_r, mac_2, ead_2) = decode_plaintext_2(plaintext_2)?;
@@ -144,7 +147,7 @@ pub(crate) fn i_parse_message_2_statstat(
     })
 }
 
-pub(crate) fn i_verify_message_2_statstat(
+pub(crate) fn i_verify_message_2_stat(
     state: &ProcessingM2,
     crypto: &mut impl CryptoTrait,
     valid_cred_r: Credential,
@@ -200,7 +203,7 @@ pub(crate) fn i_verify_message_2_statstat(
     }
 }
 
-pub(crate) fn i_prepare_message_3_statstat(
+pub(crate) fn i_prepare_message_3_stat(
     state: &ProcessedM2,
     crypto: &mut impl CryptoTrait,
     cred_i: Credential,
@@ -212,7 +215,7 @@ pub(crate) fn i_prepare_message_3_statstat(
         CredentialTransfer::ByReference => cred_i.by_kid()?,
     };
 
-    let mac_3 = compute_mac_3(
+    let mac_3: BytesMac3 = compute_mac_3(
         crypto,
         &state.prk_4e3m,
         &state.th_3,
@@ -221,7 +224,8 @@ pub(crate) fn i_prepare_message_3_statstat(
         ead_3,
     );
 
-    let plaintext_3 = encode_plaintext_3(Some((id_cred_i.as_encoded_value(), &mac_3)), &ead_3)?;
+    let plaintext_3 =
+        encode_plaintext_3(Some((id_cred_i.as_encoded_value(), &mac_3.into())), &ead_3)?;
     let message_3 = encrypt_message_3(crypto, &state.prk_3e2m, &state.th_3, &plaintext_3, None)?;
 
     let th_4 = compute_th_4(
