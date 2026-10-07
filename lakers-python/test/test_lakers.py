@@ -32,13 +32,13 @@ def test_responder():
 
 def test_ccs_consruction():
     # The main crednetials we use can be parsed as they are:
-    cred_r = lakers.Credential(CRED_R)
+    cred_r = lakers.PublicCredential(CRED_R)
 
     # We can also parse them on our own and construct an equivalent credential:
     parsed_cred_r = cbor2.loads(CRED_R)
     public_key = parsed_cred_r[8][1][-2]
     kid = [ord(parsed_cred_r[8][1][2])]
-    cred_r_manual = lakers.Credential(CRED_R, public_key=public_key, kid=kid)
+    cred_r_manual = lakers.PublicCredential(CRED_R, public_key=public_key, kid=kid)
 
     # No equality is useful, but the reprs are comprehensive
     assert repr(cred_r_manual) == repr(cred_r)

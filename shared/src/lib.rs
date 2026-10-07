@@ -600,6 +600,7 @@ pub enum ProcessingM3MethodSpecifics {
     Psk {
         id_cred_psk: IdCred,
         cred_r: PskCredential,
+        prk_4e3m: BytesHashLen,
     },
 }
 #[derive(Debug)]

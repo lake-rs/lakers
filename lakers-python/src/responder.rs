@@ -157,15 +157,8 @@ impl PyEdhocResponder {
             ProcessingM3MethodSpecifics::StatStat { .. } => EDHOCMethod::StatStat,
             ProcessingM3MethodSpecifics::Psk { .. } => EDHOCMethod::PSK,
         };
-        let cred = super::parse_credential(method, valid_cred_i)
+        let valid_cred_i = super::parse_peer_credential(method, valid_cred_i)
             .with_cause(py, "Failed to ingest CRED_I")?;
-        let valid_cred_i = match method {
-            EDHOCMethod::StatStat => {
-                PeerCredential::StatStat(Some(PublicCredential::try_from(cred)?))
-            }
-            EDHOCMethod::PSK => PeerCredential::Psk(PskCredential::try_from(cred)?),
-            _ => return Err(EDHOCError::UnsupportedMethod.into()),
-        };
         let (state, prk_out) = r_verify_message_3(
             &mut self.take_processing_m3()?,
             &mut default_crypto(),
@@ -358,17 +351,15 @@ fn parse_responder_identity(
     cred_r: super::AutoCredential,
 ) -> Result<ResponderIdentity, EDHOCError> {
     if r.is_empty() {
-        let cred_r = super::parse_credential(EDHOCMethod::PSK, cred_r)?;
         Ok(ResponderIdentity::Psk {
-            cred_r: cred_r.try_into()?,
+            cred_r: cred_r.to_psk()?,
         })
     } else {
         // A present `r` means the Python caller wants the stat-stat responder identity.
         let identity: BytesP256ElemLen = r.try_into().map_err(|_| EDHOCError::ParsingError)?;
-        let cred_r = super::parse_credential(EDHOCMethod::StatStat, cred_r)?;
         Ok(ResponderIdentity::StatStat {
             r: identity,
-            cred_r: cred_r.try_into()?,
+            cred_r: cred_r.to_public()?,
         })
     }
 }

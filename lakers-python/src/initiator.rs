@@ -5,7 +5,6 @@ use pyo3::exceptions::PyValueError;
 use pyo3::{prelude::*, types::PyBytes};
 
 use super::{ErrExt as _, StateMismatch};
-use crate::parse_credential;
 
 /// An implementation of the EDHOC protocol for the initiator side.
 #[pyclass(name = "EdhocInitiator")]
@@ -140,9 +139,6 @@ impl PyEdhocInitiator {
         cred_i: super::AutoCredential,
         valid_cred_r: super::AutoCredential,
     ) -> PyResult<()> {
-        let cred_i = parse_credential(self.start.method, cred_i)
-            .with_cause(py, "Failed to ingest CRED_I")?;
-
         // The initiator identity format depends on the negotiated method:
         // stat-stat needs the static DH private key, PSK does not.
         let identity = match self.start.method {
@@ -154,23 +150,18 @@ impl PyEdhocInitiator {
                     i: i.as_slice()
                         .try_into()
                         .map_err(|_| EDHOCError::ParsingError)?,
-                    cred_i: PublicCredential::try_from(cred_i)?,
+                    cred_i: cred_i
+                        .to_public()
+                        .with_cause(py, "Failed to ingest CRED_I")?,
                 }
             }
             EDHOCMethod::PSK => InitiatorIdentity::Psk {
-                cred_i: PskCredential::try_from(cred_i)?,
+                cred_i: cred_i.to_psk().with_cause(py, "Failed to ingest CRED_I")?,
             },
             _ => return Err(EDHOCError::UnsupportedMethod.into()),
         };
-        let cred = super::parse_credential(self.start.method, valid_cred_r)
+        let valid_cred_r = super::parse_peer_credential(self.start.method, valid_cred_r)
             .with_cause(py, "Failed to ingest CRED_I")?;
-        let valid_cred_r = match self.start.method {
-            EDHOCMethod::StatStat => {
-                PeerCredential::StatStat(Some(PublicCredential::try_from(cred)?))
-            }
-            EDHOCMethod::PSK => PeerCredential::Psk(PskCredential::try_from(cred)?),
-            _ => return Err(EDHOCError::UnsupportedMethod.into()),
-        };
         let state = i_verify_message_2(
             &self.take_processing_m2()?,
             &mut default_crypto(),

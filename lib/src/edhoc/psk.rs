@@ -95,10 +95,11 @@ where
             method_specifics: ProcessingM3MethodSpecifics::Psk {
                 id_cred_psk: id_cred_psk.clone(),
                 cred_r: cred_r.clone(),
+                prk_4e3m,
             },
             id_cred: id_cred_psk,
             plaintext_3: plaintext_3b, // NOTE: this is needed for th_4, which needs valid_cred_i, which is only available at the 'verify' step
-            ead_3: ead_3.clone(), // NOTE: this clone could be avoided by using a reference or an index to the ead_3 item in plaintext_3
+            ead_3: ead_3.clone(), // NOTE: this clone could be avoided by using a reference or an index to the ead_3 item in plaintext_
         })
     } else {
         Err(decoded_p3_res.unwrap_err())
@@ -111,10 +112,8 @@ pub(crate) fn r_verify_message_3_psk(
     valid_cred_i: PskCredential,
     id_cred_psk: &IdCred,
     cred_r: &PskCredential,
-    salt_4e3m: &BytesHashLen,
+    prk_4e3m: BytesHashLen,
 ) -> Result<VerifiedMessage3, EDHOCError> {
-    let prk_4e3m = compute_prk_4e3m_psk(crypto, &salt_4e3m, &valid_cred_i.psk());
-
     let th_4 = compute_th_4(
         crypto,
         &state.th_3,

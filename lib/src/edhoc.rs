@@ -212,7 +212,6 @@ where
         WaitM3MethodSpecifics::StatStat { .. } => {
             r_parse_message_3_statstat(state, crypto, message_3)?
         }
-        // TEMPORARY (#435)
         WaitM3MethodSpecifics::Psk { cred_r } => {
             r_parse_message_3_psk_with_cred_resolver(state, crypto, message_3, cred_r, |id| {
                 resolve_cred_i(id)
@@ -251,9 +250,10 @@ pub fn r_verify_message_3(
             ProcessingM3MethodSpecifics::Psk {
                 id_cred_psk,
                 cred_r,
+                prk_4e3m,
             },
             PeerCredential::Psk(valid_cred_i),
-        ) => r_verify_message_3_psk(state, crypto, valid_cred_i, id_cred_psk, cred_r, &salt_4e3m)?,
+        ) => r_verify_message_3_psk(state, crypto, valid_cred_i, id_cred_psk, cred_r, *prk_4e3m)?,
         (
             ProcessingM3MethodSpecifics::StatStat {
                 mac_3: _,
