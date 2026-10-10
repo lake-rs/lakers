@@ -1,15 +1,14 @@
+use super::{ErrExt as _, StateMismatch};
 use lakers::*;
 use lakers_crypto::{default_crypto, CryptoTrait};
 use log::trace;
+use pyo3::exceptions::PyValueError;
 use pyo3::{prelude::*, types::PyBytes};
-
-use super::{ErrExt as _, StateMismatch};
 
 /// An implementation of the EDHOC protocol for the responder side.
 #[pyclass(name = "EdhocResponder")]
 pub struct PyEdhocResponder {
-    r: Vec<u8>,
-    cred_r: Credential,
+    identity: Option<ResponderIdentity>,
     start: Option<ResponderStart>,
     processing_m1: Option<ProcessingM1>,
     wait_m3: Option<WaitM3>,
@@ -46,18 +45,11 @@ impl PyEdhocResponder {
         // Mirror the Rust API: PSK has no static responder DH key, so `r=None` selects PSK.
         let r = r.unwrap_or_default();
 
-        let cred_r = match parse_responder_identity(&r) {
-            Ok(ResponderIdentity::StatStat { .. }) => {
-                super::parse_credential(EDHOCMethod::StatStat, cred_r)
-            }
-            Ok(ResponderIdentity::Psk) => super::parse_credential(EDHOCMethod::PSK, cred_r),
-            Err(err) => Err(err),
-        }
-        .with_cause(py, "Failed to ingest CRED_R")?;
+        let identity =
+            parse_responder_identity(&r, cred_r).with_cause(py, "Failed to ingest CRED_R")?;
 
         Ok(Self {
-            r,
-            cred_r,
+            identity: Some(identity),
             start: Some(ResponderStart { y, g_y }),
             processing_m1: None,
             wait_m3: None,
@@ -111,38 +103,22 @@ impl PyEdhocResponder {
             None => generate_connection_identifier_cbor(&mut default_crypto()),
         };
         let ead_2 = ead_2.try_into()?;
-        let processing_m1 = self.as_ref_processing_m1()?;
-        let (state, message_2) = match processing_m1.method {
-            EDHOCMethod::StatStat => {
-                let r: BytesP256ElemLen = self
-                    .r
-                    .as_slice()
-                    .try_into()
-                    .map_err(|_| EDHOCError::ParsingError)?;
-                r_prepare_message_2(
-                    processing_m1,
-                    &mut default_crypto(),
-                    // FIXME: take as reference rather than cloning
-                    self.cred_r.clone(),
-                    PrepareMessage2Details::StatStat {
-                        r: &r,
-                        cred_transfer,
-                    },
-                    c_r,
-                    &ead_2,
-                )?
-            }
-            EDHOCMethod::PSK => r_prepare_message_2(
-                processing_m1,
-                &mut default_crypto(),
-                // FIXME: take as reference rather than cloning
-                self.cred_r.clone(),
-                PrepareMessage2Details::Psk,
-                c_r,
-                &ead_2,
-            )?,
-            _ => return Err(EDHOCError::UnsupportedMethod.into()),
+        self.as_ref_processing_m1()?;
+        let identity = self
+            .identity
+            .take()
+            .ok_or_else(|| PyValueError::new_err("Responder identity already used"))?;
+        let details = match identity {
+            ResponderIdentity::StatStat { r, cred_r } => PrepareMessage2Details::StatStat {
+                r,
+                cred_r,
+                cred_transfer,
+            },
+            ResponderIdentity::Psk { cred_r } => PrepareMessage2Details::Psk { cred_r },
         };
+        let processing_m1 = self.as_ref_processing_m1()?;
+        let (state, message_2) =
+            r_prepare_message_2(processing_m1, &mut default_crypto(), details, c_r, &ead_2)?;
         self.wait_m3 = Some(state);
         Ok(PyBytes::new(py, message_2.as_slice()))
     }
@@ -181,7 +157,7 @@ impl PyEdhocResponder {
             ProcessingM3MethodSpecifics::StatStat { .. } => EDHOCMethod::StatStat,
             ProcessingM3MethodSpecifics::Psk { .. } => EDHOCMethod::PSK,
         };
-        let valid_cred_i = super::parse_credential(method, valid_cred_i)
+        let valid_cred_i = super::parse_peer_credential(method, valid_cred_i)
             .with_cause(py, "Failed to ingest CRED_I")?;
         let (state, prk_out) = r_verify_message_3(
             &mut self.take_processing_m3()?,
@@ -370,12 +346,20 @@ impl PyEdhocResponder {
     }
 }
 
-fn parse_responder_identity(r: &[u8]) -> Result<ResponderIdentity, EDHOCError> {
+fn parse_responder_identity(
+    r: &[u8],
+    cred_r: super::AutoCredential,
+) -> Result<ResponderIdentity, EDHOCError> {
     if r.is_empty() {
-        Ok(ResponderIdentity::Psk)
+        Ok(ResponderIdentity::Psk {
+            cred_r: cred_r.to_psk()?,
+        })
     } else {
         // A present `r` means the Python caller wants the stat-stat responder identity.
         let identity: BytesP256ElemLen = r.try_into().map_err(|_| EDHOCError::ParsingError)?;
-        Ok(ResponderIdentity::StatStat { r: identity })
+        Ok(ResponderIdentity::StatStat {
+            r: identity,
+            cred_r: cred_r.to_public()?,
+        })
     }
 }

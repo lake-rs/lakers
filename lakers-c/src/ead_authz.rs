@@ -62,7 +62,11 @@ pub unsafe extern "C" fn authz_device_process_ead_2(
     let crypto = &mut default_crypto();
     let device = &(*device_c);
     let ead_2_item = (*ead_2_c).items[0].to_rust();
-    let cred_v = (*cred_v).to_rust();
+    // An `extern "C"` function must not panic: report the error like the arm below does.
+    let cred_v = match (*cred_v).to_public() {
+        Ok(cred_v) => cred_v,
+        Err(err) => return err as i8,
+    };
     let cred_v = cred_v.bytes.as_slice();
     match device.wait_ead2.process_ead_2(crypto, &ead_2_item, cred_v) {
         Ok(device) => {

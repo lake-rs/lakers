@@ -526,7 +526,7 @@ pub struct WaitM2 {
 #[derive(Debug)]
 pub enum WaitM3MethodSpecifics {
     StatStat {},
-    Psk { cred_r: Credential },
+    Psk { cred_r: PskCredential },
 }
 #[derive(Debug)]
 pub struct WaitM3 {
@@ -537,13 +537,16 @@ pub struct WaitM3 {
 }
 
 /// Method-specific details required to prepare EDHOC message_2.
-#[derive(Copy, Clone, Debug)]
-pub enum PrepareMessage2Details<'a> {
+#[derive(Clone, Debug)]
+pub enum PrepareMessage2Details {
     StatStat {
-        r: &'a BytesP256ElemLen,
+        r: BytesP256ElemLen,
         cred_transfer: CredentialTransfer,
+        cred_r: PublicCredential,
     },
-    Psk,
+    Psk {
+        cred_r: PskCredential,
+    },
 }
 
 #[derive(Debug)]
@@ -575,7 +578,7 @@ pub enum ParsedMessage2Details {
 #[repr(C)]
 pub enum ProcessedM2MethodSpecifics {
     StatStat {},
-    Psk { cred_r: Credential },
+    Psk { cred_r: PskCredential },
 }
 
 #[derive(Debug)]
@@ -594,7 +597,8 @@ pub enum ProcessingM3MethodSpecifics {
     },
     Psk {
         id_cred_psk: IdCred,
-        cred_r: Credential,
+        cred_r: PskCredential,
+        prk_4e3m: BytesHashLen,
     },
 }
 #[derive(Debug)]
@@ -631,6 +635,12 @@ pub struct Completed {
     pub prk_exporter: BytesHashLen,
 }
 
+#[derive(Debug)]
+#[repr(C)]
+pub enum PeerCredential {
+    StatStat(Option<PublicCredential>),
+    Psk(PskCredential),
+}
 /// An enum describing options how to send credentials.
 #[cfg_attr(feature = "python-bindings", pyclass(eq, eq_int, from_py_object))]
 #[derive(Copy, Clone, Debug, PartialEq)]

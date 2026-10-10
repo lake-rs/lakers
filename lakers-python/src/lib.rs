@@ -89,8 +89,9 @@ pub fn py_credential_check_or_fetch<'a>(
     id_cred_received: Vec<u8>,
     cred_expected: Option<AutoCredential>,
 ) -> PyResult<Bound<'a, PyBytes>> {
+    let cred_expected = cred_expected.map(|c| c.to_public()).transpose()?;
     let valid_cred = credential_check_or_fetch(
-        cred_expected.map(|c| c.to_credential()).transpose()?,
+        cred_expected,
         IdCred::from_full_value(id_cred_received.as_slice())?,
     )?;
 
@@ -109,43 +110,60 @@ fn p256_generate_key_pair<'a>(
     ))
 }
 
-/// Helper for PyO3 converted functions that behave like passing an argument through a
-/// `Credential` constructor; use this in an argument and then call [self.to_credential()].
-/// The resulting function will accept both a bytes-ish object (and pass it through
-/// [Credential::new()] or a preexisting [Credential].
+/// Helper for PyO3 converted functions that take a credential argument.
+///
+/// The resulting function accepts either a bytes-ish object, parsed as a CCS according to what the
+/// call site asks for, or a [`PublicCredential`] the caller already holds. There is no variant for
+/// an existing [`PskCredential`]: that class exposes no constructor to Python yet, so Python cannot
+/// hold one.
+///
+/// The `annotation` strings appear in the `TypeError` Python sees when an argument matches no
+/// variant, so they name the Python-visible types.
 #[derive(FromPyObject)]
 pub enum AutoCredential {
     #[pyo3(transparent, annotation = "bytes")]
     Parse(Vec<u8>),
-    #[pyo3(transparent, annotation = "Credential")]
-    Existing(lakers_shared::Credential),
+    #[pyo3(transparent, annotation = "PublicCredential")]
+    ExistingPublic(PublicCredential),
 }
 
 impl AutoCredential {
-    pub fn to_credential(self) -> Result<Credential, EDHOCError> {
+    /// Resolve to a credential carrying an asymmetric public key.
+    pub fn to_public(self) -> Result<PublicCredential, EDHOCError> {
         use AutoCredential::*;
         Ok(match self {
-            Existing(e) => e,
-            Parse(v) => Credential::parse_ccs(v.as_slice())?,
+            ExistingPublic(e) => e,
+            Parse(v) => PublicCredential::parse_ccs(v.as_slice())?,
+        })
+    }
+
+    /// Resolve to a credential carrying a pre-shared key.
+    ///
+    /// Only bytes can produce one, since Python cannot construct a [`PskCredential`]. A credential
+    /// object passed here is a public one: well-formed, but the wrong kind.
+    pub fn to_psk(self) -> Result<PskCredential, EDHOCError> {
+        use AutoCredential::*;
+        Ok(match self {
+            Parse(v) => PskCredential::parse_ccs(v.as_slice())?,
+            ExistingPublic(_) => return Err(EDHOCError::WrongCredentialType),
         })
     }
 }
 
-pub(crate) fn parse_credential(
+/// Build the credential expected of the peer, parsed according to the negotiated EDHOC method.
+///
+/// The same Python API accepts both stat-stat CCS credentials and PSK CCS credentials, so the
+/// method decides which parser runs and which [`PeerCredential`] variant results. Call sites that
+/// need their *own* credential, to build an identity, use [`AutoCredential::to_public`] or
+/// [`AutoCredential::to_psk`] instead: they want the concrete type rather than this enum.
+pub(crate) fn parse_peer_credential(
     method: EDHOCMethod,
     credential: AutoCredential,
-) -> Result<Credential, EDHOCError> {
-    use AutoCredential::{Existing, Parse};
-
-    Ok(match credential {
-        Existing(existing) => existing,
-        // The same Python API accepts both stat-stat CCS credentials and PSK CCS credentials.
-        // Parse according to the negotiated EDHOC method so callers don't need separate types.
-        Parse(v) => match method {
-            EDHOCMethod::StatStat => Credential::parse_ccs(v.as_slice())?,
-            EDHOCMethod::PSK => Credential::parse_ccs_symmetric(v.as_slice())?,
-            _ => return Err(EDHOCError::UnsupportedMethod),
-        },
+) -> Result<PeerCredential, EDHOCError> {
+    Ok(match method {
+        EDHOCMethod::StatStat => PeerCredential::StatStat(Some(credential.to_public()?)),
+        EDHOCMethod::PSK => PeerCredential::Psk(credential.to_psk()?),
+        _ => return Err(EDHOCError::UnsupportedMethod),
     })
 }
 
@@ -178,7 +196,7 @@ fn lakers_python(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<responder::PyEdhocResponder>()?;
     m.add_class::<lakers::CredentialTransfer>()?;
     m.add_class::<lakers::EADItem>()?;
-    m.add_class::<lakers::Credential>()?;
+    m.add_class::<lakers::PublicCredential>()?;
     // ead-authz items
     m.add_class::<ead_authz::PyAuthzDevice>()?;
     m.add_class::<ead_authz::PyAuthzAutenticator>()?;

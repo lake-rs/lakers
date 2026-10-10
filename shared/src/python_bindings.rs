@@ -68,20 +68,19 @@ impl<'py> pyo3::conversion::IntoPyObject<'py> for EadItems {
     }
 }
 
-// FIXME: adjust for new Credential struct
 #[pymethods]
-impl Credential {
-    /// Construct a new Credential
+impl PublicCredential {
+    /// Construct a new PublicCredential
     ///
     /// This has two variations:
     /// * Pass only the value. Lakers will try to parse the value as a CCS, and populate all fields
     ///   (value, public_key, kid) from that.
     /// * Pass all components. Lakers will not attempt to parse the value. This is primarily
-    ///   useful when the credential is not a CCS but eg. a CBOR Web Token (CWT) which the
+    ///   useful when the PublicCredential is not a CCS but eg. a CBOR Web Token (CWT) which the
     ///   application can decrypt based on its association with an ACE Authorization Server (AS),
     ///   or of which it knows the corresponding details from when it requested that token.
     ///
-    /// Note that other forms of a Credential can be around (eg. only carrying a kid). Those can
+    /// Note that other forms of a PublicCredential can be around (eg. only carrying a kid). Those can
     /// not directly be constructed, but may be produced by Lakers when parsing a message that
     /// contains a credential by reference.
     #[new]
@@ -106,9 +105,9 @@ impl Credential {
 
     fn __repr__(&self) -> String {
         format!(
-            "Credential(bytes.fromhex('{}'), public_key=bytes.fromhex('{}'), kid=bytes.fromhex('{}'))",
+            "PublicCredential(bytes.fromhex('{}'), public_key=bytes.fromhex('{}'), kid=bytes.fromhex('{}'))",
             hex::encode(self.bytes.as_slice()),
-            hex::encode(self.public_key().unwrap().as_slice()),
+            hex::encode(self.public_key().as_slice()),
             hex::encode(self.kid.as_ref().unwrap().as_slice()),
         )
     }
@@ -119,7 +118,7 @@ impl Credential {
 
     #[pyo3(name = "public_key")]
     fn py_public_key<'a>(&self, py: Python<'a>) -> Bound<'a, PyBytes> {
-        PyBytes::new(py, &self.public_key().unwrap())
+        PyBytes::new(py, &self.public_key())
     }
 
     fn kid<'a>(&self, py: Python<'a>) -> Bound<'a, PyBytes> {

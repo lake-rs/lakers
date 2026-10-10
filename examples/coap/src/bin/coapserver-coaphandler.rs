@@ -107,9 +107,10 @@ impl coap_handler::Handler for EdhocHandler {
         let starts_with_true = first_byte == &0xf5;
 
         if starts_with_true {
-            let cred_r =
-                Credential::parse_ccs(CRED_R.try_into().expect("Static credential is too large"))
-                    .expect("Static credential is not processable");
+            let cred_r = PublicCredential::parse_ccs(
+                CRED_R.try_into().expect("Static credential is too large"),
+            )
+            .expect("Static credential is not processable");
 
             let message_1 =
                 &EdhocBuffer::new_from_slice(&request.payload()[1..]).map_err(too_small)?;
@@ -118,8 +119,8 @@ impl coap_handler::Handler for EdhocHandler {
                 lakers_crypto::default_crypto(),
                 ResponderIdentity::StatStat {
                     r: R.try_into().expect("Wrong length of responder private key"),
+                    cred_r: cred_r.clone(),
                 },
-                cred_r,
             )
             .process_message_1(message_1)
             .map_err(render_error)?;
@@ -184,15 +185,19 @@ impl coap_handler::Handler for EdhocHandler {
                 println!("Critical EAD3 items were present that were not processed: {ead_3:?}");
                 render_error(e)
             })?;
-            let cred_i =
-                Credential::parse_ccs(CRED_I.try_into().expect("Static credential is too large"))
-                    .expect("Static credential is not processable");
-            let valid_cred_i =
-                credential_check_or_fetch(Some(cred_i), id_cred_i).map_err(render_error)?;
-            let (responder, prk_out) = responder.verify_message_3(valid_cred_i).map_err(|e| {
-                println!("EDHOC processing error: {:?}", e);
-                render_error(e)
-            })?;
+            let cred_i = PublicCredential::parse_ccs(
+                CRED_I.try_into().expect("Static credential is too large"),
+            )
+            .expect("Static credential is not processable");
+            let valid_cred_i = credential_check_or_fetch(Some(cred_i), id_cred_i)
+                .map_err(render_error)
+                .map(PublicCredential::from)?;
+            let (responder, prk_out) = responder
+                .verify_message_3(PeerCredential::StatStat(Some(valid_cred_i.clone())))
+                .map_err(|e| {
+                    println!("EDHOC processing error: {:?}", e);
+                    render_error(e)
+                })?;
 
             let (mut responder, _message_4) =
                 responder.prepare_message_4(&EadItems::new()).unwrap();
