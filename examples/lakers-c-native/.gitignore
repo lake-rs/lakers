@@ -1,3 +1,6 @@
 *.o
 lakers_ffi_native
-lakers_c_native
+lakers_c_native_initiator
+lakers_c_native_initiator_psk
+lakers_c_native_responder
+lakers_c_native_responder_psk

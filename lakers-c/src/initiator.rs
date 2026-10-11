@@ -285,6 +285,32 @@ pub unsafe extern "C" fn completed_without_message_4(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn initiator_edhoc_exporter(
+    initiator_c: *mut EdhocInitiator,
+    label: u8,
+    context: *const u8,
+    context_len: usize,
+    out: *mut u8,
+    out_len: usize,
+) -> i8 {
+    if initiator_c.is_null() || out.is_null() || (context.is_null() && context_len != 0) {
+        return -1;
+    }
+
+    let crypto = &mut default_crypto();
+    let context = if context_len == 0 {
+        &[]
+    } else {
+        core::slice::from_raw_parts(context, context_len)
+    };
+    let out = core::slice::from_raw_parts_mut(out, out_len);
+
+    edhoc_exporter(&(*initiator_c).completed, crypto, label, context, out);
+
+    0
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn initiator_compute_ephemeral_secret(
     initiator_c: *const EdhocInitiator,
     g_a: *const BytesP256ElemLen,
@@ -319,7 +345,6 @@ mod tests {
 
     fn make_ffi_initiator() -> EdhocInitiator {
         EdhocInitiator {
-            method: EDHOCMethod::StatStat,
             start: InitiatorStart {
                 suites_i: Default::default(),
                 method: EDHOCMethod::StatStat,
@@ -403,7 +428,6 @@ mod tests {
         unsafe {
             assert_eq!(initiator_new(&mut initiator, EDHOCMethod::PSK), 0);
         }
-        assert!(matches!(initiator.method, EDHOCMethod::PSK));
         assert!(matches!(initiator.start.method, EDHOCMethod::PSK));
     }
 
@@ -565,5 +589,114 @@ mod tests {
         };
 
         assert_eq!(verify_rc, 0);
+    }
+
+    #[test]
+    fn initiator_edhoc_exporter_matches_completed_state_exporter() {
+        let cred_i = Credential::parse_ccs(
+            hex!("A2027734322D35302D33312D46462D45462D33372D33322D333908A101A5010202412B2001215820AC75E9ECE3E50BFC8ED60399889522405C47BF16DF96660A41298CB4307F7EB62258206E5DE611388A4B8A8211334AC7D37ECB52A387D257E6DB3C2A93DF21FF3AFFC8")
+                .as_slice()
+                .try_into()
+                .unwrap(),
+        )
+        .unwrap();
+        let cred_r = Credential::parse_ccs(CRED_R_STATSTAT.try_into().unwrap()).unwrap();
+        let i_statstat: BytesP256ElemLen =
+            hex!("fb13adeb6518cee5f88417660841142e830a81fe334380a953406a1305e8706b");
+
+        let mut initiator = make_ffi_initiator();
+        let mut message_1 = EdhocMessageBuffer::default();
+        unsafe {
+            assert_eq!(initiator_new(&mut initiator, EDHOCMethod::StatStat), 0);
+            assert_eq!(
+                initiator_prepare_message_1(
+                    &mut initiator,
+                    core::ptr::null_mut(),
+                    core::ptr::null_mut(),
+                    &mut message_1,
+                ),
+                0
+            );
+        }
+
+        let responder = EdhocResponder::new(
+            default_crypto(),
+            ResponderIdentity::StatStat { r: R_STATSTAT },
+            cred_r.clone(),
+        );
+        let (responder, _c_i, _ead_1) = responder.process_message_1(&message_1).unwrap();
+        let (responder, message_2) = responder
+            .prepare_message_2(CredentialTransfer::ByReference, None, &EadItems::new())
+            .unwrap();
+
+        let mut c_r_out = 0u8;
+        let mut has_id_cred_r_out = false;
+        let mut id_cred_r_out = IdCred::default();
+        let mut ead_2_out = EadItemsC::default();
+        let parse_m2_rc = unsafe {
+            initiator_parse_message_2(
+                &mut initiator,
+                &message_2,
+                &mut c_r_out,
+                &mut has_id_cred_r_out,
+                &mut id_cred_r_out,
+                &mut ead_2_out,
+            )
+        };
+        assert_eq!(parse_m2_rc, 0);
+
+        let mut cred_i_c = credential_to_c(cred_i.clone());
+        let mut cred_r_c = credential_to_c(cred_r.clone());
+        let verify_m2_rc = unsafe {
+            initiator_verify_message_2(&mut initiator, &i_statstat, &mut cred_i_c, &mut cred_r_c)
+        };
+        assert_eq!(verify_m2_rc, 0);
+
+        let mut message_3 = EdhocMessageBuffer::default();
+        let mut i_prk_out = [0u8; SHA256_DIGEST_LEN];
+        let prepare_m3_rc = unsafe {
+            initiator_prepare_message_3(
+                &mut initiator,
+                CredentialTransfer::ByReference,
+                core::ptr::null_mut(),
+                &mut message_3,
+                &mut i_prk_out,
+            )
+        };
+        assert_eq!(prepare_m3_rc, 0);
+
+        let (responder, _id_cred_i, _ead_3) = responder.parse_message_3(&message_3).unwrap();
+        let (responder, _r_prk_out) = responder.verify_message_3(cred_i).unwrap();
+        let (_responder, message_4) = responder.prepare_message_4(&EadItems::new()).unwrap();
+
+        let mut ead_4_out = EadItemsC::default();
+        let process_m4_rc =
+            unsafe { initiator_process_message_4(&mut initiator, &message_4, &mut ead_4_out) };
+        assert_eq!(process_m4_rc, 0);
+
+        let label = 27u8;
+        let context = [0x11u8, 0x22, 0x33];
+        let mut ffi_exported = [0u8; 32];
+        let exporter_rc = unsafe {
+            initiator_edhoc_exporter(
+                &mut initiator,
+                label,
+                context.as_ptr(),
+                context.len(),
+                ffi_exported.as_mut_ptr(),
+                ffi_exported.len(),
+            )
+        };
+        assert_eq!(exporter_rc, 0);
+
+        let mut rust_exported = [0u8; 32];
+        edhoc_exporter(
+            &initiator.completed,
+            &mut default_crypto(),
+            label,
+            &context,
+            &mut rust_exported,
+        );
+        assert_eq!(ffi_exported, rust_exported);
     }
 }

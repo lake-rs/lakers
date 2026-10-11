@@ -12,6 +12,7 @@ use lakers_crypto::{default_crypto, CryptoTrait};
 #[cfg(feature = "ead-authz")]
 pub mod ead_authz;
 pub mod initiator;
+pub mod responder;
 
 #[cfg(test)]
 extern crate std;
@@ -262,6 +263,14 @@ impl CredentialC {
     }
 }
 
+pub type ResponderParseMessage3CredResolver = Option<
+    unsafe extern "C" fn(
+        id_cred_i: *const IdCred,
+        cred_out: *mut CredentialC,
+        context: *mut core::ffi::c_void,
+    ) -> i8,
+>;
+
 #[repr(C)]
 pub enum ProcessedM2MethodSpecificsKindC {
     Prm2StatStat,
@@ -362,6 +371,297 @@ impl ProcessedM2C {
                     kind: ProcessedM2MethodSpecificsKindC::Prm2Psk,
                     data: ProcessedM2MethodSpecificsDataC {
                         psk: core::mem::ManuallyDrop::new(ProcessedM2PskC { cred_r: cred_r_c }),
+                    },
+                };
+            }
+        }
+    }
+}
+
+#[repr(C)]
+pub struct ProcessingM1C {
+    pub method: EDHOCMethod,
+    pub y: BytesP256ElemLen,
+    pub g_y: BytesP256ElemLen,
+    pub c_i: u8,
+    pub g_x: BytesP256ElemLen,
+    pub h_message_1: BytesHashLen,
+}
+
+impl Default for ProcessingM1C {
+    fn default() -> Self {
+        Self {
+            method: EDHOCMethod::StatStat,
+            y: Default::default(),
+            g_y: Default::default(),
+            c_i: Default::default(),
+            g_x: Default::default(),
+            h_message_1: Default::default(),
+        }
+    }
+}
+
+impl ProcessingM1C {
+    pub fn to_rust(&self) -> ProcessingM1 {
+        ProcessingM1 {
+            method: self.method,
+            y: self.y,
+            g_y: self.g_y,
+            #[allow(deprecated)]
+            c_i: ConnId::from_int_raw(self.c_i),
+            g_x: self.g_x,
+            h_message_1: self.h_message_1,
+        }
+    }
+
+    pub unsafe fn copy_into_c(processing_m1: ProcessingM1, processing_m1_c: *mut ProcessingM1C) {
+        if processing_m1_c.is_null() {
+            panic!("processing_m1_c is null");
+        }
+
+        (*processing_m1_c).method = processing_m1.method;
+        (*processing_m1_c).y = processing_m1.y;
+        (*processing_m1_c).g_y = processing_m1.g_y;
+        let c_i = processing_m1.c_i.as_slice();
+        assert_eq!(c_i.len(), 1, "C API only supports short C_I");
+        (*processing_m1_c).c_i = c_i[0];
+        (*processing_m1_c).g_x = processing_m1.g_x;
+        (*processing_m1_c).h_message_1 = processing_m1.h_message_1;
+    }
+}
+
+#[repr(C)]
+pub enum WaitM3MethodSpecificsKindC {
+    Wm3StatStat,
+    Wm3Psk,
+}
+
+#[repr(C)]
+pub struct WaitM3StatStatC {}
+
+#[repr(C)]
+pub struct WaitM3PskC {
+    pub cred_r: CredentialC,
+}
+
+#[repr(C)]
+pub union WaitM3MethodSpecificsDataC {
+    pub statstat: core::mem::ManuallyDrop<WaitM3StatStatC>,
+    pub psk: core::mem::ManuallyDrop<WaitM3PskC>,
+}
+
+#[repr(C)]
+pub struct WaitM3MethodSpecificsC {
+    pub kind: WaitM3MethodSpecificsKindC,
+    pub data: WaitM3MethodSpecificsDataC,
+}
+
+#[repr(C)]
+pub struct WaitM3C {
+    pub method_specifics: WaitM3MethodSpecificsC,
+    pub y: BytesP256ElemLen,
+    pub prk_3e2m: BytesHashLen,
+    pub th_3: BytesHashLen,
+}
+
+impl Default for WaitM3C {
+    fn default() -> Self {
+        Self {
+            method_specifics: WaitM3MethodSpecificsC {
+                kind: WaitM3MethodSpecificsKindC::Wm3StatStat,
+                data: WaitM3MethodSpecificsDataC {
+                    statstat: core::mem::ManuallyDrop::new(WaitM3StatStatC {}),
+                },
+            },
+            y: Default::default(),
+            prk_3e2m: Default::default(),
+            th_3: Default::default(),
+        }
+    }
+}
+
+impl WaitM3C {
+    pub fn to_rust(&self) -> WaitM3 {
+        let method_specifics = match self.method_specifics.kind {
+            WaitM3MethodSpecificsKindC::Wm3StatStat => WaitM3MethodSpecifics::StatStat {},
+            WaitM3MethodSpecificsKindC::Wm3Psk => {
+                // SAFETY: Accessing a union field is unsafe. We just matched on
+                // `self.method_specifics.kind == WaitM3MethodSpecificsKindC::Wm3Psk`,
+                // so `data.psk` is the active variant.
+                let psk = unsafe { &self.method_specifics.data.psk };
+                WaitM3MethodSpecifics::Psk {
+                    cred_r: psk.cred_r.to_rust(),
+                }
+            }
+        };
+
+        WaitM3 {
+            method_specifics,
+            y: self.y,
+            prk_3e2m: self.prk_3e2m,
+            th_3: self.th_3,
+        }
+    }
+
+    pub unsafe fn copy_into_c(wait_m3: WaitM3, wait_m3_c: *mut WaitM3C) {
+        if wait_m3_c.is_null() {
+            panic!("wait_m3_c is null");
+        }
+
+        (*wait_m3_c).y = wait_m3.y;
+        (*wait_m3_c).prk_3e2m = wait_m3.prk_3e2m;
+        (*wait_m3_c).th_3 = wait_m3.th_3;
+
+        match wait_m3.method_specifics {
+            WaitM3MethodSpecifics::StatStat {} => {
+                (*wait_m3_c).method_specifics = WaitM3MethodSpecificsC {
+                    kind: WaitM3MethodSpecificsKindC::Wm3StatStat,
+                    data: WaitM3MethodSpecificsDataC {
+                        statstat: core::mem::ManuallyDrop::new(WaitM3StatStatC {}),
+                    },
+                };
+            }
+            WaitM3MethodSpecifics::Psk { cred_r } => {
+                let mut cred_r_c = core::mem::MaybeUninit::<CredentialC>::uninit();
+                CredentialC::copy_into_c(cred_r, cred_r_c.as_mut_ptr());
+                let cred_r_c = cred_r_c.assume_init();
+                (*wait_m3_c).method_specifics = WaitM3MethodSpecificsC {
+                    kind: WaitM3MethodSpecificsKindC::Wm3Psk,
+                    data: WaitM3MethodSpecificsDataC {
+                        psk: core::mem::ManuallyDrop::new(WaitM3PskC { cred_r: cred_r_c }),
+                    },
+                };
+            }
+        }
+    }
+}
+
+#[repr(C)]
+pub enum ProcessingM3MethodSpecificsKindC {
+    Pm3StatStat,
+    Pm3Psk,
+}
+
+#[repr(C)]
+pub struct ProcessingM3StatStatC {
+    pub mac_3: BytesMac3,
+    pub id_cred_i: IdCred,
+}
+
+#[repr(C)]
+pub struct ProcessingM3PskC {
+    pub id_cred_psk: IdCred,
+    pub cred_r: CredentialC,
+}
+
+#[repr(C)]
+pub union ProcessingM3MethodSpecificsDataC {
+    pub statstat: core::mem::ManuallyDrop<ProcessingM3StatStatC>,
+    pub psk: core::mem::ManuallyDrop<ProcessingM3PskC>,
+}
+
+#[repr(C)]
+pub struct ProcessingM3MethodSpecificsC {
+    pub kind: ProcessingM3MethodSpecificsKindC,
+    pub data: ProcessingM3MethodSpecificsDataC,
+}
+
+#[repr(C)]
+pub struct ProcessingM3C {
+    pub method_specifics: ProcessingM3MethodSpecificsC,
+    pub y: BytesP256ElemLen,
+    pub prk_3e2m: BytesHashLen,
+    pub th_3: BytesHashLen,
+    pub plaintext_3: BufferPlaintext3,
+    pub ead_3: *mut EadItemsC,
+}
+
+impl Default for ProcessingM3C {
+    fn default() -> Self {
+        Self {
+            method_specifics: ProcessingM3MethodSpecificsC {
+                kind: ProcessingM3MethodSpecificsKindC::Pm3StatStat,
+                data: ProcessingM3MethodSpecificsDataC {
+                    statstat: core::mem::ManuallyDrop::new(ProcessingM3StatStatC {
+                        mac_3: Default::default(),
+                        id_cred_i: Default::default(),
+                    }),
+                },
+            },
+            y: Default::default(),
+            prk_3e2m: Default::default(),
+            th_3: Default::default(),
+            plaintext_3: Default::default(),
+            ead_3: core::ptr::null_mut(),
+        }
+    }
+}
+
+impl ProcessingM3C {
+    pub fn to_rust(&self) -> ProcessingM3 {
+        let method_specifics = match self.method_specifics.kind {
+            ProcessingM3MethodSpecificsKindC::Pm3StatStat => {
+                let stat = unsafe { &self.method_specifics.data.statstat };
+                ProcessingM3MethodSpecifics::StatStat {
+                    mac_3: stat.mac_3,
+                    id_cred_i: stat.id_cred_i.clone(),
+                }
+            }
+            ProcessingM3MethodSpecificsKindC::Pm3Psk => {
+                let psk = unsafe { &self.method_specifics.data.psk };
+                ProcessingM3MethodSpecifics::Psk {
+                    id_cred_psk: psk.id_cred_psk.clone(),
+                    cred_r: psk.cred_r.to_rust(),
+                }
+            }
+        };
+
+        ProcessingM3 {
+            method_specifics,
+            y: self.y,
+            prk_3e2m: self.prk_3e2m,
+            th_3: self.th_3,
+            plaintext_3: self.plaintext_3.clone(),
+            ead_3: unsafe { (*self.ead_3).to_rust() },
+        }
+    }
+
+    pub unsafe fn copy_into_c(processing_m3: ProcessingM3, processing_m3_c: *mut ProcessingM3C) {
+        if processing_m3_c.is_null() {
+            panic!("processing_m3_c is null");
+        }
+
+        (*processing_m3_c).y = processing_m3.y;
+        (*processing_m3_c).prk_3e2m = processing_m3.prk_3e2m;
+        (*processing_m3_c).th_3 = processing_m3.th_3;
+        (*processing_m3_c).plaintext_3 = processing_m3.plaintext_3;
+
+        match processing_m3.method_specifics {
+            ProcessingM3MethodSpecifics::StatStat { mac_3, id_cred_i } => {
+                (*processing_m3_c).method_specifics = ProcessingM3MethodSpecificsC {
+                    kind: ProcessingM3MethodSpecificsKindC::Pm3StatStat,
+                    data: ProcessingM3MethodSpecificsDataC {
+                        statstat: core::mem::ManuallyDrop::new(ProcessingM3StatStatC {
+                            mac_3,
+                            id_cred_i,
+                        }),
+                    },
+                };
+            }
+            ProcessingM3MethodSpecifics::Psk {
+                id_cred_psk,
+                cred_r,
+            } => {
+                let mut cred_r_c = core::mem::MaybeUninit::<CredentialC>::uninit();
+                CredentialC::copy_into_c(cred_r, cred_r_c.as_mut_ptr());
+                let cred_r_c = cred_r_c.assume_init();
+                (*processing_m3_c).method_specifics = ProcessingM3MethodSpecificsC {
+                    kind: ProcessingM3MethodSpecificsKindC::Pm3Psk,
+                    data: ProcessingM3MethodSpecificsDataC {
+                        psk: core::mem::ManuallyDrop::new(ProcessingM3PskC {
+                            id_cred_psk,
+                            cred_r: cred_r_c,
+                        }),
                     },
                 };
             }
