@@ -118,7 +118,7 @@ pub const CBOR_MAJOR_ARRAY_MAX: u8 = 0x97u8;
 pub const CBOR_MAJOR_MAP: u8 = 0xA0;
 pub const MAX_INFO_LEN: usize = 2 + SHA256_DIGEST_LEN + // 32-byte digest as bstr
     1 + MAX_KDF_LABEL_LEN +     // label <24 bytes as tstr
-    1 + MAX_KDF_CONTEXT_LEN +   // context as bstr, up to a 2-byte length header
+    3 + MAX_KDF_CONTEXT_LEN +   // context as bstr, up to a 3-byte header
     1; // length as u8
        // The PSK is the IKM of an HKDF-SHA-256 extract, whose output is a 256-bit PRK, so entropy beyond
        // 32 bytes cannot be carried into the key schedule and a longer PSK buys no additional security.
@@ -1698,15 +1698,19 @@ mod test_encode_info {
     use super::*;
 
     #[test]
-    fn context_length_header_is_well_formed() {
-        let info = encode_info(2, &[0xaa; 10], 32);
-        assert_eq!(&info.as_slice()[..2], &[0x02, 0x4a]);
+    fn context_length_header_at_boundaries() {
+        let cases: &[(usize, &[u8])] = &[
+            (0, &[0x40]),
+            (23, &[0x57]),
+            (24, &[0x58, 24]),
+            (255, &[0x58, 0xff]),
+            (256, &[0x59, 0x01, 0x00]),
+        ];
 
-        let info = encode_info(2, &[0xaa; 200], 32);
-        assert_eq!(&info.as_slice()[..3], &[0x02, 0x58, 200]);
-
-        let info = encode_info(2, &[0xaa; 256], 32);
-        assert_eq!(&info.as_slice()[..4], &[0x02, 0x59, 0x01, 0x00]);
+        for &(len, header) in cases {
+            let info = encode_info(2, &[0xaa; 256][..len], 32);
+            assert_eq!(&info.as_slice()[1..1 + header.len()], header, "len = {len}");
+        }
     }
 
     #[test]
