@@ -98,6 +98,7 @@ pub const MAX_BUFFER_LEN: usize = if cfg!(feature = "max_buffer_len_1024") {
     256 + 64
 };
 pub const CBOR_BYTE_STRING: u8 = 0x58u8;
+pub const CBOR_BYTE_STRING_2BYTE_LEN: u8 = 0x59u8;
 pub const CBOR_TEXT_STRING: u8 = 0x78u8;
 pub const CBOR_UINT_1BYTE: u8 = 0x18u8;
 pub const CBOR_NEG_INT_1BYTE_START: u8 = 0x20u8;
@@ -116,7 +117,7 @@ pub const CBOR_MAJOR_ARRAY_MAX: u8 = 0x97u8;
 pub const CBOR_MAJOR_MAP: u8 = 0xA0;
 pub const MAX_INFO_LEN: usize = 2 + SHA256_DIGEST_LEN + // 32-byte digest as bstr
     1 + MAX_KDF_LABEL_LEN +     // label <24 bytes as tstr
-    1 + MAX_KDF_CONTEXT_LEN +   // context <24 bytes as bstr
+    3 + MAX_KDF_CONTEXT_LEN +   // context as bstr, up to a 3-byte header
     1; // length as u8
        // The PSK is the IKM of an HKDF-SHA-256 extract, whose output is a 256-bit PRK, so entropy beyond
        // 32 bytes cannot be carried into the key schedule and a longer PSK buys no additional security.
@@ -956,9 +957,13 @@ mod helpers {
         if context.len() < 24 {
             info.push(context.len() as u8 | CBOR_MAJOR_BYTE_STRING)
                 .unwrap();
-        } else {
+        } else if context.len() <= u8::MAX as usize {
             info.push(CBOR_BYTE_STRING).unwrap();
             info.push(context.len() as u8).unwrap();
+        } else {
+            info.push(CBOR_BYTE_STRING_2BYTE_LEN).unwrap();
+            info.extend_from_slice(&(context.len() as u16).to_be_bytes())
+                .unwrap();
         };
         info.extend_from_slice(context).unwrap();
 
@@ -1683,5 +1688,35 @@ mod test_ead_items {
             .iter()
             .map(|i| (i.label(), i.is_critical(), Vec::from(i.value.as_slice())))
             .collect::<Vec<_>>()
+    }
+}
+
+#[cfg(test)]
+mod test_encode_info {
+    use super::*;
+
+    #[test]
+    fn context_length_header_at_boundaries() {
+        let cases: &[(usize, &[u8])] = &[
+            (0, &[0x40]),
+            (23, &[0x57]),
+            (24, &[0x58, 24]),
+            (255, &[0x58, 0xff]),
+            (256, &[0x59, 0x01, 0x00]),
+        ];
+
+        for &(len, header) in cases {
+            let info = encode_info(2, &[0xaa; 256][..len], 32);
+            assert_eq!(&info.as_slice()[1..1 + header.len()], header, "len = {len}");
+        }
+    }
+
+    #[test]
+    fn long_context_is_encoded_in_full() {
+        let context = [0xaa; 256];
+        let info = encode_info(2, &context, 32);
+        assert_eq!(info.len(), 1 + 3 + context.len() + 2);
+        assert_eq!(&info.as_slice()[4..4 + context.len()], &context[..]);
+        assert_eq!(&info.as_slice()[info.len() - 2..], &[0x18, 0x20]);
     }
 }
