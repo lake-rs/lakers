@@ -1004,7 +1004,7 @@ mod edhoc_parser {
             .map_err(|_| EDHOCError::ParsingError)?;
 
         let is_critical = label < 0;
-        let label = label.abs();
+        let label = label.unsigned_abs();
 
         let position_after_label = decoder.position();
         let (ead_value, position) = if let Ok(_slice) = decoder.bytes() {
@@ -1675,6 +1675,19 @@ mod test_ead_items {
         assert_eq!(ead1.label, 1);
 
         items.processed_critical_items().unwrap();
+    }
+
+    #[test]
+    fn test_parse_eads_negative_label_bounds() {
+        let decoded = edhoc_parser::parse_eads(&hex!("39fffe")).unwrap();
+        let item = decoded.iter().next().unwrap();
+        assert_eq!(item.label(), 0xffff);
+        assert!(item.is_critical());
+
+        assert_eq!(
+            edhoc_parser::parse_eads(&hex!("39ffff")).unwrap_err(),
+            EDHOCError::ParsingError
+        );
     }
 
     // Not introducing PartialEq/Eq just for this test, but if it's introduced later for other
