@@ -294,6 +294,9 @@ impl ConnId {
         let len = ConnIdType::classify(decoder.current()?)
             .ok_or(CBORError::DecodingError)?
             .length();
+        if len > MAX_CONNID_ENCODED_LEN {
+            return Err(CBORError::DecodingError);
+        }
         s[..len].copy_from_slice(decoder.read_slice(len)?);
         Ok(Self(s))
     }
@@ -1683,5 +1686,36 @@ mod test_ead_items {
             .iter()
             .map(|i| (i.label(), i.is_critical(), Vec::from(i.value.as_slice())))
             .collect::<Vec<_>>()
+    }
+}
+
+#[cfg(test)]
+mod test_conn_id {
+    use super::*;
+
+    #[test]
+    fn test_conn_id_from_decoder_bstr_at_capacity() {
+        let mut input = [0x01; MAX_CONNID_ENCODED_LEN];
+        input[0] = 0x40 | (MAX_CONNID_ENCODED_LEN as u8 - 1);
+        let mut decoder = CBORDecoder::new(&input);
+
+        let conn_id = ConnId::from_decoder(&mut decoder).unwrap();
+        assert_eq!(conn_id.as_cbor(), &input[..]);
+        assert!(decoder.finished());
+    }
+
+    #[cfg(not(feature = "max_connid_encoded_len_24"))]
+    #[test]
+    fn test_conn_id_from_decoder_bstr_exceeds_capacity() {
+        for n in MAX_CONNID_ENCODED_LEN..24 {
+            let mut input = [0x01; 24];
+            input[0] = 0x40 | n as u8;
+            let mut decoder = CBORDecoder::new(&input[..=n]);
+
+            assert!(matches!(
+                ConnId::from_decoder(&mut decoder),
+                Err(CBORError::DecodingError)
+            ));
+        }
     }
 }
