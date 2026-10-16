@@ -1395,7 +1395,12 @@ mod cbor_decoder {
             } else if 0x18 == n {
                 Ok(self.read()? as i8)
             } else if 0x38 == n {
-                Ok(-1 - (self.read()? - 0x20) as i8)
+                let b = self.read()?;
+                if b <= 127 {
+                    Ok(-1 - b as i8)
+                } else {
+                    Err(CBORError::DecodingError)
+                }
             } else {
                 Err(CBORError::DecodingError)
             }
@@ -1611,6 +1616,25 @@ mod test_cbor_decoder {
         assert_eq!(-1, decoder.i8().unwrap());
         assert_eq!([0x68, 0x69], decoder.str().unwrap()); // "hi"
         assert_eq!([0xFE, 0xFE], decoder.bytes().unwrap());
+    }
+
+    #[test]
+    fn test_cbor_decoder_i8_two_byte_negative() {
+        assert_eq!(-25, CBORDecoder::new(&[0x38, 0x18]).i8().unwrap());
+        assert_eq!(-100, CBORDecoder::new(&[0x38, 0x63]).i8().unwrap());
+        assert_eq!(-128, CBORDecoder::new(&[0x38, 0x7F]).i8().unwrap());
+    }
+
+    #[test]
+    fn test_cbor_decoder_i8_two_byte_negative_small_argument() {
+        assert_eq!(-1, CBORDecoder::new(&[0x38, 0x00]).i8().unwrap());
+        assert_eq!(-32, CBORDecoder::new(&[0x38, 0x1F]).i8().unwrap());
+    }
+
+    #[test]
+    fn test_cbor_decoder_i8_two_byte_negative_out_of_range() {
+        assert!(CBORDecoder::new(&[0x38, 0x80]).i8().is_err());
+        assert!(CBORDecoder::new(&[0x38, 0xFF]).i8().is_err());
     }
 
     #[test]
