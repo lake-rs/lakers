@@ -43,16 +43,18 @@ impl ZeroTouchServer {
             .pop_by_label(EAD_AUTHZ_LABEL)
             .ok_or(EDHOCError::EADUnprocessable)?;
         ead_1.processed_critical_items()?;
-        let (_loc_w, enc_id) = parse_ead_1_value(&ead_item.value_bytes().unwrap())?;
+        let value = ead_item.value_bytes().ok_or(EDHOCError::EADUnprocessable)?;
+        let (_loc_w, enc_id) = parse_ead_1_value(value)?;
         let id_u_encoded = decrypt_enc_id(crypto, &prk, &enc_id, EDHOC_SUPPORTED_SUITES[0])?;
         let id_u = decode_id_u(id_u_encoded)?;
 
-        if self.acl.is_none() || self.authorized(id_u[3]) {
+        // A too-short ID_U has no KID; with an ACL it cannot be authorized.
+        let kid = id_u.as_slice().get(3).copied();
+        if self.acl.is_none() || kid.is_some_and(|kid| self.authorized(kid)) {
             let h_message_1 = crypto.sha256_digest(message_1.as_slice());
 
             let voucher = prepare_voucher(crypto, &h_message_1, &self.cred_v.as_slice(), &prk);
-            let voucher_response = encode_voucher_response(&message_1, &voucher, &opaque_state);
-            Ok(voucher_response)
+            encode_voucher_response(&message_1, &voucher, &opaque_state)
         } else {
             Err(EDHOCError::AccessDenied)
         }
@@ -84,7 +86,8 @@ impl ZeroTouchServerUserAcl {
         let prk = compute_prk(crypto, &self.w, &g_x);
 
         let ead_item = ead_1.iter().next().ok_or(EDHOCError::EADUnprocessable)?;
-        let (_loc_w, enc_id) = parse_ead_1_value(&ead_item.value_bytes().unwrap())?;
+        let value = ead_item.value_bytes().ok_or(EDHOCError::EADUnprocessable)?;
+        let (_loc_w, enc_id) = parse_ead_1_value(value)?;
         let id_u_encoded = decrypt_enc_id(crypto, &prk, &enc_id, EDHOC_SUPPORTED_SUITES[0])?;
 
         decode_id_u(id_u_encoded)
@@ -103,8 +106,7 @@ impl ZeroTouchServerUserAcl {
         let h_message_1 = crypto.sha256_digest(message_1.as_slice());
 
         let voucher = prepare_voucher(crypto, &h_message_1, &self.cred_v.as_slice(), &prk);
-        let voucher_response = encode_voucher_response(&message_1, &voucher, &opaque_state);
-        Ok(voucher_response)
+        encode_voucher_response(&message_1, &voucher, &opaque_state)
     }
 }
 
@@ -133,6 +135,11 @@ fn decrypt_enc_id<Crypto: CryptoTrait>(
     enc_id: &EdhocMessageBuffer,
     ss: u8,
 ) -> Result<EdhocMessageBuffer, EDHOCError> {
+    // aes_ccm_decrypt subtracts the tag length without checking, so a shorter ENC_ID is malformed.
+    if enc_id.len() < CcmTagLen8::LEN {
+        return Err(EDHOCError::EADUnprocessable);
+    }
+
     let (k_1, iv_1) = compute_k_1_iv_1(crypto, &prk);
 
     // external_aad = (SS: int)
@@ -158,40 +165,84 @@ fn encode_voucher_response(
     message_1: &BufferMessage1,
     voucher: &BytesVoucher,
     opaque_state: &Option<EdhocMessageBuffer>,
-) -> EdhocMessageBuffer {
+) -> Result<EdhocMessageBuffer, EDHOCError> {
     let mut output = EdhocMessageBuffer::new();
 
     if opaque_state.is_some() {
-        output.push(CBOR_MAJOR_ARRAY | 3).unwrap();
+        output.push(CBOR_MAJOR_ARRAY | 3).map_err(enc_err)?;
     } else {
-        output.push(CBOR_MAJOR_ARRAY | 2).unwrap();
+        output.push(CBOR_MAJOR_ARRAY | 2).map_err(enc_err)?;
     }
-    output.push(CBOR_BYTE_STRING).unwrap();
-    output.push(message_1.len() as u8).unwrap();
-    output.extend_from_slice(message_1.as_slice()).unwrap();
+    // A one-byte header cannot express a length over 255; reject rather than truncate.
+    let message_1_len: u8 = message_1.len().try_into().map_err(enc_err)?;
+    output.push(CBOR_BYTE_STRING).map_err(enc_err)?;
+    output.push(message_1_len).map_err(enc_err)?;
+    output
+        .extend_from_slice(message_1.as_slice())
+        .map_err(enc_err)?;
 
     output
         .push(CBOR_MAJOR_BYTE_STRING + 1 + VOUCHER_LEN as u8)
-        .unwrap();
+        .map_err(enc_err)?;
     // The voucher is double-wrapped in bytes; see
     // <https://github.com/lake-rs/lakers/issues/382>
-    output.push(0x48).unwrap();
-    output.extend_from_slice(voucher).unwrap();
+    output.push(0x48).map_err(enc_err)?;
+    output.extend_from_slice(voucher).map_err(enc_err)?;
 
     if let Some(opaque_state) = opaque_state {
-        output.push(CBOR_BYTE_STRING).unwrap();
-        output.push(opaque_state.len() as u8).unwrap();
-        output.extend_from_slice(opaque_state.as_slice()).unwrap();
+        let opaque_state_len: u8 = opaque_state.len().try_into().map_err(enc_err)?;
+        output.push(CBOR_BYTE_STRING).map_err(enc_err)?;
+        output.push(opaque_state_len).map_err(enc_err)?;
+        output
+            .extend_from_slice(opaque_state.as_slice())
+            .map_err(enc_err)?;
     }
 
-    output
+    Ok(output)
 }
 
 #[cfg(test)]
 mod test_enrollment_server {
     use super::*;
+    use crate::authenticator::encode_voucher_request;
     use crate::test_vectors::*;
+    use crate::ZeroTouchDevice;
     use lakers_crypto::default_crypto;
+
+    // Layout of `MESSAGE_1_WITH_EAD_TV`: METHOD, SUITES_I, G_X and C_I, then the EAD items.
+    const G_X_OFFSET: usize = 6;
+    const G_X_LEN: usize = 32;
+    const EAD_OFFSET: usize = G_X_OFFSET + G_X_LEN + 1;
+
+    /// A `message_1` built from the test-vector preamble (through `C_I`) with `ead` appended.
+    ///
+    /// The preamble embeds `G_X_TV`; the short-ID_U test relies on it matching the `G_XW_TV` secret
+    /// used by `ZeroTouchDevice::prepare_ead_1`.
+    fn message_1_with_ead(ead: &[u8]) -> EdhocMessageBuffer {
+        // The short-ID_U test would otherwise only fail as a confusing MacVerificationFailed.
+        debug_assert_eq!(
+            &MESSAGE_1_WITH_EAD_TV[G_X_OFFSET..G_X_OFFSET + G_X_LEN],
+            G_X_TV
+        );
+        let mut message_1 =
+            EdhocMessageBuffer::new_from_slice(&MESSAGE_1_WITH_EAD_TV[..EAD_OFFSET]).unwrap();
+        message_1.extend_from_slice(ead).unwrap();
+        message_1
+    }
+
+    /// A voucher request whose `message_1` carries a well-formed authz `EAD_1` encrypting a 1-byte
+    /// `ID_U` (too short to carry a KID).
+    fn short_id_u_voucher_request() -> EdhocMessageBuffer {
+        let device = ZeroTouchDevice::new(
+            EdhocMessageBuffer::new_from_slice(&[0x00]).unwrap(),
+            G_W_TV.try_into().unwrap(),
+            LOC_W_TV.try_into().unwrap(),
+        );
+        let (_, ead_1) =
+            device.prepare_ead_1(&mut default_crypto(), G_XW_TV.try_into().unwrap(), SS_TV);
+        let message_1 = message_1_with_ead(ead_1.encode().unwrap().as_slice());
+        encode_voucher_request(&message_1, &None).unwrap()
+    }
 
     #[test]
     fn test_decrypt_enc_id() {
@@ -210,6 +261,75 @@ mod test_enrollment_server {
     }
 
     #[test]
+    fn test_handle_voucher_request_no_ead_value_returns_error() {
+        // message_1 with the authz label but no EAD value
+        let message_1 = message_1_with_ead(&[EAD_AUTHZ_LABEL as u8]);
+        let vreq = encode_voucher_request(&message_1, &None).unwrap();
+
+        let server = ZeroTouchServer::new(W_TV.try_into().unwrap(), CRED_V_TV, None);
+        let res = server.handle_voucher_request(&mut default_crypto(), &vreq);
+        assert_eq!(res.unwrap_err(), EDHOCError::EADUnprocessable);
+    }
+
+    #[test]
+    fn test_decode_voucher_request_no_ead_value_returns_error() {
+        let message_1 = message_1_with_ead(&[EAD_AUTHZ_LABEL as u8]);
+        let vreq = encode_voucher_request(&message_1, &None).unwrap();
+
+        let server = ZeroTouchServerUserAcl::new(W_TV.try_into().unwrap(), CRED_V_TV);
+        let res = server.decode_voucher_request(&mut default_crypto(), &vreq);
+        assert_eq!(res.unwrap_err(), EDHOCError::EADUnprocessable);
+    }
+
+    #[test]
+    fn test_handle_voucher_request_short_enc_id_returns_error() {
+        // EAD_1 value = empty text string + a byte string shorter than the AEAD tag.
+        for short_enc_id in [&[][..], &[0xaa, 0xbb, 0xcc][..]] {
+            let mut value = EdhocMessageBuffer::new();
+            value.push(0x60).unwrap(); // empty text string (LOC_W)
+            value
+                .push(CBOR_MAJOR_BYTE_STRING | short_enc_id.len() as u8)
+                .unwrap();
+            value.extend_from_slice(short_enc_id).unwrap();
+
+            let ead = EADItem::new_full(EAD_AUTHZ_LABEL, true, Some(value.as_slice()))
+                .unwrap()
+                .encode()
+                .unwrap();
+            let message_1 = message_1_with_ead(ead.as_slice());
+            let vreq = encode_voucher_request(&message_1, &None).unwrap();
+
+            let server = ZeroTouchServer::new(W_TV.try_into().unwrap(), CRED_V_TV, None);
+            let res = server.handle_voucher_request(&mut default_crypto(), &vreq);
+            assert_eq!(res.unwrap_err(), EDHOCError::EADUnprocessable);
+        }
+    }
+
+    #[test]
+    fn test_handle_voucher_request_short_id_u_returns_error() {
+        let vreq = short_id_u_voucher_request();
+
+        let server = ZeroTouchServer::new(
+            W_TV.try_into().unwrap(),
+            CRED_V_TV,
+            Some(ACL_TV.try_into().unwrap()),
+        );
+        let res = server.handle_voucher_request(&mut default_crypto(), &vreq);
+        assert_eq!(res.unwrap_err(), EDHOCError::AccessDenied);
+    }
+
+    #[test]
+    fn test_handle_voucher_request_short_id_u_without_acl_is_allowed() {
+        // Without an ACL the server enrolls any device, so a short ID_U is allowed.
+        let vreq = short_id_u_voucher_request();
+
+        let server = ZeroTouchServer::new(W_TV.try_into().unwrap(), CRED_V_TV, None);
+        assert!(server
+            .handle_voucher_request(&mut default_crypto(), &vreq)
+            .is_ok());
+    }
+
+    #[test]
     fn test_prepare_voucher() {
         let h_message_1: BytesHashLen = H_MESSAGE_1_TV.try_into().unwrap();
         let prk: BytesHashLen = PRK_TV.try_into().unwrap();
@@ -225,8 +345,23 @@ mod test_enrollment_server {
         let voucher_response_tv: EdhocMessageBuffer = SLO_VOUCHER_RESPONSE_TV.try_into().unwrap();
 
         let voucher_response =
-            encode_voucher_response(&message_1_tv, &VOUCHER_MAC_TV, &Some(opaque_state_tv));
+            encode_voucher_response(&message_1_tv, &VOUCHER_MAC_TV, &Some(opaque_state_tv))
+                .unwrap();
         assert_eq!(voucher_response, voucher_response_tv);
+    }
+
+    #[test]
+    fn test_encode_voucher_response_too_long_returns_error() {
+        // A response is strictly larger than its request, so a large request (or a large
+        // opaque_state) must yield an error rather than overflow the buffer.
+        let big_message_1 =
+            BufferMessage1::new_from_slice(&[0u8; MAX_MESSAGE_SIZE_LEN - 10]).unwrap();
+        assert!(encode_voucher_response(&big_message_1, &VOUCHER_MAC_TV, &None).is_err());
+
+        let message_1 = BufferMessage1::new_from_slice(&[0u8; 40]).unwrap();
+        let opaque_state =
+            EdhocMessageBuffer::new_from_slice(&[0u8; MAX_MESSAGE_SIZE_LEN - 20]).unwrap();
+        assert!(encode_voucher_response(&message_1, &VOUCHER_MAC_TV, &Some(opaque_state)).is_err());
     }
 
     #[test]
