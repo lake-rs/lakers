@@ -819,19 +819,13 @@ fn decrypt_message_3(
     message_3: &BufferMessage3,
     psk_fields: Option<(&[u8], &[u8], &[u8])>,
 ) -> Result<BufferPlaintext3, EDHOCError> {
-    // decode message_3
-    // FIXME: Reuse CBOR decoder
-    let (bytestring_length, prefix_length) =
-        if (0..=23).contains(&(message_3[0] ^ CBOR_MAJOR_BYTE_STRING)) {
-            ((message_3[0] ^ CBOR_MAJOR_BYTE_STRING).into(), 1)
-        } else {
-            (message_3[1].into(), 2)
-        };
-
-    let ciphertext_3: BufferCiphertext3 = BufferCiphertext3::new_from_slice(
-        &message_3.as_slice()[prefix_length..][..bytestring_length],
-    )
-    .unwrap();
+    let ciphertext_3 = parse_bstr_message(message_3)?;
+    // `ciphertext_3` borrows from `BufferMessage3`, which is bounded by `MAX_MESSAGE_SIZE_LEN`.
+    // Once the AEAD tag is accounted for, the plaintext necessarily fits the `N =
+    // MAX_MESSAGE_SIZE_LEN` decrypt output buffer, so only the lower bound needs checking here.
+    if ciphertext_3.len() < CcmTagLen8::LEN {
+        return Err(EDHOCError::ParsingError);
+    }
 
     let (k_3, iv_3) = compute_k_3_iv_3(crypto, prk_3e2m, th_3);
     let external_aad = build_external_aad(th_3, psk_fields)?;
@@ -841,7 +835,7 @@ fn decrypt_message_3(
         &k_3,
         &iv_3,
         &enc_structure.as_slice()[..enc_structure.len()],
-        ciphertext_3.as_slice(),
+        ciphertext_3,
     )
 }
 
@@ -894,19 +888,12 @@ fn decrypt_message_4(
     th_4: &BytesHashLen,
     message_4: &BufferMessage4,
 ) -> Result<BufferPlaintext4, EDHOCError> {
-    // decode message_4
-    // FIXME: Reuse CBOR decoder
-    let (bytestring_length, prefix_length) =
-        if (0..=23).contains(&(message_4[0] ^ CBOR_MAJOR_BYTE_STRING)) {
-            ((message_4[0] ^ CBOR_MAJOR_BYTE_STRING).into(), 1)
-        } else {
-            (message_4[1].into(), 2)
-        };
-
-    let ciphertext_4 = BufferCiphertext4::new_from_slice(
-        &message_4.as_slice()[prefix_length..][..bytestring_length],
-    )
-    .unwrap();
+    let ciphertext_4 = parse_bstr_message(message_4)?;
+    // See the note in `decrypt_message_3`: the ciphertext is bounded by `MAX_MESSAGE_SIZE_LEN`, so
+    // the plaintext cannot exceed the decrypt output buffer.
+    if ciphertext_4.len() < CcmTagLen8::LEN {
+        return Err(EDHOCError::ParsingError);
+    }
 
     let (k_4, iv_4) = compute_k_4_iv_4(crypto, prk_4e3m, th_4);
 
@@ -916,7 +903,7 @@ fn decrypt_message_4(
         &k_4,
         &iv_4,
         &enc_structure.as_slice()[..enc_structure.len()],
-        ciphertext_4.as_slice(),
+        ciphertext_4,
     )
 }
 
@@ -1727,6 +1714,72 @@ mod tests {
         );
         assert_eq!(plaintext_3b.unwrap(), PLAINTEXT_3B_PSK_TV);
     }
+
+    #[test]
+    fn test_decrypt_message_3_malformed_returns_error() {
+        for malformed in malformed_bstr_messages() {
+            assert_eq!(
+                decrypt_message_3(
+                    &mut default_crypto(),
+                    &PRK_3E2M_TV,
+                    &TH_3_TV,
+                    &malformed,
+                    None,
+                ),
+                Err(EDHOCError::ParsingError)
+            );
+        }
+    }
+
+    #[test]
+    fn test_decrypt_message_4_malformed_returns_error() {
+        for malformed in malformed_bstr_messages() {
+            assert_eq!(
+                decrypt_message_4(&mut default_crypto(), &PRK_4E3M_TV, &TH_4_TV, &malformed),
+                Err(EDHOCError::ParsingError)
+            );
+        }
+    }
+
+    /// Inputs that are not exactly one definite-length byte string, or whose payload is shorter than
+    /// the AEAD tag. All must be rejected with `ParsingError` rather than panicking.
+    fn malformed_bstr_messages() -> [EdhocMessageBuffer; 9] {
+        [
+            EdhocMessageBuffer::new(),                                  // empty
+            EdhocMessageBuffer::new_from_slice(&[0x41]).unwrap(), // declares 1 byte, none present
+            EdhocMessageBuffer::new_from_slice(&[0x58]).unwrap(), // truncated extended-length header
+            EdhocMessageBuffer::new_from_slice(&[0x58, 0x20]).unwrap(), // declares 32 bytes, none present
+            EdhocMessageBuffer::new_from_slice(&[0x59, 0x00]).unwrap(), // 16-bit length form, unsupported by the decoder
+            EdhocMessageBuffer::new_from_slice(&[0x00]).unwrap(),       // not a byte string
+            EdhocMessageBuffer::new_from_slice(&[0x40]).unwrap(), // empty bstr, shorter than tag
+            EdhocMessageBuffer::new_from_slice(&[0x41, 0x00]).unwrap(), // 1-byte bstr, shorter than tag
+            // An otherwise valid tag-length bstr with a trailing byte: only the trailing-byte check
+            // rejects it, so this catches a regression in that behaviour.
+            EdhocMessageBuffer::new_from_slice(&[0x48, 0, 0, 0, 0, 0, 0, 0, 0, 0x00]).unwrap(),
+        ]
+    }
+
+    #[test]
+    fn test_decrypt_tag_length_payload_returns_mac_error() {
+        // A payload of exactly one AEAD tag is well-formed and reaches the AEAD, which then fails
+        // tag verification rather than being rejected as a parsing error.
+        let tag_only = EdhocMessageBuffer::new_from_slice(&[0x48, 0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
+        assert_eq!(
+            decrypt_message_3(
+                &mut default_crypto(),
+                &PRK_3E2M_TV,
+                &TH_3_TV,
+                &tag_only,
+                None
+            ),
+            Err(EDHOCError::MacVerificationFailed)
+        );
+        assert_eq!(
+            decrypt_message_4(&mut default_crypto(), &PRK_4E3M_TV, &TH_4_TV, &tag_only),
+            Err(EDHOCError::MacVerificationFailed)
+        );
+    }
+
     #[test]
     fn test_compute_mac_3() {
         let mac_3 = compute_mac_3(

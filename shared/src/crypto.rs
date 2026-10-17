@@ -72,6 +72,14 @@ pub trait Crypto: core::fmt::Debug {
         ad: &[u8],
         plaintext: &[u8],
     ) -> EdhocBuffer<N>;
+    /// Decrypt `ciphertext`, which carries the trailing `TagLen::LEN`-byte authentication tag, and
+    /// verify that tag.
+    ///
+    /// # Panics
+    ///
+    /// Implementations may panic if `ciphertext.len() < TagLen::LEN` or if the plaintext
+    /// (`ciphertext.len() - TagLen::LEN`) exceeds `N`. Callers passing attacker-controlled input
+    /// must check both first.
     fn aes_ccm_decrypt<const N: usize, TagLen: CcmTagLen>(
         &mut self,
         key: &BytesCcmKeyLen,
