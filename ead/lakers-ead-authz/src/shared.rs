@@ -59,6 +59,12 @@ pub(crate) fn parse_ead_1_value(
     ))
 }
 
+/// Maps any encoder error (buffer full, or a length that does not fit its header) to one encoding
+/// error.
+pub(crate) fn enc_err<E>(_: E) -> EDHOCError {
+    EDHOCError::EncodingError
+}
+
 pub(crate) fn encode_enc_structure(ss: u8) -> [u8; EAD_AUTHZ_ENC_STRUCTURE_LEN] {
     let encrypt0 = b"Encrypt0";
 
