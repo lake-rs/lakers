@@ -58,26 +58,44 @@ pub fn encode_voucher_request(
     let mut output = EdhocMessageBuffer::new();
 
     if opaque_state.is_some() {
-        output.push(CBOR_MAJOR_ARRAY | 2).map_err(enc_err)?;
+        output
+            .push(CBOR_MAJOR_ARRAY | 2)
+            .map_err(|_| EDHOCError::EncodingError)?;
     } else {
-        output.push(CBOR_MAJOR_ARRAY | 1).map_err(enc_err)?;
+        output
+            .push(CBOR_MAJOR_ARRAY | 1)
+            .map_err(|_| EDHOCError::EncodingError)?;
     }
 
     // A one-byte header cannot express a length over 255; reject rather than truncate.
-    let message_1_len: u8 = message_1.len().try_into().map_err(enc_err)?;
-    output.push(CBOR_BYTE_STRING).map_err(enc_err)?;
-    output.push(message_1_len).map_err(enc_err)?;
+    let message_1_len: u8 = message_1
+        .len()
+        .try_into()
+        .map_err(|_| EDHOCError::EncodingError)?;
+    output
+        .push(CBOR_BYTE_STRING)
+        .map_err(|_| EDHOCError::EncodingError)?;
+    output
+        .push(message_1_len)
+        .map_err(|_| EDHOCError::EncodingError)?;
     output
         .extend_from_slice(message_1.as_slice())
-        .map_err(enc_err)?;
+        .map_err(|_| EDHOCError::EncodingError)?;
 
     if let Some(opaque_state) = opaque_state {
-        let opaque_state_len: u8 = opaque_state.len().try_into().map_err(enc_err)?;
-        output.push(CBOR_BYTE_STRING).map_err(enc_err)?;
-        output.push(opaque_state_len).map_err(enc_err)?;
+        let opaque_state_len: u8 = opaque_state
+            .len()
+            .try_into()
+            .map_err(|_| EDHOCError::EncodingError)?;
+        output
+            .push(CBOR_BYTE_STRING)
+            .map_err(|_| EDHOCError::EncodingError)?;
+        output
+            .push(opaque_state_len)
+            .map_err(|_| EDHOCError::EncodingError)?;
         output
             .extend_from_slice(opaque_state.as_slice())
-            .map_err(enc_err)?;
+            .map_err(|_| EDHOCError::EncodingError)?;
     }
 
     Ok(output)

@@ -168,10 +168,14 @@ impl CryptoTrait for Crypto {
             },
         };
         let my_key = key_management::import(attributes, None, &key[..]).unwrap();
+        let plaintext_len = ciphertext
+            .len()
+            .checked_sub(Tag::LEN)
+            .ok_or(EDHOCError::ParsingError)?;
         let mut output_buffer = EdhocBuffer::new();
         let out_slice = output_buffer
-            .extend_reserve(ciphertext.len() - Tag::LEN)
-            .unwrap();
+            .extend_reserve(plaintext_len)
+            .map_err(|_| EDHOCError::ParsingError)?;
 
         #[allow(deprecated, reason = "using extend_reserve")]
         match aead::decrypt(

@@ -135,11 +135,6 @@ fn decrypt_enc_id<Crypto: CryptoTrait>(
     enc_id: &EdhocMessageBuffer,
     ss: u8,
 ) -> Result<EdhocMessageBuffer, EDHOCError> {
-    // aes_ccm_decrypt subtracts the tag length without checking, so a shorter ENC_ID is malformed.
-    if enc_id.len() < CcmTagLen8::LEN {
-        return Err(EDHOCError::EADUnprocessable);
-    }
-
     let (k_1, iv_1) = compute_k_1_iv_1(crypto, &prk);
 
     // external_aad = (SS: int)
@@ -169,33 +164,53 @@ fn encode_voucher_response(
     let mut output = EdhocMessageBuffer::new();
 
     if opaque_state.is_some() {
-        output.push(CBOR_MAJOR_ARRAY | 3).map_err(enc_err)?;
+        output
+            .push(CBOR_MAJOR_ARRAY | 3)
+            .map_err(|_| EDHOCError::EncodingError)?;
     } else {
-        output.push(CBOR_MAJOR_ARRAY | 2).map_err(enc_err)?;
+        output
+            .push(CBOR_MAJOR_ARRAY | 2)
+            .map_err(|_| EDHOCError::EncodingError)?;
     }
     // A one-byte header cannot express a length over 255; reject rather than truncate.
-    let message_1_len: u8 = message_1.len().try_into().map_err(enc_err)?;
-    output.push(CBOR_BYTE_STRING).map_err(enc_err)?;
-    output.push(message_1_len).map_err(enc_err)?;
+    let message_1_len: u8 = message_1
+        .len()
+        .try_into()
+        .map_err(|_| EDHOCError::EncodingError)?;
+    output
+        .push(CBOR_BYTE_STRING)
+        .map_err(|_| EDHOCError::EncodingError)?;
+    output
+        .push(message_1_len)
+        .map_err(|_| EDHOCError::EncodingError)?;
     output
         .extend_from_slice(message_1.as_slice())
-        .map_err(enc_err)?;
+        .map_err(|_| EDHOCError::EncodingError)?;
 
     output
         .push(CBOR_MAJOR_BYTE_STRING + 1 + VOUCHER_LEN as u8)
-        .map_err(enc_err)?;
+        .map_err(|_| EDHOCError::EncodingError)?;
     // The voucher is double-wrapped in bytes; see
     // <https://github.com/lake-rs/lakers/issues/382>
-    output.push(0x48).map_err(enc_err)?;
-    output.extend_from_slice(voucher).map_err(enc_err)?;
+    output.push(0x48).map_err(|_| EDHOCError::EncodingError)?;
+    output
+        .extend_from_slice(voucher)
+        .map_err(|_| EDHOCError::EncodingError)?;
 
     if let Some(opaque_state) = opaque_state {
-        let opaque_state_len: u8 = opaque_state.len().try_into().map_err(enc_err)?;
-        output.push(CBOR_BYTE_STRING).map_err(enc_err)?;
-        output.push(opaque_state_len).map_err(enc_err)?;
+        let opaque_state_len: u8 = opaque_state
+            .len()
+            .try_into()
+            .map_err(|_| EDHOCError::EncodingError)?;
+        output
+            .push(CBOR_BYTE_STRING)
+            .map_err(|_| EDHOCError::EncodingError)?;
+        output
+            .push(opaque_state_len)
+            .map_err(|_| EDHOCError::EncodingError)?;
         output
             .extend_from_slice(opaque_state.as_slice())
-            .map_err(enc_err)?;
+            .map_err(|_| EDHOCError::EncodingError)?;
     }
 
     Ok(output)
@@ -283,7 +298,8 @@ mod test_enrollment_server {
 
     #[test]
     fn test_handle_voucher_request_short_enc_id_returns_error() {
-        // EAD_1 value = empty text string + a byte string shorter than the AEAD tag.
+        // EAD_1 value = empty text string + a byte string shorter than the AEAD tag; the decrypt
+        // backend rejects it rather than underflowing.
         for short_enc_id in [&[][..], &[0xaa, 0xbb, 0xcc][..]] {
             let mut value = EdhocMessageBuffer::new();
             value.push(0x60).unwrap(); // empty text string (LOC_W)
@@ -301,7 +317,7 @@ mod test_enrollment_server {
 
             let server = ZeroTouchServer::new(W_TV.try_into().unwrap(), CRED_V_TV, None);
             let res = server.handle_voucher_request(&mut default_crypto(), &vreq);
-            assert_eq!(res.unwrap_err(), EDHOCError::EADUnprocessable);
+            assert_eq!(res.unwrap_err(), EDHOCError::ParsingError);
         }
     }
 

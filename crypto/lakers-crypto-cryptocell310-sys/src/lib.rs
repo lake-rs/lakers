@@ -142,13 +142,21 @@ impl CryptoTrait for Crypto {
         ad: &[u8],
         ciphertext: &[u8],
     ) -> Result<EdhocBuffer<N>, EDHOCError> {
+        let plaintext_len = ciphertext
+            .len()
+            .checked_sub(Tag::LEN)
+            .ok_or(EDHOCError::ParsingError)?;
         let mut output = EdhocBuffer::new();
-        output.extend_reserve(ciphertext.len() - Tag::LEN).unwrap();
+        output
+            .extend_reserve(plaintext_len)
+            .map_err(|_| EDHOCError::ParsingError)?;
         let mut aesccm_key: CRYS_AESCCM_Key_t = Default::default();
 
         aesccm_key[0..AES_CCM_KEY_LEN].copy_from_slice(&key[..]);
 
-        assert!(ciphertext.len() - Tag::LEN <= N);
+        if plaintext_len > N {
+            return Err(EDHOCError::ParsingError);
+        }
 
         #[allow(deprecated, reason = "using extend_reserve")]
         unsafe {
@@ -162,11 +170,11 @@ impl CryptoTrait for Crypto {
                 ad.len() as u32,
                 // CC_AESCCM does not really write there, it's just missing a `const`
                 ciphertext.as_ptr() as *mut _,
-                (ciphertext.len() - Tag::LEN) as u32,
+                (plaintext_len) as u32,
                 output.content.as_mut_ptr(),
                 Tag::LEN as u8,
                 // as before
-                ciphertext[ciphertext.len() - Tag::LEN..].as_ptr() as *mut _,
+                ciphertext[plaintext_len..].as_ptr() as *mut _,
                 0 as u32, // CCM
             ) {
                 CRYS_OK => Ok(output),
