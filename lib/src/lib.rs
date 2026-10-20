@@ -938,6 +938,35 @@ mod test {
             .unwrap_err();
         assert_eq!(err, EDHOCError::ParsingError);
     }
+
+    #[test]
+    fn test_parse_message_3_statstat_truncated_returns_error() {
+        let cred_r = Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
+
+        let initiator = EdhocInitiator::new(
+            default_crypto(),
+            EDHOCMethod::StatStat,
+            EDHOCSuite::CipherSuite2,
+        );
+        let responder = EdhocResponder::new(
+            default_crypto(),
+            ResponderIdentity::StatStat {
+                r: R.try_into().expect("Wrong length of responder private key"),
+            },
+            cred_r,
+        );
+
+        let (_initiator, message_1) = initiator.prepare_message_1(None, &EadItems::new()).unwrap();
+        let (responder, _c_i, _ead_1) = responder.process_message_1(&message_1).unwrap();
+        let (responder, _message_2) = responder
+            .prepare_message_2(CredentialTransfer::ByReference, None, &EadItems::new())
+            .unwrap();
+
+        // message_3 declares a 1-byte payload but carries none (#454)
+        let truncated_message_3 = BufferMessage3::new_from_slice(&[0x41]).unwrap();
+        let err = responder.parse_message_3(&truncated_message_3).unwrap_err();
+        assert_eq!(err, EDHOCError::ParsingError);
+    }
 }
 
 #[cfg(feature = "test-ead-authz")]

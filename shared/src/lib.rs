@@ -1140,22 +1140,21 @@ mod edhoc_parser {
         }
     }
 
+    /// Decode a message consisting of a single CBOR byte string (message_3, message_4, or the PSK
+    /// inner CIPHERTEXT_3B). Returns `ParsingError` unless `msg` is exactly one definite-length bstr.
+    pub fn parse_bstr_message(msg: &EdhocMessageBuffer) -> Result<&[u8], EDHOCError> {
+        let mut decoder = CBORDecoder::new(msg.as_slice());
+        let ciphertext = decoder.bytes()?;
+        decoder.ensure_finished()?;
+        Ok(ciphertext)
+    }
+
     pub fn parse_message_3(
         rcvd_message_3: &BufferMessage3,
     ) -> Result<BufferCiphertext3, EDHOCError> {
         trace!("Enter parse_message_3");
-        let mut decoder = CBORDecoder::new(rcvd_message_3.as_slice());
-        let ciphertext_3a_slice = decoder.bytes()?;
-        if !decoder.finished() {
-            return Err(EDHOCError::ParsingError);
-        }
-
-        let mut ciphertext_3a = BufferCiphertext3::new();
-        ciphertext_3a
-            .fill_with_slice(ciphertext_3a_slice)
-            .map_err(|_| EDHOCError::ParsingError)?;
-
-        Ok(ciphertext_3a)
+        let ciphertext_3a = parse_bstr_message(rcvd_message_3)?;
+        BufferCiphertext3::new_from_slice(ciphertext_3a).map_err(|_| EDHOCError::ParsingError)
     }
 
     pub fn decode_plaintext_2(
@@ -1507,7 +1506,12 @@ mod cbor_decoder {
             }
         }
 
-        /// Decode a `u8` value into usize.
+        /// Decode a CBOR length argument (the additional-information byte) into a `usize`.
+        ///
+        /// Only the immediate (`0..=23`) and 8-bit (`0x18`, up to 255) forms are supported; the
+        /// 16- and 32-bit forms (`0x19`/`0x1a`/`0x1b`) are rejected. Byte strings longer than 255
+        /// bytes are therefore not decodable, even though `encode_bstr_header` can emit the 16-bit
+        /// form.
         pub fn as_usize(&mut self, b: u8) -> Result<usize, CBORError> {
             if (0..=0x17).contains(&b) {
                 Ok(usize::from(b))
