@@ -29,7 +29,7 @@ impl ZeroTouchAuthenticator {
         }
 
         let (loc_w, _enc_id) = parse_ead_1_value(ead_1.value_bytes().unwrap())?;
-        let voucher_request = encode_voucher_request(message_1, &opaque_state);
+        let voucher_request = encode_voucher_request(message_1, &opaque_state)?;
 
         Ok((
             ZeroTouchAuthenticatorWaitVoucherResp::default(),
@@ -54,26 +54,51 @@ impl ZeroTouchAuthenticatorWaitVoucherResp {
 pub fn encode_voucher_request(
     message_1: &BufferMessage1,
     opaque_state: &Option<EdhocMessageBuffer>,
-) -> EdhocMessageBuffer {
+) -> Result<EdhocMessageBuffer, EDHOCError> {
     let mut output = EdhocMessageBuffer::new();
 
     if opaque_state.is_some() {
-        output.push(CBOR_MAJOR_ARRAY | 2).unwrap();
+        output
+            .push(CBOR_MAJOR_ARRAY | 2)
+            .map_err(|_| EDHOCError::EncodingError)?;
     } else {
-        output.push(CBOR_MAJOR_ARRAY | 1).unwrap();
+        output
+            .push(CBOR_MAJOR_ARRAY | 1)
+            .map_err(|_| EDHOCError::EncodingError)?;
     }
 
-    output.push(CBOR_BYTE_STRING).unwrap();
-    output.push(message_1.len() as u8).unwrap();
-    output.extend_from_slice(message_1.as_slice()).unwrap();
+    // A one-byte header cannot express a length over 255; reject rather than truncate.
+    let message_1_len: u8 = message_1
+        .len()
+        .try_into()
+        .map_err(|_| EDHOCError::EncodingError)?;
+    output
+        .push(CBOR_BYTE_STRING)
+        .map_err(|_| EDHOCError::EncodingError)?;
+    output
+        .push(message_1_len)
+        .map_err(|_| EDHOCError::EncodingError)?;
+    output
+        .extend_from_slice(message_1.as_slice())
+        .map_err(|_| EDHOCError::EncodingError)?;
 
     if let Some(opaque_state) = opaque_state {
-        output.push(CBOR_BYTE_STRING).unwrap();
-        output.push(opaque_state.len() as u8).unwrap();
-        output.extend_from_slice(opaque_state.as_slice()).unwrap();
+        let opaque_state_len: u8 = opaque_state
+            .len()
+            .try_into()
+            .map_err(|_| EDHOCError::EncodingError)?;
+        output
+            .push(CBOR_BYTE_STRING)
+            .map_err(|_| EDHOCError::EncodingError)?;
+        output
+            .push(opaque_state_len)
+            .map_err(|_| EDHOCError::EncodingError)?;
+        output
+            .extend_from_slice(opaque_state.as_slice())
+            .map_err(|_| EDHOCError::EncodingError)?;
     }
 
-    output
+    Ok(output)
 }
 
 fn parse_voucher_response(
@@ -123,8 +148,24 @@ mod test_authenticator {
         let voucher_request_tv: EdhocMessageBuffer = VOUCHER_REQUEST_TV.try_into().unwrap();
 
         let voucher_request =
-            encode_voucher_request(&MESSAGE_1_WITH_EAD_TV.try_into().unwrap(), &None);
+            encode_voucher_request(&MESSAGE_1_WITH_EAD_TV.try_into().unwrap(), &None).unwrap();
         assert_eq!(voucher_request, voucher_request_tv);
+    }
+
+    #[test]
+    fn test_encode_voucher_request_too_long_returns_error() {
+        // A message_1 that leaves no room for the request wrapper.
+        let message_1 = BufferMessage1::new_from_slice(&[0u8; MAX_MESSAGE_SIZE_LEN - 2]).unwrap();
+        assert!(encode_voucher_request(&message_1, &None).is_err());
+    }
+
+    #[test]
+    fn test_encode_voucher_request_rejects_length_over_255() {
+        // Only reachable with buffers larger than 255 bytes; the length must not be truncated.
+        if MAX_MESSAGE_SIZE_LEN > 258 {
+            let message_1 = BufferMessage1::new_from_slice(&[0u8; 256]).unwrap();
+            assert!(encode_voucher_request(&message_1, &None).is_err());
+        }
     }
 
     #[test]
@@ -176,7 +217,8 @@ mod test_responder_stateless_operation {
         let opaque_state_tv: EdhocMessageBuffer = SLO_OPAQUE_STATE_TV.try_into().unwrap();
         let voucher_request_tv: EdhocMessageBuffer = SLO_VOUCHER_REQUEST_TV.try_into().unwrap();
 
-        let voucher_request = encode_voucher_request(&message_1_tv, &Some(opaque_state_tv));
+        let voucher_request =
+            encode_voucher_request(&message_1_tv, &Some(opaque_state_tv)).unwrap();
         assert_eq!(voucher_request, voucher_request_tv);
     }
 

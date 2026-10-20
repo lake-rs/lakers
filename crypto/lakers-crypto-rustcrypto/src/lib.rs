@@ -131,8 +131,12 @@ impl<Rng: rand_core::RngCore + rand_core::CryptoRng> CryptoTrait for Crypto<Rng>
         ad: &[u8],
         ciphertext: &[u8],
     ) -> Result<EdhocBuffer<N>, EDHOCError> {
-        let plaintext_len = ciphertext.len() - Tag::LEN;
-        let mut buffer = EdhocBuffer::new_from_slice(&ciphertext[..plaintext_len]).unwrap();
+        let plaintext_len = ciphertext
+            .len()
+            .checked_sub(Tag::LEN)
+            .ok_or(EDHOCError::ParsingError)?;
+        let mut buffer = EdhocBuffer::new_from_slice(&ciphertext[..plaintext_len])
+            .map_err(|_| EDHOCError::ParsingError)?;
         let tag = &ciphertext[plaintext_len..];
         #[allow(
             deprecated,

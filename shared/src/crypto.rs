@@ -75,11 +75,8 @@ pub trait Crypto: core::fmt::Debug {
     /// Decrypt `ciphertext`, which carries the trailing `TagLen::LEN`-byte authentication tag, and
     /// verify that tag.
     ///
-    /// # Panics
-    ///
-    /// Implementations may panic if `ciphertext.len() < TagLen::LEN` or if the plaintext
-    /// (`ciphertext.len() - TagLen::LEN`) exceeds `N`. Callers passing attacker-controlled input
-    /// must check both first.
+    /// Returns an error if `ciphertext` is shorter than `TagLen::LEN`, or if the plaintext exceeds
+    /// the output buffer `N`.
     fn aes_ccm_decrypt<const N: usize, TagLen: CcmTagLen>(
         &mut self,
         key: &BytesCcmKeyLen,

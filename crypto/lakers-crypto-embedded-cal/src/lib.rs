@@ -141,9 +141,12 @@ impl<C: Cal + rand_core::TryCryptoRng> CryptoTrait for Crypto<C> {
         ciphertext: &[u8],
     ) -> Result<EdhocBuffer<N>, EDHOCError> {
         let alg = aes_ccm_algorithm::<C, Tag>();
-        let plaintext_len = ciphertext.len() - Tag::LEN;
+        let plaintext_len = ciphertext
+            .len()
+            .checked_sub(Tag::LEN)
+            .ok_or(EDHOCError::ParsingError)?;
         let mut buffer = EdhocBuffer::<N>::new_from_slice(&ciphertext[..plaintext_len])
-            .expect("ciphertext-without-tag fits the output buffer");
+            .map_err(|_| EDHOCError::ParsingError)?;
         let tag = &ciphertext[plaintext_len..];
         let aead = self.cal.aead();
         let key = aead.load_from_keydata(alg, key);
