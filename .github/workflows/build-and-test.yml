@@ -9,11 +9,13 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: -Dwarnings 
+  RUSTFLAGS: -Dwarnings
 
+# Runners are pinned to ubuntu-24.04 because rust-psa-crypto's bindgen 0.69 generates broken
+# bindings with the newer libclang on ubuntu-26.04; go back to ubuntu-latest once rust-psa-crypto is removed.
 jobs:
   check-style:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - name: Checkout repo
       uses: actions/checkout@v4
@@ -26,7 +28,7 @@ jobs:
 
   unit-tests-default:
     needs: check-style
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     strategy:
       fail-fast: false
@@ -41,7 +43,7 @@ jobs:
 
   unit-tests:
     needs: check-style
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     strategy:
       fail-fast: false
@@ -59,7 +61,7 @@ jobs:
 
   build-edhoc-package:
     needs: unit-tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     strategy:
       fail-fast: false
@@ -80,7 +82,7 @@ jobs:
 
 
   generate-fstar:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
     - name: Checkout lakers
@@ -127,7 +129,7 @@ jobs:
 
   build-lakers-c:
     needs: unit-tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     strategy:
       fail-fast: false
@@ -155,7 +157,7 @@ jobs:
 
   build-lakers-c-example:
     needs: unit-tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     strategy:
       fail-fast: false
@@ -192,7 +194,7 @@ jobs:
 
   test-lakers-python:
     needs: check-style
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     strategy:
       fail-fast: false
@@ -219,7 +221,7 @@ jobs:
 
   run-example-on-qemu:
     needs: unit-tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     strategy:
       fail-fast: false
@@ -243,7 +245,7 @@ jobs:
 
   build-example-for-cortex-m4:
     needs: unit-tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     strategy:
       fail-fast: false
@@ -265,7 +267,7 @@ jobs:
 
   build-coap-example:
     needs: unit-tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
     - name: Checkout repo
@@ -282,7 +284,7 @@ jobs:
 
 
   release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [
       build-edhoc-package, build-lakers-c,
       generate-fstar,
