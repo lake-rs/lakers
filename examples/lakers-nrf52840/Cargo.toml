@@ -15,7 +15,7 @@ embassy-time = { version = "0.3.2", features = ["defmt", "defmt-timestamp-uptime
 embassy-nrf = { version = "0.2.0", features = ["defmt", "nrf52840", "time-driver-rtc1", "gpiote", "unstable-pac", "time"] }
 
 # lakers
-lakers = { package = "lakers", path = "../../lib", features = [ "defmt" ] }
+lakers = { package = "lakers", path = "../../lib", features = ["defmt"] }
 lakers-crypto = { path = "../../crypto", default-features = false }
 
 # misc
@@ -34,10 +34,10 @@ cortex-m-rt = "0.7.0"
 panic-probe = { version = "0.3", features = ["print-defmt"] }
 
 [features]
-default = [ "crypto-cryptocell310", "ead-none" ]
-crypto-cryptocell310 = [ "lakers-crypto/cryptocell310" ]
-crypto-psa = [ "lakers-crypto/psa-baremetal" ]
-ead-none = [ ]
+default = ["crypto-cryptocell310", "ead-none"]
+crypto-cryptocell310 = ["lakers-crypto/cryptocell310"]
+crypto-psa = ["lakers-crypto/psa-baremetal"]
+ead-none = []
 
 [profile.release]
 debug = 2

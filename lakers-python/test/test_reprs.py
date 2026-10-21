@@ -25,9 +25,9 @@ def test_responder():
 
 
 def test_credential():
-    cred_r = repr(lakers.Credential(CRED_R))
+    cred_r = repr(lakers.PublicCredential(CRED_R))
     # Not all of that is a guaranteed property, but let's make sure we deliberately change it.
     assert cred_r.startswith(
-        "Credential(bytes.fromhex('" + CRED_R.hex() + "'), public_key=bytes.fromhex('"
+        "PublicCredential(bytes.fromhex('" + CRED_R.hex() + "'), public_key=bytes.fromhex('"
     )
     assert cred_r.endswith("'), kid=bytes.fromhex('0a'))")

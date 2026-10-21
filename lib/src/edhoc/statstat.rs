@@ -2,19 +2,18 @@ use super::{
     compute_mac_2, compute_mac_3, compute_prk_3e2m, compute_prk_4e3m, compute_salt_3e2m,
     compute_salt_4e3m, compute_th_3, compute_th_4, decode_plaintext_2, decode_plaintext_3,
     decrypt_message_3, encode_plaintext_2, encode_plaintext_3, encrypt_message_3, BufferMessage3,
-    BufferPlaintext2, BytesHashLen, BytesMac3, BytesP256ElemLen, ConnId, Credential, CredentialKey,
-    CredentialTransfer, DecodedMessage2, EDHOCError, EadItems, IdCred, ParsedMessage2Details,
-    ParsedMessage3, PreparedMessage2, PreparedMessage3, ProcessedM2, ProcessedM2MethodSpecifics,
-    ProcessingM1, ProcessingM2, ProcessingM2MethodSpecifics, ProcessingM3,
-    ProcessingM3MethodSpecifics, Th4Input, VerifiedMessage2, VerifiedMessage3, WaitM3,
-    WaitM3MethodSpecifics,
+    BufferPlaintext2, BytesHashLen, BytesMac3, BytesP256ElemLen, ConnId, CredentialTransfer,
+    DecodedMessage2, EDHOCError, EadItems, IdCred, ParsedMessage2Details, ParsedMessage3,
+    PreparedMessage2, PreparedMessage3, ProcessedM2, ProcessedM2MethodSpecifics, ProcessingM1,
+    ProcessingM2, ProcessingM2MethodSpecifics, ProcessingM3, ProcessingM3MethodSpecifics,
+    PublicCredential, Th4Input, VerifiedMessage2, VerifiedMessage3, WaitM3, WaitM3MethodSpecifics,
 };
 use lakers_shared::Crypto as CryptoTrait;
 pub(crate) fn r_prepare_message_2_statstat(
     state: &ProcessingM1,
     crypto: &mut impl CryptoTrait,
-    cred_r: Credential,
-    r: &BytesP256ElemLen, // R's static private DH key
+    cred_r: PublicCredential,
+    r: BytesP256ElemLen, // R's static private DH key
     c_r: ConnId,
     cred_transfer: CredentialTransfer,
     ead_2: &EadItems,
@@ -23,7 +22,7 @@ pub(crate) fn r_prepare_message_2_statstat(
 ) -> Result<PreparedMessage2, EDHOCError> {
     // compute prk_3e2m
     let salt_3e2m = compute_salt_3e2m(crypto, &prk_2e, &th_2);
-    let prk_3e2m = compute_prk_3e2m(crypto, &salt_3e2m, r, &state.g_x);
+    let prk_3e2m = compute_prk_3e2m(crypto, &salt_3e2m, &r, &state.g_x);
 
     let id_cred_r = match cred_transfer {
         CredentialTransfer::ByValue => cred_r.by_value()?,
@@ -88,19 +87,12 @@ pub(crate) fn r_parse_message_3_statstat(
 pub(crate) fn r_verify_message_3_statstat(
     state: &ProcessingM3,
     crypto: &mut impl CryptoTrait,
-    valid_cred_i: Credential,
+    valid_cred_i: PublicCredential,
     mac_3: BytesMac3,
     id_cred_i: &IdCred,
     salt_4e3m: &BytesHashLen,
 ) -> Result<VerifiedMessage3, EDHOCError> {
-    let prk_4e3m = match valid_cred_i.key {
-        CredentialKey::EC2Compact(public_key) => {
-            compute_prk_4e3m(crypto, &salt_4e3m, &state.y, &public_key)
-        }
-        // FIXME: the error is not accurate. It is a lack of agreement between peers.
-        _ => return Err(EDHOCError::UnsupportedMethod),
-    };
-
+    let prk_4e3m = compute_prk_4e3m(crypto, &salt_4e3m, &state.y, &valid_cred_i.public_key());
     // compute mac_3
     let expected_mac_3 = compute_mac_3(
         crypto,
@@ -147,19 +139,13 @@ pub(crate) fn i_parse_message_2_statstat(
 pub(crate) fn i_verify_message_2_statstat(
     state: &ProcessingM2,
     crypto: &mut impl CryptoTrait,
-    valid_cred_r: Credential,
+    valid_cred_r: PublicCredential,
     i: &BytesP256ElemLen, // I's static private DH key
 ) -> Result<VerifiedMessage2, EDHOCError> {
     // verify mac_2
     let salt_3e2m = compute_salt_3e2m(crypto, &state.prk_2e, &state.th_2);
 
-    let prk_3e2m = match valid_cred_r.key {
-        CredentialKey::EC2Compact(public_key) => {
-            compute_prk_3e2m(crypto, &salt_3e2m, &state.x, &public_key)
-        }
-        // FIXME: the error is not accurate. It is a lack of agreement between peers.
-        _ => return Err(EDHOCError::UnsupportedMethod),
-    };
+    let prk_3e2m = compute_prk_3e2m(crypto, &salt_3e2m, &state.x, &valid_cred_r.public_key());
 
     let (id_cred_r, mac_2) = match &state.method_specifics {
         ProcessingM2MethodSpecifics::StatStat { id_cred_r, mac_2 } => (id_cred_r, *mac_2),
@@ -203,7 +189,7 @@ pub(crate) fn i_verify_message_2_statstat(
 pub(crate) fn i_prepare_message_3_statstat(
     state: &ProcessedM2,
     crypto: &mut impl CryptoTrait,
-    cred_i: Credential,
+    cred_i: PublicCredential,
     cred_transfer: CredentialTransfer,
     ead_3: &EadItems,
 ) -> Result<PreparedMessage3, EDHOCError> {

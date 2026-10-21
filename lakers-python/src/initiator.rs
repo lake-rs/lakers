@@ -5,12 +5,11 @@ use pyo3::exceptions::PyValueError;
 use pyo3::{prelude::*, types::PyBytes};
 
 use super::{ErrExt as _, StateMismatch};
-use crate::parse_credential;
 
 /// An implementation of the EDHOC protocol for the initiator side.
 #[pyclass(name = "EdhocInitiator")]
 pub struct PyEdhocInitiator {
-    cred_i: Option<Credential>,
+    identity: Option<InitiatorIdentity>,
     // FIXME: This does *not* get taken out, so some data stays available for longer than it needs
     // to be -- but that is apparently needed in selected_cipher_suite and
     // compute_ephemeral_secret.
@@ -53,7 +52,7 @@ impl PyEdhocInitiator {
         let method = parse_method(method)?;
 
         Ok(Self {
-            cred_i: None,
+            identity: None,
             start: InitiatorStart {
                 x,
                 g_x,
@@ -140,11 +139,6 @@ impl PyEdhocInitiator {
         cred_i: super::AutoCredential,
         valid_cred_r: super::AutoCredential,
     ) -> PyResult<()> {
-        let cred_i = parse_credential(self.start.method, cred_i)
-            .with_cause(py, "Failed to ingest CRED_I")?;
-        let valid_cred_r = parse_credential(self.start.method, valid_cred_r)
-            .with_cause(py, "Failed to ingest CRED_R")?;
-
         // The initiator identity format depends on the negotiated method:
         // stat-stat needs the static DH private key, PSK does not.
         let identity = match self.start.method {
@@ -156,20 +150,26 @@ impl PyEdhocInitiator {
                     i: i.as_slice()
                         .try_into()
                         .map_err(|_| EDHOCError::ParsingError)?,
+                    cred_i: cred_i
+                        .to_public()
+                        .with_cause(py, "Failed to ingest CRED_I")?,
                 }
             }
-            EDHOCMethod::PSK => InitiatorIdentity::Psk,
+            EDHOCMethod::PSK => InitiatorIdentity::Psk {
+                cred_i: cred_i.to_psk().with_cause(py, "Failed to ingest CRED_I")?,
+            },
             _ => return Err(EDHOCError::UnsupportedMethod.into()),
         };
-
+        let valid_cred_r = super::parse_peer_credential(self.start.method, valid_cred_r)
+            .with_cause(py, "Failed to ingest CRED_I")?;
         let state = i_verify_message_2(
             &self.take_processing_m2()?,
             &mut default_crypto(),
             valid_cred_r,
-            identity,
+            &identity,
         )?;
         self.processed_m2 = Some(state);
-        self.cred_i = Some(cred_i);
+        self.identity = Some(identity);
         Ok(())
     }
 
@@ -185,11 +185,15 @@ impl PyEdhocInitiator {
         ead_3: EadItems,
     ) -> PyResult<(Bound<'a, PyBytes>, Bound<'a, PyBytes>)> {
         let ead_3 = ead_3.try_into()?;
+        let mut processed_m2 = self.take_processed_m2()?;
+        let identity = self
+            .identity
+            .take()
+            .ok_or_else(|| PyValueError::new_err("verify_message_2 must be called first"))?;
         let (state, message_3, prk_out) = i_prepare_message_3(
-            &mut self.take_processed_m2()?,
+            &mut processed_m2,
             &mut default_crypto(),
-            // FIXME: take as reference rather than cloning
-            self.cred_i.as_ref().unwrap().clone(),
+            identity,
             cred_transfer,
             &ead_3,
         )?;

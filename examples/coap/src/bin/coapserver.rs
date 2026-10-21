@@ -44,13 +44,14 @@ fn main() {
             println!("Received message from {}", src);
             // This is an EDHOC message
             if request.message.payload[0] == 0xf5 {
-                let cred_r: Credential = Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
+                let cred_r: PublicCredential =
+                    PublicCredential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
                 let responder = EdhocResponder::new(
                     lakers_crypto::default_crypto(),
                     ResponderIdentity::StatStat {
                         r: R.try_into().unwrap(),
+                        cred_r: cred_r.clone(),
                     },
-                    cred_r,
                 );
 
                 let message_1: BufferMessage1 = request.message.payload[1..]
@@ -113,10 +114,13 @@ fn main() {
                     continue;
                 };
                 ead_3.processed_critical_items().unwrap();
-                let cred_i = Credential::parse_ccs(CRED_I.try_into().unwrap()).unwrap();
-                let valid_cred_i = credential_check_or_fetch(Some(cred_i), id_cred_i).unwrap();
+                let cred_i = PublicCredential::parse_ccs(CRED_I.try_into().unwrap()).unwrap();
+                let valid_cred_i = credential_check_or_fetch(Some(cred_i), id_cred_i)
+                    .map(PublicCredential::from) // TEMPORARY (#435): API still takes the legacy `Credential`
+                    .unwrap();
                 // FIXME: instead of cloning, take by reference
-                let Ok((responder, prk_out)) = responder.verify_message_3(valid_cred_i.clone())
+                let Ok((responder, prk_out)) = responder
+                    .verify_message_3(PeerCredential::StatStat(Some(valid_cred_i.clone())))
                 else {
                     println!("EDHOC error at verify_message_3: {:?}", valid_cred_i);
                     continue;

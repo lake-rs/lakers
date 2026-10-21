@@ -245,20 +245,50 @@ pub struct CredentialC {
 }
 
 impl CredentialC {
-    pub fn to_rust(&self) -> Credential {
-        Credential {
-            bytes: self.bytes.clone(),
-            key: self.key.clone(),
-            kid: Some(self.kid.clone()),
-            cred_type: self.cred_type,
+    /// Convert into a credential carrying an asymmetric public key.
+    ///
+    /// Fallible on purpose: this struct lives in memory owned by the C caller, so nothing
+    /// guarantees which kind of key it holds.
+    pub fn to_public(&self) -> Result<PublicCredential, EDHOCError> {
+        match &self.key {
+            CredentialKey::EC2Compact(key) => {
+                Ok(PublicCredential::new_ccs(self.bytes.clone(), *key).with_kid(self.kid.clone()))
+            }
+            CredentialKey::Symmetric(_) => Err(EDHOCError::WrongCredentialType),
         }
     }
 
-    pub unsafe fn copy_into_c(cred: Credential, cred_c: *mut CredentialC) {
+    /// Convert into a credential carrying a pre-shared key.
+    ///
+    /// Built through the constructor rather than field by field: `PskCredential` keeps its fields
+    /// private outside `lakers-shared`, so the PSK is only reachable through accessors.
+    pub fn to_psk(&self) -> Result<PskCredential, EDHOCError> {
+        match &self.key {
+            CredentialKey::Symmetric(psk) => Ok(PskCredential::new_ccs_symmetric(
+                self.bytes.clone(),
+                psk.clone(),
+            )
+            .with_kid(self.kid.clone())),
+            CredentialKey::EC2Compact(_) => Err(EDHOCError::WrongCredentialType),
+        }
+    }
+
+    pub unsafe fn copy_into_c_public(cred: PublicCredential, cred_c: *mut CredentialC) {
         (*cred_c).bytes = cred.bytes;
-        (*cred_c).key = cred.key;
-        (*cred_c).kid = cred.kid.unwrap();
-        (*cred_c).cred_type = cred.cred_type;
+        (*cred_c).key = CredentialKey::EC2Compact(cred.key);
+        // The C struct has no `Option`, so a credential without a kid cannot be represented.
+        // Pre-existing behaviour; reporting it instead of panicking belongs to the follow-up
+        // that reworks the C credential types.
+        (*cred_c).kid = cred.kid.expect("CredentialC requires a kid");
+        (*cred_c).cred_type = CredentialType::CCS;
+    }
+
+    pub unsafe fn copy_into_c_psk(cred: PskCredential, cred_c: *mut CredentialC) {
+        (*cred_c).bytes = cred.bytes().clone();
+        (*cred_c).key = CredentialKey::Symmetric(cred.psk().clone());
+        // Same caveat about the missing `Option` as above.
+        (*cred_c).kid = cred.kid().expect("CredentialC requires a kid").clone();
+        (*cred_c).cred_type = CredentialType::CCS_PSK;
     }
 }
 
@@ -312,7 +342,7 @@ impl Default for ProcessedM2C {
 }
 
 impl ProcessedM2C {
-    pub fn to_rust(&self) -> ProcessedM2 {
+    pub fn to_rust(&self) -> Result<ProcessedM2, EDHOCError> {
         let method_specifics = match self.method_specifics.kind {
             ProcessedM2MethodSpecificsKindC::Prm2StatStat => {
                 ProcessedM2MethodSpecifics::StatStat {}
@@ -323,17 +353,18 @@ impl ProcessedM2C {
                 // so `data.psk` is the active variant.
                 let psk = unsafe { &self.method_specifics.data.psk };
                 ProcessedM2MethodSpecifics::Psk {
-                    cred_r: psk.cred_r.to_rust(),
+                    // C owns this memory, so the key type is checked rather than trusted.
+                    cred_r: psk.cred_r.to_psk()?,
                 }
             }
         };
 
-        ProcessedM2 {
+        Ok(ProcessedM2 {
             method_specifics,
             prk_3e2m: self.prk_3e2m,
             prk_4e3m: self.prk_4e3m,
             th_3: self.th_3,
-        }
+        })
     }
 
     pub unsafe fn copy_into_c(processed_m2: ProcessedM2, processed_m2_c: *mut ProcessedM2C) {
@@ -356,7 +387,7 @@ impl ProcessedM2C {
             }
             ProcessedM2MethodSpecifics::Psk { cred_r } => {
                 let mut cred_r_c = core::mem::MaybeUninit::<CredentialC>::uninit();
-                CredentialC::copy_into_c(cred_r, cred_r_c.as_mut_ptr());
+                CredentialC::copy_into_c_psk(cred_r, cred_r_c.as_mut_ptr());
                 let cred_r_c = cred_r_c.assume_init();
                 (*processed_m2_c).method_specifics = ProcessedM2MethodSpecificsC {
                     kind: ProcessedM2MethodSpecificsKindC::Prm2Psk,
@@ -376,9 +407,9 @@ pub unsafe extern "C" fn credential_new(
     value_len: usize,
 ) -> i8 {
     let value = core::slice::from_raw_parts(value, value_len);
-    match Credential::parse_ccs(value) {
+    match PublicCredential::parse_ccs(value) {
         Ok(cred_parsed) => {
-            CredentialC::copy_into_c(cred_parsed, cred);
+            CredentialC::copy_into_c_public(cred_parsed, cred);
             0
         }
         Err(_) => -1,
@@ -392,9 +423,9 @@ pub unsafe extern "C" fn credential_new_symmetric(
     value_len: usize,
 ) -> i8 {
     let value = core::slice::from_raw_parts(value, value_len);
-    match Credential::parse_ccs_symmetric(value) {
+    match PskCredential::parse_ccs(value) {
         Ok(cred_parsed) => {
-            CredentialC::copy_into_c(cred_parsed, cred);
+            CredentialC::copy_into_c_psk(cred_parsed, cred);
             0
         }
         Err(_) => -1,
@@ -410,13 +441,18 @@ pub unsafe extern "C" fn credential_check_or_fetch(
     let cred_expected = if cred_expected.is_null() {
         None
     } else {
-        Some((*cred_expected).to_rust())
+        Some((*cred_expected).to_public())
     };
 
     let id_cred_received_value = (*id_cred_received).clone();
-    match credential_check_or_fetch_rust(cred_expected, id_cred_received_value) {
+    // A symmetric credential fails the conversion above and is reported to C as an error code,
+    // like any other error below. Errors stay in the `Result`: this function must not panic.
+    let result = cred_expected
+        .transpose()
+        .and_then(|cred| credential_check_or_fetch_rust(cred, id_cred_received_value));
+    match result {
         Ok(valid_cred) => {
-            CredentialC::copy_into_c(valid_cred, cred_out);
+            CredentialC::copy_into_c_public(valid_cred, cred_out);
             0
         }
         Err(err) => err as i8,

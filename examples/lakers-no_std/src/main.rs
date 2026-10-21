@@ -103,8 +103,8 @@ fn main() -> ! {
     info!("Test test_prepare_message_1 passed.");
 
     fn test_handshake() {
-        let cred_i = Credential::parse_ccs(CRED_I.try_into().unwrap()).unwrap();
-        let cred_r = Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
+        let cred_i = PublicCredential::parse_ccs(CRED_I.try_into().unwrap()).unwrap();
+        let cred_r = PublicCredential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
 
         let initiator = EdhocInitiator::new(
             lakers_crypto::default_crypto(),
@@ -115,8 +115,8 @@ fn main() -> ! {
             lakers_crypto::default_crypto(),
             ResponderIdentity::StatStat {
                 r: R.try_into().expect("Wrong length of responder private key"),
+                cred_r: cred_r.clone(),
             },
-            cred_r.clone(),
         );
 
         let (initiator, message_1) = initiator.prepare_message_1(None, &EadItems::new()).unwrap();
@@ -128,14 +128,14 @@ fn main() -> ! {
 
         let (mut initiator, _c_r, _ead_2) = initiator.parse_message_2(&message_2).unwrap();
         initiator
-            .set_identity(
-                InitiatorIdentity::StatStat {
-                    i: I.try_into().expect("Wrong length of initiator private key"),
-                },
-                cred_i.clone(),
-            )
+            .set_identity(InitiatorIdentity::StatStat {
+                i: I.try_into().expect("Wrong length of initiator private key"),
+                cred_i: cred_i.clone(),
+            })
             .unwrap(); // exposing own identity only after validating cred_r
-        let initiator = initiator.verify_message_2(Some(cred_r)).unwrap();
+        let initiator = initiator
+            .verify_message_2(PeerCredential::StatStat(Some(cred_r)))
+            .unwrap();
 
         let (initiator, message_3, i_prk_out) = initiator
             .prepare_message_3(CredentialTransfer::ByReference, &EadItems::new())
@@ -143,7 +143,9 @@ fn main() -> ! {
 
         let (responder, id_cred_i, _ead_3) = responder.parse_message_3(&message_3).unwrap();
         let valid_cred_i = credential_check_or_fetch(Some(cred_i), id_cred_i).unwrap();
-        let (responder, r_prk_out) = responder.verify_message_3(valid_cred_i).unwrap();
+        let (responder, r_prk_out) = responder
+            .verify_message_3(PeerCredential::StatStat(Some(valid_cred_i)))
+            .unwrap();
 
         let mut initiator = initiator.completed_without_message_4().unwrap();
         let mut responder = responder.completed_without_message_4().unwrap();
@@ -167,8 +169,8 @@ fn main() -> ! {
     }
 
     fn test_handshake_psk() {
-        let cred_i = Credential::parse_ccs_symmetric(CRED_I_PSK.try_into().unwrap()).unwrap();
-        let cred_r = Credential::parse_ccs_symmetric(CRED_R_PSK.try_into().unwrap()).unwrap();
+        let cred_i = PskCredential::parse_ccs(CRED_I_PSK.try_into().unwrap()).unwrap();
+        let cred_r = PskCredential::parse_ccs(CRED_R_PSK.try_into().unwrap()).unwrap();
 
         let initiator = EdhocInitiator::new(
             lakers_crypto::default_crypto(),
@@ -177,8 +179,9 @@ fn main() -> ! {
         );
         let responder = EdhocResponder::new(
             lakers_crypto::default_crypto(),
-            ResponderIdentity::Psk,
-            cred_r.clone(),
+            ResponderIdentity::Psk {
+                cred_r: cred_r.clone(),
+            },
         );
 
         let (initiator, message_1) = initiator.prepare_message_1(None, &EadItems::new()).unwrap();
@@ -190,9 +193,13 @@ fn main() -> ! {
 
         let (mut initiator, _c_r, _ead_2) = initiator.parse_message_2(&message_2).unwrap();
         initiator
-            .set_identity(InitiatorIdentity::Psk, cred_i.clone())
+            .set_identity(InitiatorIdentity::Psk {
+                cred_i: cred_i.clone(),
+            })
             .unwrap(); // exposing own identity only after validating cred_r
-        let initiator = initiator.verify_message_2(Some(cred_r)).unwrap();
+        let initiator = initiator
+            .verify_message_2(PeerCredential::Psk(cred_r))
+            .unwrap();
 
         let (initiator, message_3, i_prk_out) = initiator
             .prepare_message_3(CredentialTransfer::ByReference, &EadItems::new())
@@ -200,11 +207,14 @@ fn main() -> ! {
 
         let (responder, id_cred_i, _ead_3) = responder
             .parse_message_3_with_credential_lookup(&message_3, |id| {
-                credential_check_or_fetch(Some(cred_i.clone()), id.clone())
+                psk_credential_lookup(&[cred_i.clone()], id).map(PskCredential::from)
             })
             .unwrap();
-        let valid_cred_i = credential_check_or_fetch(Some(cred_i), id_cred_i).unwrap();
-        let (responder, r_prk_out) = responder.verify_message_3(valid_cred_i).unwrap();
+        assert!(id_cred_i.reference_only());
+        // The resolver above already identified the PSK credential; no second lookup is needed.
+        let (responder, r_prk_out) = responder
+            .verify_message_3(PeerCredential::Psk(cred_i))
+            .unwrap();
 
         let mut initiator = initiator.completed_without_message_4().unwrap();
         let mut responder = responder.completed_without_message_4().unwrap();
