@@ -28,12 +28,13 @@ pub enum IdCredType {
     KCCS = 14,
 }
 
-impl From<u8> for IdCredType {
-    fn from(value: u8) -> Self {
+impl TryFrom<u8> for IdCredType {
+    type Error = EDHOCError;
+    fn try_from(value: u8) -> Result<Self, EDHOCError> {
         match value {
-            4 => IdCredType::KID,
-            14 => IdCredType::KCCS,
-            _ => panic!("Invalid IdCredType"),
+            4 => Ok(IdCredType::KID),
+            14 => Ok(IdCredType::KCCS),
+            _ => Err(EDHOCError::ParsingError),
         }
     }
 }
@@ -139,12 +140,15 @@ impl IdCred {
         }
     }
 
-    pub fn reference_only(&self) -> bool {
-        [IdCredType::KID].contains(&self.item_type())
+    pub fn reference_only(&self) -> Result<bool, EDHOCError> {
+        Ok(self.item_type()? == IdCredType::KID)
     }
 
-    pub fn item_type(&self) -> IdCredType {
-        self.bytes.as_slice()[1].into()
+    fn item_type(&self) -> Result<IdCredType, EDHOCError> {
+        if self.bytes.len() < 2 {
+            return Err(EDHOCError::ParsingError);
+        }
+        self.bytes[1].try_into()
     }
 
     /// Extract the credential this ID_CRED carries by value.
@@ -164,7 +168,7 @@ impl IdCred {
     /// an application-supplied resolver, this one protects direct callers of
     /// `credential_lookup_or_fetch` and `credential_check_or_fetch`.
     pub fn get_ccs(&self) -> Result<Credential, EDHOCError> {
-        if self.item_type() == IdCredType::KCCS {
+        if self.item_type() == Ok(IdCredType::KCCS) {
             let cred = Credential::parse_ccs(&self.bytes.as_slice()[2..])?;
             match cred.cred_type {
                 CredentialType::CCS => Ok(cred),
@@ -492,10 +496,10 @@ mod test {
             .with_kid(KID_VALUE_TV.try_into().unwrap());
         let id_cred = cred.by_value().unwrap();
         assert_eq!(id_cred.bytes.as_slice(), ID_CRED_BY_VALUE_TV);
-        assert_eq!(id_cred.item_type(), IdCredType::KCCS);
+        assert_eq!(id_cred.item_type(), Ok(IdCredType::KCCS));
         let id_cred = cred.by_kid().unwrap();
         assert_eq!(id_cred.bytes.as_slice(), ID_CRED_BY_REF_TV);
-        assert_eq!(id_cred.item_type(), IdCredType::KID);
+        assert_eq!(id_cred.item_type(), Ok(IdCredType::KID));
     }
 
     #[test]
