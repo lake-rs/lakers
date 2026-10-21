@@ -698,7 +698,7 @@ impl EADItem {
                 value.push(head).unwrap();
                 value.push(value_bytes.len() as u8).unwrap();
             } else if value_bytes.len() <= u16::MAX.into() {
-                head |= 24;
+                head |= 25;
                 value.push(head).unwrap();
                 value
                     .extend_from_slice(&(value_bytes.len() as u16).to_be_bytes())
@@ -1511,17 +1511,24 @@ mod cbor_decoder {
             }
         }
 
-        /// Decode a CBOR length argument (the additional-information byte) into a `usize`.
+        /// Decode a CBOR argument from the given additional-information value, reading any following argument bytes.
         ///
-        /// Only the immediate (`0..=23`) and 8-bit (`0x18`, up to 255) forms are supported; the
-        /// 16- and 32-bit forms (`0x19`/`0x1a`/`0x1b`) are rejected. Byte strings longer than 255
-        /// bytes are therefore not decodable, even though `encode_bstr_header` can emit the 16-bit
-        /// form.
+        /// The immediate (`0..=23`), 8-bit (`0x18`) and 16-bit (`0x19`) forms are supported; the
+        /// 16-bit form must carry a value above 255 (deterministic CBOR). The 32- and 64-bit forms
+        /// (`0x1a`/`0x1b`) are rejected.
         pub fn as_usize(&mut self, b: u8) -> Result<usize, CBORError> {
             if (0..=0x17).contains(&b) {
                 Ok(usize::from(b))
             } else if 0x18 == b {
                 self.read().map(usize::from)
+            } else if 0x19 == b {
+                let high = self.read()?;
+                let low = self.read()?;
+                let value = usize::from(u16::from_be_bytes([high, low]));
+                if value <= u8::MAX as usize {
+                    return Err(CBORError::DecodingError); // deterministic CBOR
+                }
+                Ok(value)
             } else {
                 Err(CBORError::DecodingError)
             }
@@ -1632,6 +1639,28 @@ mod test_cbor_decoder {
 
         assert_eq!(input, decoder.any_as_encoded().unwrap());
         assert!(decoder.finished())
+    }
+
+    #[test]
+    fn test_cbor_decoder_long_bytes() {
+        let mut input = [0xab; 3 + 300]; // header + 300
+        input[..3].copy_from_slice(&[0x59, 0x01, 0x2c]); // 0x012c = 300
+
+        let mut decoder = CBORDecoder::new(&input);
+        let bytes = decoder.bytes().unwrap();
+        assert_eq!(bytes.len(), 300);
+        assert_eq!(bytes, &[0xab; 300][..]);
+        assert!(decoder.finished());
+    }
+
+    #[test]
+    fn test_cbor_decoder_rejects_non_minimal_length() {
+        // 0x0010 = 16, which must be encoded as the single byte 0x50
+        let mut input = [0xab; 3 + 16];
+        input[..3].copy_from_slice(&[0x59, 0x00, 0x10]);
+
+        let mut decoder = CBORDecoder::new(&input);
+        assert!(decoder.bytes().is_err());
     }
 }
 
