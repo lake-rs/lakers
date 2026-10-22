@@ -62,7 +62,7 @@ where
     // `resolve_cred_i` runs, so that an application-supplied resolver cannot reintroduce the
     // problem; `IdCred::get_ccs` enforces the same rule for direct callers of the credential
     // lookup helpers.
-    if !id_cred_psk.reference_only() {
+    if !id_cred_psk.reference_only()? {
         return Err(EDHOCError::WrongCredentialType);
     }
     let ciphertext_3b_bytes = decoder
