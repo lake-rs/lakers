@@ -436,7 +436,7 @@ impl Credential {
                 id_cred
                     .bytes
                     .extend_from_slice(self.bytes.as_slice())
-                    .unwrap();
+                    .map_err(|_| EDHOCError::CredentialTooLongError)?;
                 Ok(id_cred)
             }
             // if we could encode a message along the error below,
