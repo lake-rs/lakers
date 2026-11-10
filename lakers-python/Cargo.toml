@@ -10,13 +10,13 @@ documentation = "https://lakers.readthedocs.io/"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-pyo3 = { version = "0.28", features = ["extension-module"] }
+pyo3 = { version = "0.30", features = ["extension-module"] }
 lakers = { package = "lakers", path = "../lib", default-features = false, features = [ "log" ] }
 lakers-ead-authz = { path = "../ead/lakers-ead-authz", features = [ "log" ] }
 lakers-shared = { path = "../shared", features = ["python-bindings", "large_buffers", "log"] }
 lakers-crypto = { path = "../crypto", default-features = false, features = ["rustcrypto"] }
 log = "0.4"
-pyo3-log = "0.13.0"
+pyo3-log = "0.13.5"
 
 [dev-dependencies]
 # We don't need it to build, but it is listed in the manifest Cargo.toml, and

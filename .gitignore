@@ -9,10 +9,6 @@ wheelhouse
 # hax
 *.fst
 
-# in Rust, libraries should avoid checking the lock file in version control
-# read more: https://doc.rust-lang.org/cargo/faq.html#why-do-binaries-have-cargolock-in-version-control-but-not-libraries
-Cargo.lock
-
 # editors
 *.swp
 *.swo
