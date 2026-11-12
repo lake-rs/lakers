@@ -8,7 +8,8 @@ lakers = { package = "lakers", path = "../../lib", features = [ "log" ] }
 lakers-ead-authz = { path = "../../ead/lakers-ead-authz", features = [ "log" ] }
 lakers-crypto = { path = "../../crypto/", features = [ "rustcrypto" ] }
 hexlit = "0.5.3"
-coap = { version = "0.13" }
+coap = { version = "0.29", default-features = false }
+tokio = { version = "1", features = ["macros", "rt", "net", "io-util"] }
 # coap pulls url pulls serde-std, so we also have to make serde_cbor (also in the dependency tree) use std
 serde_cbor = { version = "*", features = ["std"] }
 coap-lite = { version = "0.11.3" }

@@ -1,5 +1,5 @@
-use coap::CoAPClient;
-use coap_lite::ResponseType;
+use coap::request::Status;
+use coap::UdpCoAPClient;
 use defmt_or_log::info;
 use hexlit::hex;
 use lakers::*;
@@ -11,16 +11,17 @@ const CRED_I: &[u8] =
 const CRED_R: &[u8] =
     &hex!("A20269726573706F6E64657208A101A30104024110205050930FF462A77A3540CF546325DEA214");
 
-fn main() {
+#[tokio::main(flavor = "current_thread")]
+async fn main() {
     env_logger::init();
     info!("Starting EDHOC CoAP Client");
-    match client_handshake() {
+    match client_handshake().await {
         Ok(_) => println!("Handshake completed"),
         Err(e) => panic!("Handshake failed with error: {:?}", e),
     }
 }
 
-fn client_handshake() -> Result<(), EDHOCError> {
+async fn client_handshake() -> Result<(), EDHOCError> {
     let url = "coap://127.0.0.1:5683/.well-known/edhoc";
     let timeout = Duration::new(5, 0);
     println!("Client request: {}", url);
@@ -42,8 +43,10 @@ fn client_handshake() -> Result<(), EDHOCError> {
     msg_1_buf.extend_from_slice(message_1.as_slice());
     println!("message_1 len = {}", msg_1_buf.len());
 
-    let response = CoAPClient::post_with_timeout(url, msg_1_buf, timeout).unwrap();
-    if response.get_status() != &ResponseType::Changed {
+    let response = UdpCoAPClient::post_with_timeout(url, msg_1_buf, timeout)
+        .await
+        .unwrap();
+    if response.get_status() != &Status::Changed {
         panic!("Message 1 response error: {:?}", response.get_status());
     }
     println!("response_vec = {:02x?}", response.message.payload);
@@ -61,8 +64,10 @@ fn client_handshake() -> Result<(), EDHOCError> {
     msg_3.extend_from_slice(message_3.as_slice());
     println!("message_3 len = {}", msg_3.len());
 
-    let response = CoAPClient::post_with_timeout(url, msg_3, timeout).unwrap();
-    if response.get_status() != &ResponseType::Changed {
+    let response = UdpCoAPClient::post_with_timeout(url, msg_3, timeout)
+        .await
+        .unwrap();
+    if response.get_status() != &Status::Changed {
         panic!("Message 3 response error: {:?}", response.get_status());
     }
     println!("response_vec = {:02x?}", response.message.payload);
