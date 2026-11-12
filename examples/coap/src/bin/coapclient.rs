@@ -1,5 +1,5 @@
-use coap::CoAPClient;
-use coap_lite::ResponseType;
+use coap::request::Status;
+use coap::UdpCoAPClient;
 use defmt_or_log::info;
 use hexlit::hex;
 use lakers::*;
@@ -16,16 +16,17 @@ const _G_I_Y_COORD: &[u8] =
 const CRED_R: &[u8] = &hex!("A2026008A101A5010202410A2001215820BBC34960526EA4D32E940CAD2A234148DDC21791A12AFBCBAC93622046DD44F02258204519E257236B2A0CE2023F0931F1F386CA7AFDA64FCDE0108C224C51EABF6072");
 const _G_R: &[u8] = &hex!("bbc34960526ea4d32e940cad2a234148ddc21791a12afbcbac93622046dd44f0");
 
-fn main() {
+#[tokio::main(flavor = "current_thread")]
+async fn main() {
     env_logger::init();
     info!("Starting EDHOC CoAP Client");
-    match client_handshake() {
+    match client_handshake().await {
         Ok(_) => println!("Handshake completed"),
         Err(e) => panic!("Handshake failed with error: {:?}", e),
     }
 }
 
-fn client_handshake() -> Result<(), EDHOCError> {
+async fn client_handshake() -> Result<(), EDHOCError> {
     let url = "coap://127.0.0.1:5683/.well-known/edhoc";
     let timeout = Duration::new(5, 0);
     println!("Client request: {}", url);
@@ -46,8 +47,10 @@ fn client_handshake() -> Result<(), EDHOCError> {
     msg_1_buf.extend_from_slice(message_1.as_slice());
     println!("message_1 len = {}", msg_1_buf.len());
 
-    let response = CoAPClient::post_with_timeout(url, msg_1_buf, timeout).unwrap();
-    if response.get_status() != &ResponseType::Changed {
+    let response = UdpCoAPClient::post_with_timeout(url, msg_1_buf, timeout)
+        .await
+        .unwrap();
+    if response.get_status() != &Status::Changed {
         panic!("Message 1 response error: {:?}", response.get_status());
     }
     println!("response_vec = {:02x?}", response.message.payload);
@@ -70,8 +73,10 @@ fn client_handshake() -> Result<(), EDHOCError> {
     msg_3.extend_from_slice(message_3.as_slice());
     println!("message_3 len = {}", msg_3.len());
 
-    let response = CoAPClient::post_with_timeout(url, msg_3, timeout).unwrap();
-    if response.get_status() != &ResponseType::Changed {
+    let response = UdpCoAPClient::post_with_timeout(url, msg_3, timeout)
+        .await
+        .unwrap();
+    if response.get_status() != &Status::Changed {
         panic!("Message 3 response error: {:?}", response.get_status());
     }
     println!("response_vec = {:02x?}", response.message.payload);
