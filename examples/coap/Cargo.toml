@@ -14,9 +14,9 @@ tokio = { version = "1", features = ["macros", "rt", "net", "io-util"] }
 serde_cbor = { version = "*", features = ["std"] }
 coap-lite = { version = "0.11.3" }
 
-std-embedded-nal = "^0.1.2"
-embedded-nal-minimal-coapserver = "0.4"
-embedded-nal = "0.6"
+std-embedded-nal = "0.4"
+embedded-nal-minimal-coapserver = "0.5"
+embedded-nal = "0.9"
 coap-message = "0.3"
 coap-handler = "0.2"
 coap-handler-implementations = "0.5"
