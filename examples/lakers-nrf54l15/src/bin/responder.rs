@@ -25,7 +25,7 @@ fn main() -> ! {
         let cred_r = Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
         // Each handshake gets its own hardware `Crypto`; the previous one was dropped at the end of
         // the last iteration, so only one is ever alive on the single CRACEN.
-        let responder = EdhocResponder::new(
+        let responder = LakeResponder::new(
             &mut crypto,
             ResponderIdentity::StatStat {
                 r: R.try_into().unwrap(),

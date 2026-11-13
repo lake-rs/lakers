@@ -6,7 +6,7 @@ use pyo3::{prelude::*, types::PyBytes};
 use super::{ErrExt as _, StateMismatch};
 
 /// An implementation of the EDHOC protocol for the responder side.
-#[pyclass(name = "EdhocResponder")]
+#[pyclass(name = "LakeResponder")]
 pub struct PyEdhocResponder {
     r: Vec<u8>,
     cred_r: Credential,
@@ -41,7 +41,7 @@ impl PyEdhocResponder {
     #[new]
     #[pyo3(signature = (cred_r, r=None))]
     fn new(py: Python<'_>, cred_r: super::AutoCredential, r: Option<Vec<u8>>) -> PyResult<Self> {
-        trace!("Initializing EdhocResponder");
+        trace!("Initializing LakeResponder");
         let (y, g_y) = default_crypto().p256_generate_key_pair();
         // Mirror the Rust API: PSK has no static responder DH key, so `r=None` selects PSK.
         let r = r.unwrap_or_default();
@@ -69,7 +69,7 @@ impl PyEdhocResponder {
 
     fn __repr__(&self) -> String {
         format!(
-            "<lakers.EdhocResponder at {:p} in state {:?}>",
+            "<lakers.LakeResponder at {:p} in state {:?}>",
             self,
             self.summarize()
         )

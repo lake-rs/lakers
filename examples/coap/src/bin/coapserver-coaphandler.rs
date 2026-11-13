@@ -21,7 +21,7 @@ const W_TV: &[u8] = &hex!("4E5E15AB35008C15B89E91F9F329164D4AACD53D9923672CE0019
 
 #[derive(Debug)]
 struct EdhocHandler {
-    connections: Vec<(ConnId, EdhocResponderWaitM3<Crypto>)>,
+    connections: Vec<(ConnId, LakeResponderWaitM3<Crypto>)>,
     mock_server: ZeroTouchServer,
 }
 
@@ -48,7 +48,7 @@ fn render_error(_e: LAKEError) -> Error {
 }
 
 impl EdhocHandler {
-    fn take_connection_by_c_r(&mut self, c_r: ConnId) -> Option<EdhocResponderWaitM3<Crypto>> {
+    fn take_connection_by_c_r(&mut self, c_r: ConnId) -> Option<LakeResponderWaitM3<Crypto>> {
         let index = self
             .connections
             .iter()
@@ -76,7 +76,7 @@ enum EdhocResponse {
     // take up a slot there anyway) if we make it an enum.
     OkSend2 {
         c_r: ConnId,
-        responder: EdhocResponderProcessedM1<Crypto>,
+        responder: LakeResponderProcessedM1<Crypto>,
         // FIXME: Is the ead_2 the most practical data to store here? An easy alternative is the
         // voucher_response; ideal would be the voucher, bu that is only internal to prepare_ead_2.
         //
@@ -114,7 +114,7 @@ impl coap_handler::Handler for EdhocHandler {
             let message_1 =
                 &LakeBuffer::new_from_slice(&request.payload()[1..]).map_err(too_small)?;
 
-            let (responder, _c_i, mut ead_1) = EdhocResponder::new(
+            let (responder, _c_i, mut ead_1) = LakeResponder::new(
                 lakers_crypto::default_crypto(),
                 ResponderIdentity::StatStat {
                     r: R.try_into().expect("Wrong length of responder private key"),

@@ -1,5 +1,5 @@
 use lakers::{
-    // EdhocInitiator as EdhocInitiatorRust, // alias to conflict with the C-compatible struct
+    // LakeInitiator as LakeInitiatorRust, // alias to conflict with the C-compatible struct
     *,
 };
 use lakers_crypto::{default_crypto, CryptoTrait};
@@ -9,7 +9,7 @@ use crate::*;
 /// structs compatible with the C FFI
 
 #[repr(C)]
-pub struct EdhocInitiator {
+pub struct LakeInitiator {
     pub start: InitiatorStart,
     pub wait_m2: WaitM2,
     pub processing_m2: ProcessingM2C,
@@ -20,7 +20,7 @@ pub struct EdhocInitiator {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn initiator_new(initiator: *mut EdhocInitiator, method: LAKEMethod) -> i8 {
+pub unsafe extern "C" fn initiator_new(initiator: *mut LakeInitiator, method: LAKEMethod) -> i8 {
     let mut crypto = default_crypto();
     let suites_i =
         prepare_suites_i(&crypto.supported_suites(), LAKESuite::CipherSuite2.into()).unwrap();
@@ -40,7 +40,7 @@ pub unsafe extern "C" fn initiator_new(initiator: *mut EdhocInitiator, method: L
 
 #[no_mangle]
 pub unsafe extern "C" fn initiator_prepare_message_1(
-    initiator_c: *mut EdhocInitiator,
+    initiator_c: *mut LakeInitiator,
     // input params
     c_i: *mut u8,
     ead_1_c: *mut EadItemsC,
@@ -82,7 +82,7 @@ pub unsafe extern "C" fn initiator_prepare_message_1(
 #[no_mangle]
 pub unsafe extern "C" fn initiator_parse_message_2(
     // input params
-    initiator_c: *mut EdhocInitiator,
+    initiator_c: *mut LakeInitiator,
     message_2: *const LakeMessageBuffer,
     // output params
     c_r_out: *mut u8,
@@ -147,7 +147,7 @@ pub unsafe extern "C" fn initiator_parse_message_2(
 #[no_mangle]
 pub unsafe extern "C" fn initiator_verify_message_2(
     // input params
-    initiator_c: *mut EdhocInitiator,
+    initiator_c: *mut LakeInitiator,
     i: *const BytesP256ElemLen,
     cred_i: *mut CredentialC,
     cred_expected: *mut CredentialC,
@@ -198,7 +198,7 @@ pub unsafe extern "C" fn initiator_verify_message_2(
 #[no_mangle]
 pub unsafe extern "C" fn initiator_prepare_message_3(
     // input params
-    initiator_c: *mut EdhocInitiator,
+    initiator_c: *mut LakeInitiator,
     cred_transfer: CredentialTransfer,
     ead_3_c: *mut EadItemsC,
     // output params
@@ -238,7 +238,7 @@ pub unsafe extern "C" fn initiator_prepare_message_3(
 #[no_mangle]
 pub unsafe extern "C" fn initiator_process_message_4(
     // input params
-    initiator_c: *mut EdhocInitiator,
+    initiator_c: *mut LakeInitiator,
     message_4: *const LakeMessageBuffer,
     // output params
     ead_4_c_out: *mut EadItemsC,
@@ -268,7 +268,7 @@ pub unsafe extern "C" fn initiator_process_message_4(
 #[no_mangle]
 pub unsafe extern "C" fn completed_without_message_4(
     // input params
-    initiator_c: *mut EdhocInitiator,
+    initiator_c: *mut LakeInitiator,
 ) -> i8 {
     if initiator_c.is_null() {
         return -1;
@@ -286,7 +286,7 @@ pub unsafe extern "C" fn completed_without_message_4(
 
 #[no_mangle]
 pub unsafe extern "C" fn initiator_compute_ephemeral_secret(
-    initiator_c: *const EdhocInitiator,
+    initiator_c: *const LakeInitiator,
     g_a: *const BytesP256ElemLen,
     secret_c_out: *mut BytesP256ElemLen,
 ) -> i8 {
@@ -317,8 +317,8 @@ mod tests {
     const CRED_R_PSK: &[u8] =
         &hex!("a20269726573706f6e64657208a101a30104024110205050930ff462a77a3540cf546325dea214");
 
-    fn make_ffi_initiator() -> EdhocInitiator {
-        EdhocInitiator {
+    fn make_ffi_initiator() -> LakeInitiator {
+        LakeInitiator {
             method: LAKEMethod::StatStat,
             start: InitiatorStart {
                 suites_i: Default::default(),
@@ -347,7 +347,7 @@ mod tests {
         }
     }
 
-    fn prepare_message_2_for_method(method: LAKEMethod) -> (EdhocInitiator, LakeMessageBuffer) {
+    fn prepare_message_2_for_method(method: LAKEMethod) -> (LakeInitiator, LakeMessageBuffer) {
         let mut initiator = make_ffi_initiator();
         let mut message_1 = LakeMessageBuffer::default();
 
@@ -365,12 +365,12 @@ mod tests {
         }
 
         let responder = match method {
-            LAKEMethod::StatStat => EdhocResponder::new(
+            LAKEMethod::StatStat => LakeResponder::new(
                 default_crypto(),
                 ResponderIdentity::StatStat { r: R_STATSTAT },
                 Credential::parse_ccs(CRED_R_STATSTAT.try_into().unwrap()).unwrap(),
             ),
-            LAKEMethod::PSK => EdhocResponder::new(
+            LAKEMethod::PSK => LakeResponder::new(
                 default_crypto(),
                 ResponderIdentity::Psk,
                 Credential::parse_ccs_symmetric(CRED_R_PSK.try_into().unwrap()).unwrap(),
@@ -516,7 +516,7 @@ mod tests {
             );
         }
 
-        let responder = EdhocResponder::new(
+        let responder = LakeResponder::new(
             default_crypto(),
             ResponderIdentity::StatStat { r: R_STATSTAT },
             Credential::parse_ccs(CRED_R_STATSTAT.try_into().unwrap()).unwrap(),

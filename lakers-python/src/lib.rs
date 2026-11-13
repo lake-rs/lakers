@@ -149,7 +149,7 @@ pub(crate) fn parse_credential(
     })
 }
 
-/// The :class:`EdhocInitiator` and :class:`EdhocResponder` are entry points to this module. Both
+/// The :class:`LakeInitiator` and :class:`LakeResponder` are entry points to this module. Both
 /// provided classes that represent one side of the EDHOC exchange, and are updated with and
 /// produce messages and information through a series of method calls on the object.
 ///

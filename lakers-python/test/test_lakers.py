@@ -3,7 +3,7 @@ import logging
 import lakers
 import cbor2
 import pytest
-from lakers import CredentialTransfer, EdhocInitiator, EdhocResponder, EADItem
+from lakers import CredentialTransfer, LakeInitiator, LakeResponder, EADItem
 
 # This needs to be early, thus top-level: Once Lakers objects are created, the
 # log level is fixed.
@@ -23,12 +23,12 @@ def test_gen_keys():
     assert len(pub) == 32
 
 def test_initiator():
-    initiator = EdhocInitiator()
+    initiator = LakeInitiator()
     message_1 = initiator.prepare_message_1(c_i=None)
     assert type(message_1) == bytes
 
 def test_responder():
-    responder = EdhocResponder(CRED_R, R)
+    responder = LakeResponder(CRED_R, R)
 
 def test_ccs_consruction():
     # The main crednetials we use can be parsed as they are:
@@ -44,12 +44,12 @@ def test_ccs_consruction():
     assert repr(cred_r_manual) == repr(cred_r)
 
     # Both forms are accepted for constructing equivalent responders
-    _ = EdhocResponder(CRED_R, R)
-    _ = EdhocResponder(cred_r_manual, R)
+    _ = LakeResponder(CRED_R, R)
+    _ = LakeResponder(cred_r_manual, R)
 
 def _test_handshake(cred_r_transfer, cred_i_transfer):
-    initiator = EdhocInitiator()
-    responder = EdhocResponder(CRED_R, R)
+    initiator = LakeInitiator()
+    responder = LakeResponder(CRED_R, R)
 
     # initiator
     message_1 = initiator.prepare_message_1(c_i=None)
@@ -100,13 +100,13 @@ def _test_handshake(cred_r_transfer, cred_i_transfer):
     assert i_prk_out_new == r_prk_out_new
 
 def test_edhoc_error():
-    responder = EdhocResponder(CRED_R, R)
+    responder = LakeResponder(CRED_R, R)
     with pytest.raises(ValueError) as err:
         _ = responder.process_message_1([1, 2, 3])
     assert str(err.value) == "LAKEError::ParsingError"
 
 def test_buffer_error():
-    initiator = EdhocInitiator()
+    initiator = LakeInitiator()
     initiator.prepare_message_1()
     with pytest.raises(ValueError) as err:
         _ = initiator.parse_message_2(cbor2.dumps(bytes([1] * 10000)))
@@ -114,12 +114,12 @@ def test_buffer_error():
 
 def test_responder_rejects_invalid_r_length():
     with pytest.raises(ValueError) as err:
-        _ = EdhocResponder(CRED_R, b"\x01")
+        _ = LakeResponder(CRED_R, b"\x01")
     assert str(err.value) == "Failed to ingest CRED_R (LAKEError::ParsingError)"
 
 def test_initiator_rejects_invalid_i_length():
-    initiator = EdhocInitiator()
-    responder = EdhocResponder(CRED_R, R)
+    initiator = LakeInitiator()
+    responder = LakeResponder(CRED_R, R)
 
     message_1 = initiator.prepare_message_1(c_i=None)
     _c_i, _ead_1 = responder.process_message_1(message_1)
@@ -133,16 +133,16 @@ def test_initiator_rejects_invalid_i_length():
     assert str(err.value) == "LAKEError::ParsingError"
 
 def test_state_missing_step():
-    initiator = EdhocInitiator()
+    initiator = LakeInitiator()
     with pytest.raises(RuntimeError) as err:
         initiator.prepare_message_3(CredentialTransfer.ByReference)
     assert str(err.value).startswith("State machine is just at Start, but this operation requires it to have progressed to ProcessedM2")
 
 def test_state_no_going_back():
-    initiator = EdhocInitiator()
+    initiator = LakeInitiator()
     message_1 = initiator.prepare_message_1(c_i=None)
 
-    responder = EdhocResponder(CRED_R, R)
+    responder = LakeResponder(CRED_R, R)
     assert "Start" in repr(responder), f"Expected state to be reported in repr, found {responder!r}"
     responder.process_message_1(message_1)
     assert "ProcessingM1" in repr(responder), f"Expected state to be reported in repr, found {responder!r}"
@@ -157,7 +157,7 @@ def test_logging():
     test_handshake_credential_transfer_by(CredentialTransfer.ByValue, CredentialTransfer.ByValue)
 
     # So far we don't test much, but that is currently in it an shows that log messages get through.
-    assert 'Initializing EdhocInitiator' in LOGSTREAM.getvalue()
+    assert 'Initializing LakeInitiator' in LOGSTREAM.getvalue()
 
 @pytest.mark.parametrize("cred_r_transfer", [CredentialTransfer.ByReference, CredentialTransfer.ByValue])
 @pytest.mark.parametrize("cred_i_transfer", [CredentialTransfer.ByReference, CredentialTransfer.ByValue])

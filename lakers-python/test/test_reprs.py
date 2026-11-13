@@ -15,12 +15,12 @@ def test_ead_items():
 
 
 def test_initiator():
-    i = repr(lakers.EdhocInitiator())
+    i = repr(lakers.LakeInitiator())
     assert " in state Start" in i
 
 
 def test_responder():
-    r = repr(lakers.EdhocResponder(CRED_R, R))
+    r = repr(lakers.LakeResponder(CRED_R, R))
     assert " in state Start" in r
 
 

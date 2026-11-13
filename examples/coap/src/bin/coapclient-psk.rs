@@ -29,7 +29,7 @@ async fn client_handshake() -> Result<(), LAKEError> {
     let cred_i: Credential = Credential::parse_ccs_symmetric(CRED_I.try_into().unwrap())?;
     let cred_r: Credential = Credential::parse_ccs_symmetric(CRED_R.try_into().unwrap())?;
 
-    let initiator = EdhocInitiator::new(
+    let initiator = LakeInitiator::new(
         lakers_crypto::default_crypto(),
         LAKEMethod::PSK,
         LAKESuite::CipherSuite2,

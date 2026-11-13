@@ -45,7 +45,7 @@ fn main() {
             // This is an EDHOC message
             if request.message.payload[0] == 0xf5 {
                 let cred_r: Credential = Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
-                let responder = EdhocResponder::new(
+                let responder = LakeResponder::new(
                     lakers_crypto::default_crypto(),
                     ResponderIdentity::StatStat {
                         r: R.try_into().unwrap(),

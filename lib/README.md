@@ -51,7 +51,7 @@ the unit tests):
 
 ```rust
 // perform the handshake
-let initiator = EdhocInitiator::new(default_crypto());
+let initiator = LakeInitiator::new(default_crypto());
 
 let (initiator, message_1) = initiator.prepare_message_1(None, & EADItem::new_empty_array()) ?; // c_i and ead_1 are set to None
 

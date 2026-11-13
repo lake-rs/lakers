@@ -138,5 +138,5 @@ include = [
     "CredentialKey", "CredentialType", "IdCred",
     "CredentialTransfer",
     "InitiatorStart", "WaitM2", "Completed", "WaitM4",
-    "EdhocInitiatorC", "EdhocInitiatorWaitM2C", "EdhocInitiatorProcessingM2C", "EdhocInitiatorProcessedM2C", "EdhocInitiatorDoneC",
+    "LakeInitiatorC", "LakeInitiatorWaitM2C", "LakeInitiatorProcessingM2C", "LakeInitiatorProcessedM2C", "LakeInitiatorDoneC",
 ]

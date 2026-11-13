@@ -112,7 +112,7 @@ int main(void)
         return 1;
     }
     puts("creating edhoc initiator.");
-    EdhocInitiator initiator = {0};
+    LakeInitiator initiator = {0};
     initiator_new(&initiator, PSK);
 
     puts("Begin test: edhoc initiator.");

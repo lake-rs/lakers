@@ -24,11 +24,11 @@ API documentation
 .. automodule:: lakers
    :members:
    :undoc-members:
-   :exclude-members: EdhocInitiator, EdhocResponder
+   :exclude-members: LakeInitiator, LakeResponder
 
    These are the two main entry points:
 
-   .. autoclass:: EdhocInitiator
+   .. autoclass:: LakeInitiator
      :exclude-members: prepare_message_1, parse_message_2, verify_message_2, prepare_message_3, completed_without_message_4, process_message_4
      :members:
      :undoc-members:
@@ -40,7 +40,7 @@ API documentation
      .. automethod:: completed_without_message_4
      .. automethod:: process_message_4
 
-   .. autoclass:: EdhocResponder
+   .. autoclass:: LakeResponder
      :members:
      :exclude-members: process_message_1, prepare_message_2, parse_message_3, verify_message_3, completed_without_message_4, prepare_message_4
      :undoc-members:

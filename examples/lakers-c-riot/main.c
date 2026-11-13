@@ -45,7 +45,7 @@ int main(void)
     credential_new(&cred_r, CRED_R, 84);
 
     puts("creating edhoc initiator.");
-    EdhocInitiator initiator = {0};
+    LakeInitiator initiator = {0};
     initiator_new(&initiator);
 
     puts("creating ead-authz device.");

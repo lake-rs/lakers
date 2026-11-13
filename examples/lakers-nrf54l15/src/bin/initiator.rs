@@ -18,7 +18,7 @@ fn main() -> ! {
     let cred_i = Credential::parse_ccs(CRED_I.try_into().unwrap()).unwrap();
     let cred_r = Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
 
-    let mut initiator = EdhocInitiator::new(
+    let mut initiator = LakeInitiator::new(
         hardware_crypto(),
         LAKEMethod::StatStat,
         LAKESuite::CipherSuite2,

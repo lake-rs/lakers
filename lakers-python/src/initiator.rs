@@ -8,7 +8,7 @@ use super::{ErrExt as _, StateMismatch};
 use crate::parse_credential;
 
 /// An implementation of the EDHOC protocol for the initiator side.
-#[pyclass(name = "EdhocInitiator")]
+#[pyclass(name = "LakeInitiator")]
 pub struct PyEdhocInitiator {
     cred_i: Option<Credential>,
     // FIXME: This does *not* get taken out, so some data stays available for longer than it needs
@@ -45,7 +45,7 @@ impl PyEdhocInitiator {
     #[new]
     #[pyo3(signature = (method="statstat"))]
     fn new(method: &str) -> PyResult<Self> {
-        trace!("Initializing EdhocInitiator");
+        trace!("Initializing LakeInitiator");
         let mut crypto = default_crypto();
         let suites_i =
             prepare_suites_i(&crypto.supported_suites(), LAKESuite::CipherSuite2.into()).unwrap();
@@ -70,7 +70,7 @@ impl PyEdhocInitiator {
 
     fn __repr__(&self) -> String {
         format!(
-            "<lakers.EdhocInitiator at {:p} in state {:?}>",
+            "<lakers.LakeInitiator at {:p} in state {:?}>",
             self,
             self.summarize()
         )
