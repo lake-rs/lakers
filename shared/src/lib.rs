@@ -196,17 +196,17 @@ pub type BufferMessage2 = EdhocMessageBuffer;
 ///   or type by the caller, so the caller could provide the place to expand into as a `&mut [u8]`,
 ///   but likewise, our crypto API doesn't work that way.</del>
 pub type BytesMaxBuffer = [u8; MAX_BUFFER_LEN];
-pub type BufferContext = EdhocBuffer<MAX_KDF_CONTEXT_LEN>;
+pub type BufferContext = LakeBuffer<MAX_KDF_CONTEXT_LEN>;
 /// Buffer returned by [`encode_info`]
-pub type BufferInfo = EdhocBuffer<MAX_INFO_LEN>;
+pub type BufferInfo = LakeBuffer<MAX_INFO_LEN>;
 /// A buffer holding a serialized COSE_Encrypt0 structure.
 ///
-/// This is an array and not an [`EdhocBuffer`] because it always has a fixed length.
+/// This is an array and not an [`LakeBuffer`] because it always has a fixed length.
 pub type BytesEncStructureLen = [u8; ENC_STRUCTURE_LEN];
 
 pub type BytesMac = [u8; MAC_LENGTH];
 pub type BytesVoucher = [u8; VOUCHER_LEN];
-pub type EADBuffer = EdhocBuffer<MAX_EAD_LEN>;
+pub type EADBuffer = LakeBuffer<MAX_EAD_LEN>;
 
 /// Value of C_R or C_I, as chosen by ourself or the peer.
 ///
@@ -498,7 +498,7 @@ impl ErrCode {
 #[derive(Debug)]
 #[repr(C)]
 pub struct InitiatorStart {
-    pub suites_i: EdhocBuffer<MAX_SUITES_LEN>,
+    pub suites_i: LakeBuffer<MAX_SUITES_LEN>,
     pub method: EDHOCMethod,
     pub x: BytesP256ElemLen,   // ephemeral private key of myself
     pub g_x: BytesP256ElemLen, // ephemeral public key of myself
@@ -656,8 +656,8 @@ pub enum CredentialTransfer {
 #[deprecated]
 pub type MessageBufferError = buffer::EdhocBufferError;
 
-/// An [`EdhocBuffer`] used for messages.
-pub type EdhocMessageBuffer = EdhocBuffer<MAX_MESSAGE_SIZE_LEN>;
+/// An [`LakeBuffer`] used for messages.
+pub type EdhocMessageBuffer = LakeBuffer<MAX_MESSAGE_SIZE_LEN>;
 
 /// An owned EAD item.
 #[cfg_attr(feature = "python-bindings", pyclass(from_py_object))]
@@ -687,7 +687,7 @@ impl EADItem {
         is_critical: bool,
         value_bytes: Option<&[u8]>,
     ) -> Result<Self, EdhocBufferError> {
-        let mut value = EdhocBuffer::new();
+        let mut value = LakeBuffer::new();
         if let Some(value_bytes) = value_bytes {
             let mut head = CBOR_MAJOR_BYTE_STRING;
             if value_bytes.len() <= 23 {
@@ -747,7 +747,7 @@ impl EADItem {
     }
 
     pub fn encode(&self) -> Result<EADBuffer, EDHOCError> {
-        let mut output = EdhocBuffer::new();
+        let mut output = LakeBuffer::new();
 
         let argument_value = if self.is_critical {
             // We can express "critical padding" in the type, but that'll be just normal padding.
@@ -929,7 +929,7 @@ impl EadItems {
     /// Encodes all items of self into a buffer.
     ///
     /// If this errs, some EADs may already have been encoded.
-    pub fn encode<const N: usize>(&self, output: &mut EdhocBuffer<N>) -> Result<(), EDHOCError> {
+    pub fn encode<const N: usize>(&self, output: &mut LakeBuffer<N>) -> Result<(), EDHOCError> {
         for ead_item in self {
             let encoded = ead_item.encode()?;
             output
@@ -1016,7 +1016,7 @@ mod edhoc_parser {
             // It's not just from `slice`, because EADItem::value is an *encoded* value. (FIXME: It
             // shouldn't be).
             (
-                EdhocBuffer::new_from_slice(&input[position_after_label..decoder.position()])
+                LakeBuffer::new_from_slice(&input[position_after_label..decoder.position()])
                     .map_err(|_| EDHOCError::ParsingError)?,
                 decoder.position(),
             )
@@ -1024,7 +1024,7 @@ mod edhoc_parser {
             // If it's not just at the end but a different type, that's an error, but that error is
             // not for us to raise: Instead, the next item being parsed will trip over its label
             // not being an integer.
-            (EdhocBuffer::new(), position_after_label)
+            (LakeBuffer::new(), position_after_label)
         };
 
         let item = EADItem {
@@ -1042,9 +1042,9 @@ mod edhoc_parser {
 
     pub fn parse_suites_i(
         mut decoder: CBORDecoder,
-    ) -> Result<(EdhocBuffer<MAX_SUITES_LEN>, CBORDecoder), EDHOCError> {
+    ) -> Result<(LakeBuffer<MAX_SUITES_LEN>, CBORDecoder), EDHOCError> {
         trace!("Enter parse_suites_i");
-        let mut suites_i: EdhocBuffer<MAX_SUITES_LEN> = Default::default();
+        let mut suites_i: LakeBuffer<MAX_SUITES_LEN> = Default::default();
         if let Ok(curr) = decoder.current() {
             if CBOR_UINT_1BYTE_START == CBORDecoder::type_of(curr) {
                 let Ok(_) = suites_i.push(decoder.u8()?) else {
@@ -1077,7 +1077,7 @@ mod edhoc_parser {
     ) -> Result<
         (
             u8,
-            EdhocBuffer<MAX_SUITES_LEN>,
+            LakeBuffer<MAX_SUITES_LEN>,
             BytesP256ElemLen,
             ConnId,
             EadItems,

@@ -445,7 +445,7 @@ pub fn i_complete_without_message_4(state: &WaitM4) -> Result<Completed, EDHOCEr
 
 fn encode_message_1(
     method: EDHOCMethod,
-    suites: &EdhocBuffer<MAX_SUITES_LEN>,
+    suites: &LakeBuffer<MAX_SUITES_LEN>,
     g_x: &BytesP256ElemLen,
     c_i: ConnId,
     ead_1: &EadItems,
@@ -570,7 +570,7 @@ fn compute_th_4(
             cred_r,
             ead_3,
         } => {
-            let mut ead_buf = EdhocBuffer::<MAX_EAD_LEN>::new();
+            let mut ead_buf = LakeBuffer::<MAX_EAD_LEN>::new();
             ead_3.encode(&mut ead_buf).unwrap();
             // TH_3 || ID_CRED_PSK || EAD_3 || CRED_I || CRED_R
             hash.update(id_cred);
@@ -650,16 +650,16 @@ fn encode_plaintext_4(ead_4: &EadItems) -> Result<BufferPlaintext4, EDHOCError> 
 fn build_external_aad(
     th_3: &[u8],
     psk_fields: Option<(&[u8], &[u8], &[u8])>,
-) -> Result<EdhocBuffer<MAX_BUFFER_LEN>, EDHOCError> {
+) -> Result<LakeBuffer<MAX_BUFFER_LEN>, EDHOCError> {
     match psk_fields {
         None => {
-            let mut buf = EdhocBuffer::<MAX_BUFFER_LEN>::new();
+            let mut buf = LakeBuffer::<MAX_BUFFER_LEN>::new();
             buf.extend_from_slice(th_3)
                 .map_err(|_| EDHOCError::EncodingError)?;
             Ok(buf)
         }
         Some((id_cred, cred_i, cred_r)) => {
-            let mut buf = EdhocBuffer::<MAX_BUFFER_LEN>::new();
+            let mut buf = LakeBuffer::<MAX_BUFFER_LEN>::new();
 
             buf.extend_from_slice(id_cred)
                 .map_err(|_| EDHOCError::EncodingError)?;
@@ -679,10 +679,10 @@ fn build_external_aad(
 }
 
 // FIXME: The encoded Enc_structure is no longer a fixed-size array because the
-// external_aad depends on the EDHOC method, so we return an `EdhocBuffer`.
-fn encode_enc_structure(external_aad: &[u8]) -> Result<EdhocBuffer<MAX_BUFFER_LEN>, EDHOCError> {
+// external_aad depends on the EDHOC method, so we return an `LakeBuffer`.
+fn encode_enc_structure(external_aad: &[u8]) -> Result<LakeBuffer<MAX_BUFFER_LEN>, EDHOCError> {
     let encrypt0 = b"Encrypt0";
-    let mut enc_structure = EdhocBuffer::<MAX_BUFFER_LEN>::new();
+    let mut enc_structure = LakeBuffer::<MAX_BUFFER_LEN>::new();
 
     // CBOR array of 3 elements
     enc_structure
@@ -712,7 +712,7 @@ fn encode_enc_structure(external_aad: &[u8]) -> Result<EdhocBuffer<MAX_BUFFER_LE
 }
 
 fn encode_bstr_header<const N: usize>(
-    buf: &mut EdhocBuffer<N>,
+    buf: &mut LakeBuffer<N>,
     len: usize,
 ) -> Result<(), EDHOCError> {
     if len <= 23 {
@@ -1129,7 +1129,7 @@ mod tests {
 
     // EDHOC-PSK
     const METHOD_PSK_TV: EDHOCMethod = EDHOCMethod::PSK; //0x04;
-    const SUITES_I_PSK_TV: EdhocBuffer<MAX_SUITES_LEN> = EdhocBuffer::new_from_array(&hex!("02"));
+    const SUITES_I_PSK_TV: LakeBuffer<MAX_SUITES_LEN> = LakeBuffer::new_from_array(&hex!("02"));
     // === Initiator ephemeral private key X ===
     const X_PSK_TV: BytesP256ElemLen =
         hex!("09972dfef1eaab926ec96e8005fed29f70ffbf4e361c3a061a7acdb5170c10e5");
@@ -1140,7 +1140,7 @@ mod tests {
     #[allow(deprecated)]
     const C_I_PSK_TV: ConnId = ConnId::from_int_raw(0x0A);
     // === Message 1 ===
-    const MESSAGE_1_PSK_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!(
+    const MESSAGE_1_PSK_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!(
         "040258207ec68102940602aab548539bf42a35992d957249eb7f1888406d178a04c912db0a"
     ));
     // === Responder ephemeral private key Y ===
@@ -1156,14 +1156,14 @@ mod tests {
     const H_MESSAGE_1_PSK_TV: BytesHashLen =
         hex!("19cc2d2a957edd80109042fde6cc20c24b6a34bc21c6d49fea895d4c7592340e");
     // === H(message_1) CBOR (for completeness) ===
-    const _H_MESSAGE_1_CBOR_PSK_TV: EdhocBuffer<34> = EdhocBuffer::new_from_array(&hex!(
+    const _H_MESSAGE_1_CBOR_PSK_TV: LakeBuffer<34> = LakeBuffer::new_from_array(&hex!(
         "582019cc2d2a957edd80109042fde6cc20c24b6a34bc21c6d49fea895d4c7592340e"
     ));
     // === TH_2 raw ===
     const TH_2_PSK_TV: BytesHashLen =
         hex!("5b4834ae630a8a0ed0b0c6f36642604d016478c4bc8187bb764dd40f2bee3dde");
     // === TH_2 CBOR ===
-    const _TH_2_CBOR_PSK_TV: EdhocBuffer<34> = EdhocBuffer::new_from_array(&hex!(
+    const _TH_2_CBOR_PSK_TV: LakeBuffer<34> = LakeBuffer::new_from_array(&hex!(
         "58205b4834ae630a8a0ed0b0c6f36642604d016478c4bc8187bb764dd40f2bee3dde"
     ));
     // === G_XY (ECDH shared secret) ===
@@ -1178,11 +1178,11 @@ mod tests {
     // === KEYSTREAM_2A ===
     const _KEYSTREAM_2_PSK_TV: [u8; MESSAGE_2_PSK_TV.len() - P256_ELEM_LEN - 2] = hex!("ec");
     // === PLAINTEXT_2A ===
-    const PLAINTEXT_2_PSK_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!("05"));
+    const PLAINTEXT_2_PSK_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!("05"));
     // === CIPHERTEXT_2B ===
-    const CIPHERTEXT_2_PSK_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!("e9"));
+    const CIPHERTEXT_2_PSK_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!("e9"));
     // === message_2 ===
-    const MESSAGE_2_PSK_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!(
+    const MESSAGE_2_PSK_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!(
         "5821ed156a6243e0afec9efbaabce8429d5ad5e4e1c432f76a6ede8f79247bb97d83e9"
     ));
     // === SALT_4e3m ===
@@ -1208,21 +1208,21 @@ mod tests {
     const _K_3_PSK_TV: BytesCcmKeyLen = hex!("966a579cea26ca3ceb442ac727eab232");
     // === IV_3 (13 bytes) ===
     const _IV_3_PSK_TV: BytesCcmIvLen = hex!("5bf1ad0e4ffb9676d78df23f6e");
-    const PLAINTEXT_3B_PSK_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!(""));
+    const PLAINTEXT_3B_PSK_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!(""));
     // === CIPHERTEXT_3B (9 bytes) ===
     const CIPHERTEXT_3B_PSK_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("487f34496f3f69c288"));
+        LakeBuffer::new_from_array(&hex!("487f34496f3f69c288"));
     // === KEYSTREAM_3A (10 bytes) ===
     const _KEYSTREAM_3A_PSK_TV: [u8; _MESSAGE_3_PSK_TV.len() - 1] = hex!("03e5d1571bbc9332471b");
     // === PLAINTEXT_3A (10 bytes) ===
     const PLAINTEXT_3A_PSK_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("10487f34496f3f69c288"));
+        LakeBuffer::new_from_array(&hex!("10487f34496f3f69c288"));
     // === CIPHERTEXT_3A (10 bytes) ===
     const CIPHERTEXT_3A_PSK_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("13adae6352d3ac5b8593"));
+        LakeBuffer::new_from_array(&hex!("13adae6352d3ac5b8593"));
     // === message_3 (11 bytes) ===
     const _MESSAGE_3_PSK_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("4a13adae6352d3ac5b8593"));
+        LakeBuffer::new_from_array(&hex!("4a13adae6352d3ac5b8593"));
     // === TH_4 ===
     const TH_4_PSK_TV: BytesHashLen =
         hex!("11481b9afef95c679a52038217eedd0e0ce08faa865bdc825511ca6dc3919413");
@@ -1230,18 +1230,17 @@ mod tests {
     const K_4_PSK_TV: BytesCcmKeyLen = hex!("bcab1df0138dc05c885fd371e950c67f");
     // === IV_4 (13 bytes) ===
     const IV_4_PSK_TV: BytesCcmIvLen = hex!("411134d0e0c508d95da7c3acdc");
-    const PLAINTEXT_4_PSK_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!(""));
+    const PLAINTEXT_4_PSK_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!(""));
     // === message_4 (9 bytes) ===
     const MESSAGE_4_PSK_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("488add93db404859f9"));
+        LakeBuffer::new_from_array(&hex!("488add93db404859f9"));
     // === PRK_out ===
     const PRK_OUT_PSK_TV: BytesHashLen =
         hex!("bba6ded3b038d2323774d89214a513a24916f042296c7c729cd1a67b436fb414");
     // === PRK_exporter ===
     const PRK_EXPORTER_PSK_TV: BytesHashLen =
         hex!("2fcd08c0c01077c6d6486b9f9b677020e8d68f04bcdcce715dd277ed25931bef");
-    const _ENC_STRUCURE_MESSAGE_3: EdhocBuffer<MAX_BUFFER_LEN> =
-        EdhocBuffer::new_from_array(&hex!(
+    const _ENC_STRUCURE_MESSAGE_3: LakeBuffer<MAX_BUFFER_LEN> = LakeBuffer::new_from_array(&hex!(
         "8368456e637279707430405871105820386a9d052b255992eee5ffb594347d327418a2ea5183486c0c9e204
         26e0bca2fa20269696e69746961746f7208a101a30104024110205050930ff462a77a3540cf546325dea214a
         20269726573706f6e64657208a101a30104024110205050930ff462a77a3540cf546325dea214"
@@ -1250,59 +1249,59 @@ mod tests {
     // STAT-STAT METHOD
     // message_1 (first_time)
     const METHOD_TV_FIRST_TIME: EDHOCMethod = EDHOCMethod::StatStat;
-    const SUITES_I_TV_FIRST_TIME: EdhocBuffer<MAX_SUITES_LEN> =
-        EdhocBuffer::new_from_array(&hex!("06"));
+    const SUITES_I_TV_FIRST_TIME: LakeBuffer<MAX_SUITES_LEN> =
+        LakeBuffer::new_from_array(&hex!("06"));
     const G_X_TV_FIRST_TIME: BytesP256ElemLen =
         hex!("741a13d7ba048fbb615e94386aa3b61bea5b3d8f65f32620b749bee8d278efa9");
     #[allow(deprecated)]
     const C_I_TV_FIRST_TIME: ConnId = ConnId::from_int_raw(0x0e);
-    const MESSAGE_1_TV_FIRST_TIME: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!(
+    const MESSAGE_1_TV_FIRST_TIME: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!(
         "03065820741a13d7ba048fbb615e94386aa3b61bea5b3d8f65f32620b749bee8d278efa90e"
     ));
 
     // message_1 (second time)
     const METHOD_TV: EDHOCMethod = EDHOCMethod::StatStat;
     // manually modified test vector to include a single supported cipher suite
-    const SUITES_I_TV: EdhocBuffer<MAX_SUITES_LEN> = EdhocBuffer::new_from_array(&hex!("0602"));
+    const SUITES_I_TV: LakeBuffer<MAX_SUITES_LEN> = LakeBuffer::new_from_array(&hex!("0602"));
     const G_X_TV: BytesP256ElemLen =
         hex!("8af6f430ebe18d34184017a9a11bf511c8dff8f834730b96c1b7c8dbca2fc3b6");
     #[allow(deprecated)]
     const C_I_TV: ConnId = ConnId::from_int_raw(0x37);
-    const MESSAGE_1_TV: BufferMessage1 = EdhocBuffer::new_from_array(&hex!(
+    const MESSAGE_1_TV: BufferMessage1 = LakeBuffer::new_from_array(&hex!(
         "0382060258208af6f430ebe18d34184017a9a11bf511c8dff8f834730b96c1b7c8dbca2fc3b637"
     ));
     // below are a few truncated messages for the purpose of testing cipher suites
     // message with one cipher suite (23..=255)
     const MESSAGE_1_TV_SUITE_ONLY_A: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("031818"));
+        LakeBuffer::new_from_array(&hex!("031818"));
     // message with an array having two cipher suites with small values (0..=23)
     const MESSAGE_1_TV_SUITE_ONLY_B: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("03820201"));
+        LakeBuffer::new_from_array(&hex!("03820201"));
     // message with an array having two cipher suites, where one is a large value (23..=255)
     const MESSAGE_1_TV_SUITE_ONLY_C: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("0382021819"));
+        LakeBuffer::new_from_array(&hex!("0382021819"));
     // message with an array having too many cipher suites (more than 9)
     const MESSAGE_1_TV_SUITE_ONLY_ERR: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("038A02020202020202020202"));
+        LakeBuffer::new_from_array(&hex!("038A02020202020202020202"));
     const EAD_DUMMY_LABEL_TV: u16 = 0x01;
     const EAD_DUMMY_VALUE_TV: &[u8] = &hex!("cccccc");
-    const EAD_DUMMY_CRITICAL_TV: EdhocBuffer<MAX_EAD_LEN> =
-        EdhocBuffer::new_from_array(&hex!("2043cccccc"));
-    const MESSAGE_1_WITH_DUMMY_EAD_NO_VALUE_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(
+    const EAD_DUMMY_CRITICAL_TV: LakeBuffer<MAX_EAD_LEN> =
+        LakeBuffer::new_from_array(&hex!("2043cccccc"));
+    const MESSAGE_1_WITH_DUMMY_EAD_NO_VALUE_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(
         &hex!("0382060258208af6f430ebe18d34184017a9a11bf511c8dff8f834730b96c1b7c8dbca2fc3b63701"),
     );
-    const MESSAGE_1_WITH_DUMMY_EAD_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!(
+    const MESSAGE_1_WITH_DUMMY_EAD_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!(
         "0382060258208af6f430ebe18d34184017a9a11bf511c8dff8f834730b96c1b7c8dbca2fc3b6370143cccccc"
     ));
-    const MESSAGE_1_WITH_DUMMY_CRITICAL_EAD_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!("0382060258208af6f430ebe18d34184017a9a11bf511c8dff8f834730b96c1b7c8dbca2fc3b6372043cccccc"));
-    const MESSAGE_1_WITH_TWO_EADS: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!("0382060258208af6f430ebe18d34184017a9a11bf511c8dff8f834730b96c1b7c8dbca2fc3b6370143cccccc2043cccccc"));
+    const MESSAGE_1_WITH_DUMMY_CRITICAL_EAD_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!("0382060258208af6f430ebe18d34184017a9a11bf511c8dff8f834730b96c1b7c8dbca2fc3b6372043cccccc"));
+    const MESSAGE_1_WITH_TWO_EADS: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!("0382060258208af6f430ebe18d34184017a9a11bf511c8dff8f834730b96c1b7c8dbca2fc3b6370143cccccc2043cccccc"));
     const G_Y_TV: BytesP256ElemLen =
         hex!("419701d7f00a26c2dc587a36dd752549f33763c893422c8ea0f955a13a4ff5d5");
     #[allow(deprecated)]
     const C_R_TV: ConnId = ConnId::from_int_raw(0x27);
-    const MESSAGE_2_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!("582b419701d7f00a26c2dc587a36dd752549f33763c893422c8ea0f955a13a4ff5d59862a1eef9e0e7e1886fcd"));
+    const MESSAGE_2_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!("582b419701d7f00a26c2dc587a36dd752549f33763c893422c8ea0f955a13a4ff5d59862a1eef9e0e7e1886fcd"));
     const CIPHERTEXT_2_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("9862a1eef9e0e7e1886fcd"));
+        LakeBuffer::new_from_array(&hex!("9862a1eef9e0e7e1886fcd"));
     const H_MESSAGE_1_TV: BytesHashLen =
         hex!("ca02cabda5a8902749b42f711050bb4dbd52153e87527594b39f50cdf019888c");
     const TH_2_TV: BytesHashLen =
@@ -1323,19 +1322,19 @@ mod tests {
     const ID_CRED_I_TV: [u8; 4] = hex!("a104412b");
     const MAC_3_TV: BytesMac3 = hex!("623c91df41e34c2f");
     const MESSAGE_3_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("52e562097bc417dd5919485ac7891ffd90a9fc"));
+        LakeBuffer::new_from_array(&hex!("52e562097bc417dd5919485ac7891ffd90a9fc"));
     const PRK_4E3M_TV: BytesP256ElemLen =
         hex!("81cc8a298e357044e3c466bb5c0a1e507e01d49238aeba138df94635407c0ff7");
     const MESSAGE_4_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("4828c966b7ca304f83"));
-    const PLAINTEXT_4_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!(""));
+        LakeBuffer::new_from_array(&hex!("4828c966b7ca304f83"));
+    const PLAINTEXT_4_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!(""));
     const K_4_TV: BytesCcmKeyLen = hex!("d3c77872b6eeb508911bdbd308b2e6a0");
     const IV_4_TV: BytesCcmIvLen = hex!("04ff0f44456e96e217853c3601");
     const CRED_I_TV : [u8; 107] = hex!("a2027734322d35302d33312d46462d45462d33372d33322d333908a101a5010202412b2001215820ac75e9ece3e50bfc8ed60399889522405c47bf16df96660a41298cb4307f7eb62258206e5de611388a4b8a8211334ac7d37ecb52a387d257e6db3c2a93df21ff3affc8");
     const ID_CRED_R_TV: [u8; 4] = hex!("a1044132");
     const CRED_R_TV : [u8; 95] = hex!("a2026b6578616d706c652e65647508a101a501020241322001215820bbc34960526ea4d32e940cad2a234148ddc21791a12afbcbac93622046dd44f02258204519e257236b2a0ce2023f0931f1f386ca7afda64fcde0108c224c51eabf6072");
     const PLAINTEXT_2_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("2732480943305c899f5c54"));
+        LakeBuffer::new_from_array(&hex!("2732480943305c899f5c54"));
     const SK_I_TV: BytesP256ElemLen =
         hex!("fb13adeb6518cee5f88417660841142e830a81fe334380a953406a1305e8706b");
     const X_TV: BytesP256ElemLen =
@@ -1343,7 +1342,7 @@ mod tests {
     const G_R_TV: BytesP256ElemLen =
         hex!("bbc34960526ea4d32e940cad2a234148ddc21791a12afbcbac93622046dd44f0");
     const PLAINTEXT_3_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("2b48623c91df41e34c2f"));
+        LakeBuffer::new_from_array(&hex!("2b48623c91df41e34c2f"));
     const SALT_3E2M_TV: BytesHashLen =
         hex!("af4e103a47cb3cf32570d5c25ad27732bd8d8178e9a69d061c31a27f8e3ca926");
     const SALT_4E3M_TV: BytesHashLen =
@@ -1358,24 +1357,24 @@ mod tests {
     const OSCORE_MASTER_SALT_TV: [u8; 8] = hex!("ada24c7dbfc85eeb");
 
     // invalid test vectors, should result in a parsing error
-    const MESSAGE_1_INVALID_ARRAY_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!(
+    const MESSAGE_1_INVALID_ARRAY_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!(
         "8403025820741a13d7ba048fbb615e94386aa3b61bea5b3d8f65f32620b749bee8d278efa90e"
     ));
     // This is invalid because the h'0e' byte string is a text string instead
-    const MESSAGE_1_INVALID_C_I_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!(
+    const MESSAGE_1_INVALID_C_I_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!(
         "03025820741a13d7ba048fbb615e94386aa3b61bea5b3d8f65f32620b749bee8d278efa9610e"
     ));
-    const MESSAGE_1_INVALID_CIPHERSUITE_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(
-        &hex!("0381025820741a13d7ba048fbb615e94386aa3b61bea5b3d8f65f32620b749bee8d278efa90e"),
-    );
-    const MESSAGE_1_INVALID_TEXT_EPHEMERAL_KEY_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(
+    const MESSAGE_1_INVALID_CIPHERSUITE_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!(
+        "0381025820741a13d7ba048fbb615e94386aa3b61bea5b3d8f65f32620b749bee8d278efa90e"
+    ));
+    const MESSAGE_1_INVALID_TEXT_EPHEMERAL_KEY_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(
         &hex!("0302782020616972207370656564206F66206120756E6C6164656E207377616C6C6F77200e"),
     );
-    const MESSAGE_2_INVALID_NUMBER_OF_CBOR_SEQUENCE_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!("5820419701d7f00a26c2dc587a36dd752549f33763c893422c8ea0f955a13a4ff5d54B9862a11de42a95d785386a"));
+    const MESSAGE_2_INVALID_NUMBER_OF_CBOR_SEQUENCE_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!("5820419701d7f00a26c2dc587a36dd752549f33763c893422c8ea0f955a13a4ff5d54B9862a11de42a95d785386a"));
     const PLAINTEXT_2_SURPLUS_MAP_ID_CRED_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("27a10442321048fa5efa2ebf920bf3"));
+        LakeBuffer::new_from_array(&hex!("27a10442321048fa5efa2ebf920bf3"));
     const PLAINTEXT_2_SURPLUS_BSTR_ID_CRED_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("27413248fa5efa2ebf920bf3"));
+        LakeBuffer::new_from_array(&hex!("27413248fa5efa2ebf920bf3"));
 
     #[test]
     fn test_ecdh() {

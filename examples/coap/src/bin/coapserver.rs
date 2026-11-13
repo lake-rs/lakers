@@ -104,7 +104,7 @@ fn main() {
                 let responder = take_state(c_r_rcvd, &mut edhoc_connections).unwrap();
 
                 println!("Found state with connection identifier {:?}", c_r_rcvd);
-                let message_3 = EdhocBuffer::new_from_slice(&request.message.payload[1..]).unwrap();
+                let message_3 = LakeBuffer::new_from_slice(&request.message.payload[1..]).unwrap();
                 let Ok((responder, id_cred_i, ead_3)) = responder.parse_message_3(&message_3)
                 else {
                     println!("EDHOC error at parse_message_3: {:?}", message_3);

@@ -17,7 +17,7 @@ use embedded_cal::{
 };
 use lakers_shared::{
     BufferPsk, BytesCcmIvLen, BytesCcmKeyLen, BytesHashLen, BytesP256ElemLen, CcmTagLen,
-    Crypto as CryptoTrait, EDHOCError, EDHOCSuite, EdhocBuffer, MAX_SUITES_LEN,
+    Crypto as CryptoTrait, EDHOCError, EDHOCSuite, LakeBuffer, MAX_SUITES_LEN,
 };
 
 /// A [`lakers_shared::Crypto`] implementation that forwards to an embedded-cal [`Cal`] instance.
@@ -47,11 +47,11 @@ impl<C> core::fmt::Debug for Crypto<C> {
 }
 
 impl<C: Cal + rand_core::TryCryptoRng> CryptoTrait for Crypto<C> {
-    fn supported_suites(&self) -> EdhocBuffer<MAX_SUITES_LEN> {
+    fn supported_suites(&self) -> LakeBuffer<MAX_SUITES_LEN> {
         // As support for different suites is added, this will be changed to query the CAL for for the algorithms it supports (possibly at creation time), and compute the suites from that.
         //
         // Right now, suite support is as hard-coded as the suites are hard-coded in the lakers Crypto trait (e.g. by having a sha256 function).
-        EdhocBuffer::<MAX_SUITES_LEN>::new_from_slice(&[EDHOCSuite::CipherSuite2 as u8])
+        LakeBuffer::<MAX_SUITES_LEN>::new_from_slice(&[EDHOCSuite::CipherSuite2 as u8])
             .expect("the slice is of a length that always fits")
     }
 
@@ -115,16 +115,16 @@ impl<C: Cal + rand_core::TryCryptoRng> CryptoTrait for Crypto<C> {
         iv: &BytesCcmIvLen,
         ad: &[u8],
         plaintext: &[u8],
-    ) -> EdhocBuffer<N> {
+    ) -> LakeBuffer<N> {
         let alg = aes_ccm_algorithm::<C, Tag>();
         let mut outbuffer =
-            EdhocBuffer::<N>::new_from_slice(plaintext).expect("plaintext fits the output buffer");
+            LakeBuffer::<N>::new_from_slice(plaintext).expect("plaintext fits the output buffer");
         let aead = self.cal.aead();
         let key = aead.load_from_keydata(alg, key);
 
         #[allow(
             deprecated,
-            reason = "EdhocBuffer has no non-deprecated mutable-slice accessor"
+            reason = "LakeBuffer has no non-deprecated mutable-slice accessor"
         )]
         let tag = aead.encrypt_in_place(&key, iv, &mut outbuffer.content[..plaintext.len()], ad);
         outbuffer
@@ -139,13 +139,13 @@ impl<C: Cal + rand_core::TryCryptoRng> CryptoTrait for Crypto<C> {
         iv: &BytesCcmIvLen,
         ad: &[u8],
         ciphertext: &[u8],
-    ) -> Result<EdhocBuffer<N>, EDHOCError> {
+    ) -> Result<LakeBuffer<N>, EDHOCError> {
         let alg = aes_ccm_algorithm::<C, Tag>();
         let plaintext_len = ciphertext
             .len()
             .checked_sub(Tag::LEN)
             .ok_or(EDHOCError::ParsingError)?;
-        let mut buffer = EdhocBuffer::<N>::new_from_slice(&ciphertext[..plaintext_len])
+        let mut buffer = LakeBuffer::<N>::new_from_slice(&ciphertext[..plaintext_len])
             .map_err(|_| EDHOCError::ParsingError)?;
         let tag = &ciphertext[plaintext_len..];
         let aead = self.cal.aead();
@@ -153,7 +153,7 @@ impl<C: Cal + rand_core::TryCryptoRng> CryptoTrait for Crypto<C> {
 
         #[allow(
             deprecated,
-            reason = "EdhocBuffer has no non-deprecated mutable-slice accessor"
+            reason = "LakeBuffer has no non-deprecated mutable-slice accessor"
         )]
         aead.decrypt_in_place(&key, iv, &mut buffer.content[..plaintext_len], tag, ad)
             .map_err(|_| EDHOCError::MacVerificationFailed)?;

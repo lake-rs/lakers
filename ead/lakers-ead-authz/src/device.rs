@@ -116,7 +116,7 @@ fn encrypt_enc_id<Crypto: CryptoTrait>(
 }
 
 fn encode_ead_1_value(loc_w: &EdhocMessageBuffer, enc_id: &EdhocMessageBuffer) -> EADBuffer {
-    let mut output = EdhocBuffer::new();
+    let mut output = LakeBuffer::new();
 
     output.push(CBOR_TEXT_STRING).unwrap();
     output.push(loc_w.len() as u8).unwrap();

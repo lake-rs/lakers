@@ -24,8 +24,8 @@ pub extern "C" fn mbedtls_hardware_poll(
 pub struct Crypto;
 
 impl CryptoTrait for Crypto {
-    fn supported_suites(&self) -> EdhocBuffer<MAX_SUITES_LEN> {
-        EdhocBuffer::<MAX_SUITES_LEN>::new_from_slice(&[EDHOCSuite::CipherSuite2 as u8])
+    fn supported_suites(&self) -> LakeBuffer<MAX_SUITES_LEN> {
+        LakeBuffer::<MAX_SUITES_LEN>::new_from_slice(&[EDHOCSuite::CipherSuite2 as u8])
             .expect("This should never fail, as the slice is of the correct length")
     }
 
@@ -103,7 +103,7 @@ impl CryptoTrait for Crypto {
         iv: &BytesCcmIvLen,
         ad: &[u8],
         plaintext: &[u8],
-    ) -> EdhocBuffer<N> {
+    ) -> LakeBuffer<N> {
         psa_crypto::init().unwrap();
 
         let alg = Aead::AeadWithShortenedTag {
@@ -123,7 +123,7 @@ impl CryptoTrait for Crypto {
             },
         };
         let my_key = key_management::import(attributes, None, &key[..]).unwrap();
-        let mut output_buffer = EdhocBuffer::new();
+        let mut output_buffer = LakeBuffer::new();
         let full_range = output_buffer
             .extend_reserve(plaintext.len() + Tag::LEN)
             .unwrap();
@@ -148,7 +148,7 @@ impl CryptoTrait for Crypto {
         iv: &BytesCcmIvLen,
         ad: &[u8],
         ciphertext: &[u8],
-    ) -> Result<EdhocBuffer<N>, EDHOCError> {
+    ) -> Result<LakeBuffer<N>, EDHOCError> {
         psa_crypto::init().unwrap();
 
         let alg = Aead::AeadWithShortenedTag {
@@ -172,7 +172,7 @@ impl CryptoTrait for Crypto {
             .len()
             .checked_sub(Tag::LEN)
             .ok_or(EDHOCError::ParsingError)?;
-        let mut output_buffer = EdhocBuffer::new();
+        let mut output_buffer = LakeBuffer::new();
         let out_slice = output_buffer
             .extend_reserve(plaintext_len)
             .map_err(|_| EDHOCError::ParsingError)?;
@@ -313,7 +313,7 @@ impl Crypto {
 /// `psa_crypto` has no streaming hash API and needs to build a full message to be hashed in memory
 /// before hashing it in a single go.
 #[derive(Default)]
-pub struct BufferedHasherSha256(EdhocBuffer<MAX_BUFFER_LEN>);
+pub struct BufferedHasherSha256(LakeBuffer<MAX_BUFFER_LEN>);
 
 impl digest::FixedOutput for BufferedHasherSha256 {
     #[inline]

@@ -112,7 +112,7 @@ impl coap_handler::Handler for EdhocHandler {
                     .expect("Static credential is not processable");
 
             let message_1 =
-                &EdhocBuffer::new_from_slice(&request.payload()[1..]).map_err(too_small)?;
+                &LakeBuffer::new_from_slice(&request.payload()[1..]).map_err(too_small)?;
 
             let (responder, _c_i, mut ead_1) = EdhocResponder::new(
                 lakers_crypto::default_crypto(),
@@ -174,7 +174,7 @@ impl coap_handler::Handler for EdhocHandler {
 
             println!("Found state with connection identifier {:?}", c_r_rcvd);
 
-            let message_3 = EdhocBuffer::new_from_slice(&message_3).map_err(too_small)?;
+            let message_3 = LakeBuffer::new_from_slice(&message_3).map_err(too_small)?;
             let result = responder.parse_message_3(&message_3);
             let (responder, id_cred_i, ead_3) = result.map_err(|e| {
                 println!("EDHOC processing error: {:?}", e);

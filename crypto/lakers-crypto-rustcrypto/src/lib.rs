@@ -3,7 +3,7 @@
 use lakers_shared::CcmTagLen;
 use lakers_shared::{
     BufferPsk, BytesCcmIvLen, BytesCcmKeyLen, BytesHashLen, BytesP256ElemLen,
-    Crypto as CryptoTrait, EDHOCError, EDHOCSuite, EdhocBuffer, MAX_SUITES_LEN,
+    Crypto as CryptoTrait, EDHOCError, EDHOCSuite, LakeBuffer, MAX_SUITES_LEN,
 };
 
 use ccm::AeadInPlace;
@@ -38,8 +38,8 @@ impl<Rng: rand_core::RngCore + rand_core::CryptoRng> core::fmt::Debug for Crypto
 }
 
 impl<Rng: rand_core::RngCore + rand_core::CryptoRng> CryptoTrait for Crypto<Rng> {
-    fn supported_suites(&self) -> EdhocBuffer<MAX_SUITES_LEN> {
-        EdhocBuffer::<MAX_SUITES_LEN>::new_from_slice(&[EDHOCSuite::CipherSuite2 as u8])
+    fn supported_suites(&self) -> LakeBuffer<MAX_SUITES_LEN> {
+        LakeBuffer::<MAX_SUITES_LEN>::new_from_slice(&[EDHOCSuite::CipherSuite2 as u8])
             .expect("This should never fail, as the slice is of the correct length")
     }
 
@@ -88,8 +88,8 @@ impl<Rng: rand_core::RngCore + rand_core::CryptoRng> CryptoTrait for Crypto<Rng>
         iv: &BytesCcmIvLen,
         ad: &[u8],
         plaintext: &[u8],
-    ) -> EdhocBuffer<N> {
-        let mut outbuffer = EdhocBuffer::new_from_slice(plaintext).unwrap();
+    ) -> LakeBuffer<N> {
+        let mut outbuffer = LakeBuffer::new_from_slice(plaintext).unwrap();
         #[allow(
             deprecated,
             reason = "hax won't allow creating a .as_mut_slice() method"
@@ -130,12 +130,12 @@ impl<Rng: rand_core::RngCore + rand_core::CryptoRng> CryptoTrait for Crypto<Rng>
         iv: &BytesCcmIvLen,
         ad: &[u8],
         ciphertext: &[u8],
-    ) -> Result<EdhocBuffer<N>, EDHOCError> {
+    ) -> Result<LakeBuffer<N>, EDHOCError> {
         let plaintext_len = ciphertext
             .len()
             .checked_sub(Tag::LEN)
             .ok_or(EDHOCError::ParsingError)?;
-        let mut buffer = EdhocBuffer::new_from_slice(&ciphertext[..plaintext_len])
+        let mut buffer = LakeBuffer::new_from_slice(&ciphertext[..plaintext_len])
             .map_err(|_| EDHOCError::ParsingError)?;
         let tag = &ciphertext[plaintext_len..];
         #[allow(

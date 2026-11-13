@@ -56,7 +56,7 @@ async fn client_handshake() -> Result<(), EDHOCError> {
     println!("response_vec = {:02x?}", response.message.payload);
     println!("message_2 len = {}", response.message.payload.len());
 
-    let message_2 = EdhocBuffer::new_from_slice(&response.message.payload[..]).unwrap();
+    let message_2 = LakeBuffer::new_from_slice(&response.message.payload[..]).unwrap();
     let (mut initiator, c_r, ead_2) = initiator.parse_message_2(&message_2)?;
     ead_2.processed_critical_items().unwrap();
     initiator.set_identity(
@@ -81,7 +81,7 @@ async fn client_handshake() -> Result<(), EDHOCError> {
     }
     println!("response_vec = {:02x?}", response.message.payload);
     println!("message_3 len = {}", response.message.payload.len());
-    let message_4 = EdhocBuffer::new_from_slice(&response.message.payload[..]).unwrap();
+    let message_4 = LakeBuffer::new_from_slice(&response.message.payload[..]).unwrap();
     let (mut initiator, ead_4) = initiator.process_message_4(&message_4).unwrap();
     ead_4.processed_critical_items().unwrap();
 

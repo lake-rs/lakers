@@ -134,7 +134,7 @@ include = [
     "EdhocMessageBuffer", "BytesMac", "BytesMac2",
     "EADBuffer",
     "EADItemC", "EadItemsC",
-    "EdhocBuffer", "BufferKid", "BufferCred", "BufferIdCred",
+    "LakeBuffer", "BufferKid", "BufferCred", "BufferIdCred",
     "CredentialKey", "CredentialType", "IdCred",
     "CredentialTransfer",
     "InitiatorStart", "WaitM2", "Completed", "WaitM4",

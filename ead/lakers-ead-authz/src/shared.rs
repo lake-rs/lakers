@@ -62,7 +62,7 @@ pub(crate) fn parse_ead_1_value(
 pub(crate) fn encode_enc_structure(ss: u8) -> [u8; EAD_AUTHZ_ENC_STRUCTURE_LEN] {
     let encrypt0 = b"Encrypt0";
 
-    let mut enc_structure = EdhocBuffer::<EAD_AUTHZ_ENC_STRUCTURE_LEN>::new();
+    let mut enc_structure = LakeBuffer::<EAD_AUTHZ_ENC_STRUCTURE_LEN>::new();
 
     // encode Enc_structure from rfc9052 Section 5.3
     enc_structure.push(CBOR_MAJOR_ARRAY | 3 as u8).unwrap(); // 3 is the fixed number of elements in the array

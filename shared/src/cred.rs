@@ -1,8 +1,8 @@
 use super::*;
 
-pub type BufferCred = EdhocBuffer<192>; // arbitrary size
-pub type BufferKid = EdhocBuffer<16>; // variable size, up to 16 bytes
-pub type BufferIdCred = EdhocBuffer<192>; // variable size, can contain either the contents of a BufferCred or a BufferKid
+pub type BufferCred = LakeBuffer<192>; // arbitrary size
+pub type BufferKid = LakeBuffer<16>; // variable size, up to 16 bytes
+pub type BufferIdCred = LakeBuffer<192>; // variable size, can contain either the contents of a BufferCred or a BufferKid
 pub type BytesKeyEC2 = [u8; 32];
 
 #[derive(Clone, Debug)]

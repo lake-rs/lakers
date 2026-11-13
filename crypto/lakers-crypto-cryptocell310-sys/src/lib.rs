@@ -22,8 +22,8 @@ fn convert_array(input: &[u32]) -> [u8; SHA256_DIGEST_LEN] {
 pub struct Crypto;
 
 impl CryptoTrait for Crypto {
-    fn supported_suites(&self) -> EdhocBuffer<MAX_SUITES_LEN> {
-        EdhocBuffer::<MAX_SUITES_LEN>::new_from_slice(&[EDHOCSuite::CipherSuite2 as u8])
+    fn supported_suites(&self) -> LakeBuffer<MAX_SUITES_LEN> {
+        LakeBuffer::<MAX_SUITES_LEN>::new_from_slice(&[EDHOCSuite::CipherSuite2 as u8])
             .expect("This should never fail, as the slice is of the correct length")
     }
 
@@ -96,8 +96,8 @@ impl CryptoTrait for Crypto {
         iv: &BytesCcmIvLen,
         ad: &[u8],
         plaintext: &[u8],
-    ) -> EdhocBuffer<N> {
-        let mut output = EdhocBuffer::new();
+    ) -> LakeBuffer<N> {
+        let mut output = LakeBuffer::new();
         let mut tag: CRYS_AESCCM_Mac_Res_t = Default::default();
         let mut aesccm_key: CRYS_AESCCM_Key_t = Default::default();
         let mut aesccm_ad = [0x00u8; ENC_STRUCTURE_LEN];
@@ -141,12 +141,12 @@ impl CryptoTrait for Crypto {
         iv: &BytesCcmIvLen,
         ad: &[u8],
         ciphertext: &[u8],
-    ) -> Result<EdhocBuffer<N>, EDHOCError> {
+    ) -> Result<LakeBuffer<N>, EDHOCError> {
         let plaintext_len = ciphertext
             .len()
             .checked_sub(Tag::LEN)
             .ok_or(EDHOCError::ParsingError)?;
-        let mut output = EdhocBuffer::new();
+        let mut output = LakeBuffer::new();
         output
             .extend_reserve(plaintext_len)
             .map_err(|_| EDHOCError::ParsingError)?;
