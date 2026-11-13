@@ -20,6 +20,10 @@ Lightweight Authenticated Key Exchange (LAKE) is a new IETF standard that provid
 a [very lightweight](https://hal.science/hal-04382397/document) authenticated key exchange, ideal for usage in
 constrained scenarios, such as in Internet of Things environments.
 
+> **Note:** LAKE was previously called EDHOC (Ephemeral Diffie-Hellman Over COSE). The protocol
+> has been renamed to LAKE, and all types, functions and modules in this crate were renamed
+> accordingly.
+
 # LAKE Features
 
 - lightweight: full authenticated key exchange in as few as 101 bytes
