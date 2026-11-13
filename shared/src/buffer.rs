@@ -44,7 +44,7 @@ const fn copy_into_longer(long: &mut [u8], short: &[u8]) {
 
 #[derive(PartialEq, Debug)]
 #[repr(C)]
-pub enum EdhocBufferError {
+pub enum LakeBufferError {
     BufferAlreadyFull,
     SliceTooLong,
     SliceTooShort,
@@ -96,12 +96,12 @@ impl<const N: usize> LakeBuffer<N> {
     }
 
     #[hax_lib::ensures(|result| result.is_ok() == (slice.len() <= N))]
-    pub const fn new_from_slice(slice: &[u8]) -> Result<Self, EdhocBufferError> {
+    pub const fn new_from_slice(slice: &[u8]) -> Result<Self, LakeBufferError> {
         let mut buffer = Self::new();
         if buffer.fill_with_slice(slice).is_ok() {
             Ok(buffer)
         } else {
-            Err(EdhocBufferError::SliceTooLong)
+            Err(LakeBufferError::SliceTooLong)
         }
     }
 
@@ -142,13 +142,13 @@ impl<const N: usize> LakeBuffer<N> {
     }
 
     #[inline]
-    pub fn push(&mut self, item: u8) -> Result<(), EdhocBufferError> {
+    pub fn push(&mut self, item: u8) -> Result<(), LakeBufferError> {
         if self.len < self.content.len() {
             self.content[self.len] = item;
             self.len += 1;
             Ok(())
         } else {
-            Err(EdhocBufferError::BufferAlreadyFull)
+            Err(LakeBufferError::BufferAlreadyFull)
         }
     }
 
@@ -174,22 +174,22 @@ impl<const N: usize> LakeBuffer<N> {
     }
 
     #[hax_lib::ensures(|result| result.is_ok() == (slice.len() <= N))]
-    pub const fn fill_with_slice(&mut self, slice: &[u8]) -> Result<(), EdhocBufferError> {
+    pub const fn fill_with_slice(&mut self, slice: &[u8]) -> Result<(), LakeBufferError> {
         if slice.len() <= self.content.len() {
             copy_into_longer(&mut self.content, slice);
             self.len = slice.len();
             Ok(())
         } else {
-            Err(EdhocBufferError::SliceTooLong)
+            Err(LakeBufferError::SliceTooLong)
         }
     }
 
     #[inline]
-    pub fn extend_from_slice(&mut self, slice: &[u8]) -> Result<(), EdhocBufferError> {
+    pub fn extend_from_slice(&mut self, slice: &[u8]) -> Result<(), LakeBufferError> {
         // The strict criterion avoids the need to use checked / saturating addition, which is not
         // present in hax for usize.
         if self.len >= usize::MAX / 2 || slice.len() >= usize::MAX / 2 {
-            return Err(EdhocBufferError::SliceTooLong);
+            return Err(LakeBufferError::SliceTooLong);
         }
         let end = self.len() + slice.len();
         if end <= self.content.len() {
@@ -197,7 +197,7 @@ impl<const N: usize> LakeBuffer<N> {
             self.len += slice.len();
             Ok(())
         } else {
-            Err(EdhocBufferError::SliceTooLong)
+            Err(LakeBufferError::SliceTooLong)
         }
     }
 
@@ -214,11 +214,11 @@ impl<const N: usize> LakeBuffer<N> {
     pub fn extend_reserve(
         &mut self,
         length: usize,
-    ) -> Result<core::ops::Range<usize>, EdhocBufferError> {
+    ) -> Result<core::ops::Range<usize>, LakeBufferError> {
         // The strict criterion avoids the need to use checked / saturating addition, which is not
         // present in hax for usize.
         if self.len >= usize::MAX / 2 || length >= usize::MAX / 2 {
-            return Err(EdhocBufferError::SliceTooLong);
+            return Err(LakeBufferError::SliceTooLong);
         }
         let start = self.len;
         let end = start + length;
@@ -226,7 +226,7 @@ impl<const N: usize> LakeBuffer<N> {
             self.len = end;
             Ok(start..end)
         } else {
-            Err(EdhocBufferError::BufferAlreadyFull)
+            Err(LakeBufferError::BufferAlreadyFull)
         }
     }
 }

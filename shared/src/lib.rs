@@ -654,7 +654,7 @@ pub enum CredentialTransfer {
 }
 
 #[deprecated]
-pub type MessageBufferError = buffer::EdhocBufferError;
+pub type MessageBufferError = buffer::LakeBufferError;
 
 /// An [`LakeBuffer`] used for messages.
 pub type EdhocMessageBuffer = LakeBuffer<MAX_MESSAGE_SIZE_LEN>;
@@ -686,7 +686,7 @@ impl EADItem {
         label: u16,
         is_critical: bool,
         value_bytes: Option<&[u8]>,
-    ) -> Result<Self, EdhocBufferError> {
+    ) -> Result<Self, LakeBufferError> {
         let mut value = LakeBuffer::new();
         if let Some(value_bytes) = value_bytes {
             let mut head = CBOR_MAJOR_BYTE_STRING;
@@ -705,7 +705,7 @@ impl EADItem {
                     .unwrap();
             } else {
                 // EAD items do not grow beyond 64k
-                return Err(EdhocBufferError::SliceTooLong);
+                return Err(LakeBufferError::SliceTooLong);
             }
             value.extend_from_slice(value_bytes)?;
         };

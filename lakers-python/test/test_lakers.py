@@ -110,7 +110,7 @@ def test_buffer_error():
     initiator.prepare_message_1()
     with pytest.raises(ValueError) as err:
         _ = initiator.parse_message_2(cbor2.dumps(bytes([1] * 10000)))
-    assert str(err.value) == "Message 2 too long (EdhocBufferError::SliceTooLong)"
+    assert str(err.value) == "Message 2 too long (LakeBufferError::SliceTooLong)"
 
 def test_responder_rejects_invalid_r_length():
     with pytest.raises(ValueError) as err:

@@ -22,14 +22,14 @@ impl From<EDHOCError> for PyErr {
     }
 }
 
-impl fmt::Display for EdhocBufferError {
+impl fmt::Display for LakeBufferError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "EdhocBufferError::{:?}", self)
+        write!(f, "LakeBufferError::{:?}", self)
     }
 }
 
-impl From<EdhocBufferError> for PyErr {
-    fn from(error: EdhocBufferError) -> Self {
+impl From<LakeBufferError> for PyErr {
+    fn from(error: LakeBufferError) -> Self {
         PyValueError::new_err(error.to_string())
     }
 }
