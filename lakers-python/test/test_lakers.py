@@ -87,16 +87,16 @@ def _test_handshake(cred_r_transfer, cred_i_transfer):
     # initiator
     ead_4 = initiator.process_message_4(message_4)
 
-    i_oscore_secret = initiator.edhoc_exporter(0, [], 16)
-    i_oscore_salt = initiator.edhoc_exporter(1, [], 8)
-    r_oscore_secret = responder.edhoc_exporter(0, [], 16)
-    r_oscore_salt = responder.edhoc_exporter(1, [], 8)
+    i_oscore_secret = initiator.lake_exporter(0, [], 16)
+    i_oscore_salt = initiator.lake_exporter(1, [], 8)
+    r_oscore_secret = responder.lake_exporter(0, [], 16)
+    r_oscore_salt = responder.lake_exporter(1, [], 8)
     assert i_oscore_secret == r_oscore_secret
     assert i_oscore_salt == r_oscore_salt
 
     # test key update with context from RFC9529
-    i_prk_out_new = initiator.edhoc_key_update(CONTEXT)
-    r_prk_out_new = responder.edhoc_key_update(CONTEXT)
+    i_prk_out_new = initiator.lake_key_update(CONTEXT)
+    r_prk_out_new = responder.lake_key_update(CONTEXT)
     assert i_prk_out_new == r_prk_out_new
 
 def test_edhoc_error():

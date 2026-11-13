@@ -302,12 +302,12 @@ impl<Crypto: CryptoTrait> LakeResponderProcessedM3<Crypto> {
 }
 
 impl<Crypto: CryptoTrait> LakeResponderDone<Crypto> {
-    pub fn edhoc_exporter(&mut self, label: u8, context: &[u8], result: &mut [u8]) {
-        edhoc_exporter(&self.state, &mut self.crypto, label, context, result);
+    pub fn lake_exporter(&mut self, label: u8, context: &[u8], result: &mut [u8]) {
+        lake_exporter(&self.state, &mut self.crypto, label, context, result);
     }
 
-    pub fn edhoc_key_update(&mut self, context: &[u8]) -> [u8; SHA256_DIGEST_LEN] {
-        edhoc_key_update(&mut self.state, &mut self.crypto, context)
+    pub fn lake_key_update(&mut self, context: &[u8]) -> [u8; SHA256_DIGEST_LEN] {
+        lake_key_update(&mut self.state, &mut self.crypto, context)
     }
 }
 
@@ -506,12 +506,12 @@ impl<'a, Crypto: CryptoTrait> LakeInitiatorWaitM4<Crypto> {
 }
 
 impl<Crypto: CryptoTrait> LakeInitiatorDone<Crypto> {
-    pub fn edhoc_exporter(&mut self, label: u8, context: &[u8], result: &mut [u8]) {
-        edhoc_exporter(&self.state, &mut self.crypto, label, context, result);
+    pub fn lake_exporter(&mut self, label: u8, context: &[u8], result: &mut [u8]) {
+        lake_exporter(&self.state, &mut self.crypto, label, context, result);
     }
 
-    pub fn edhoc_key_update(&mut self, context: &[u8]) -> [u8; SHA256_DIGEST_LEN] {
-        edhoc_key_update(&mut self.state, &mut self.crypto, context)
+    pub fn lake_key_update(&mut self, context: &[u8]) -> [u8; SHA256_DIGEST_LEN] {
+        lake_key_update(&mut self.state, &mut self.crypto, context)
     }
 }
 
@@ -783,14 +783,14 @@ mod test {
 
         // derive OSCORE secret and salt at both sides and compare
         let mut i_oscore_secret = [0; 16];
-        initiator.edhoc_exporter(0u8, &[], &mut i_oscore_secret); // label is 0
+        initiator.lake_exporter(0u8, &[], &mut i_oscore_secret); // label is 0
         let mut i_oscore_salt = [0; 8];
-        initiator.edhoc_exporter(1u8, &[], &mut i_oscore_salt); // label is 1
+        initiator.lake_exporter(1u8, &[], &mut i_oscore_salt); // label is 1
 
         let mut r_oscore_secret = [0; 16];
-        responder.edhoc_exporter(0u8, &[], &mut r_oscore_secret); // label is 0
+        responder.lake_exporter(0u8, &[], &mut r_oscore_secret); // label is 0
         let mut r_oscore_salt = [0; 8];
-        responder.edhoc_exporter(1u8, &[], &mut r_oscore_salt); // label is 1
+        responder.lake_exporter(1u8, &[], &mut r_oscore_salt); // label is 1
 
         assert_eq!(i_oscore_secret, r_oscore_secret);
         assert_eq!(i_oscore_salt, r_oscore_salt);
@@ -800,8 +800,8 @@ mod test {
             0xa0, 0x11, 0x58, 0xfd, 0xb8, 0x20, 0x89, 0x0c, 0xd6, 0xbe, 0x16, 0x96, 0x02, 0xb8,
             0xbc, 0xea,
         ];
-        let i_prk_out_new = initiator.edhoc_key_update(context);
-        let r_prk_out_new = responder.edhoc_key_update(context);
+        let i_prk_out_new = initiator.lake_key_update(context);
+        let r_prk_out_new = responder.lake_key_update(context);
 
         assert_eq!(i_prk_out_new, r_prk_out_new);
     }
@@ -849,14 +849,14 @@ mod test {
         assert_eq!(i_prk_out, r_prk_out);
 
         let mut i_oscore_secret = [0; 16];
-        initiator.edhoc_exporter(0u8, &[], &mut i_oscore_secret);
+        initiator.lake_exporter(0u8, &[], &mut i_oscore_secret);
         let mut i_oscore_salt = [0; 8];
-        initiator.edhoc_exporter(1u8, &[], &mut i_oscore_salt);
+        initiator.lake_exporter(1u8, &[], &mut i_oscore_salt);
 
         let mut r_oscore_secret = [0; 16];
-        responder.edhoc_exporter(0u8, &[], &mut r_oscore_secret);
+        responder.lake_exporter(0u8, &[], &mut r_oscore_secret);
         let mut r_oscore_salt = [0; 8];
-        responder.edhoc_exporter(1u8, &[], &mut r_oscore_salt);
+        responder.lake_exporter(1u8, &[], &mut r_oscore_salt);
 
         assert_eq!(i_oscore_secret, r_oscore_secret);
         assert_eq!(i_oscore_salt, r_oscore_salt);

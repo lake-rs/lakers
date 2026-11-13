@@ -228,7 +228,7 @@ impl PyLakeInitiator {
     }
 
     /// Exports key material.
-    pub fn edhoc_exporter<'a>(
+    pub fn lake_exporter<'a>(
         &mut self,
         py: Python<'a>,
         label: u8,
@@ -237,7 +237,7 @@ impl PyLakeInitiator {
     ) -> PyResult<Bound<'a, PyBytes>> {
         let completed = self.as_mut_completed()?;
         PyBytes::new_with(py, length, |output| {
-            Ok(edhoc_exporter(
+            Ok(lake_exporter(
                 completed,
                 &mut default_crypto(),
                 label,
@@ -248,12 +248,12 @@ impl PyLakeInitiator {
     }
 
     /// Performs the key update procedure, enabling the production of new key material.
-    pub fn edhoc_key_update<'a>(
+    pub fn lake_key_update<'a>(
         &mut self,
         py: Python<'a>,
         context: Vec<u8>,
     ) -> PyResult<Bound<'a, PyBytes>> {
-        let res = edhoc_key_update(
+        let res = lake_key_update(
             self.as_mut_completed()?,
             &mut default_crypto(),
             context.as_slice(),

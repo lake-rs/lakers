@@ -200,22 +200,22 @@ impl coap_handler::Handler for EdhocHandler {
             println!("PRK_out: {:02x?}", prk_out);
 
             let mut oscore_secret = [0; 16];
-            responder.edhoc_exporter(0u8, &[], &mut oscore_secret); // label is 0
+            responder.lake_exporter(0u8, &[], &mut oscore_secret); // label is 0
             println!("OSCORE secret: {:02x?}", oscore_secret);
             let mut oscore_salt = [0; 8];
-            responder.edhoc_exporter(1u8, &[], &mut oscore_salt); // label is 1
+            responder.lake_exporter(1u8, &[], &mut oscore_salt); // label is 1
             println!("OSCORE salt: {:02x?}", oscore_salt);
 
             // context of key update is a test vector from draft-ietf-lake-traces
-            let prk_out_new = responder.edhoc_key_update(&[
+            let prk_out_new = responder.lake_key_update(&[
                 0xa0, 0x11, 0x58, 0xfd, 0xb8, 0x20, 0x89, 0x0c, 0xd6, 0xbe, 0x16, 0x96, 0x02, 0xb8,
                 0xbc, 0xea,
             ]);
             println!("PRK_out after key update: {:02x?}?", prk_out_new);
 
-            responder.edhoc_exporter(0u8, &[], &mut oscore_secret); // label is 0
+            responder.lake_exporter(0u8, &[], &mut oscore_secret); // label is 0
             println!("OSCORE secret after key update: {:02x?}", oscore_secret);
-            responder.edhoc_exporter(1u8, &[], &mut oscore_salt); // label is 1
+            responder.lake_exporter(1u8, &[], &mut oscore_salt); // label is 1
             println!("OSCORE salt after key update: {:02x?}", oscore_salt);
 
             Ok(EdhocResponse::Message3Processed)

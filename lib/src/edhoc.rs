@@ -54,7 +54,7 @@ struct VerifiedMessage3 {
     th_4: BytesHashLen,
 }
 
-pub fn edhoc_exporter(
+pub fn lake_exporter(
     state: &Completed,
     crypto: &mut impl CryptoTrait,
     label: u8,
@@ -64,7 +64,7 @@ pub fn edhoc_exporter(
     edhoc_kdf(crypto, &state.prk_exporter, label, context, result);
 }
 
-pub fn edhoc_key_update(
+pub fn lake_key_update(
     state: &mut Completed,
     crypto: &mut impl CryptoTrait,
     context: &[u8],

@@ -61,11 +61,11 @@ let initiator = initiator.verify_message_2(I, cred_i, Some(CRED_R)) ?; // I is I
 let ( mut initiator, message_3, i_prk_out) = initiator.prepare_message_3(CredentialTransfer::ByReference, & EADItem::new_empty_array()) ?; // no ead_3
 
 // derive a secret to use with OSCORE
-let oscore_secret = initiator.edhoc_exporter(0u8, & [], 16); // label is 0
+let oscore_secret = initiator.lake_exporter(0u8, & [], 16); // label is 0
 
 // update the prk_out key (context taken from draft-ietf-lake-traces)
 let context = & [0xa0, 0x11, 0x58, 0xfd, 0xb8, 0x20, 0x89, 0x0c, 0xd6, 0xbe, 0x16, 0x96, 0x02, 0xb8, 0xbc, 0xea];
-let prk_out_new = initiator.edhoc_key_update(context);
+let prk_out_new = initiator.lake_key_update(context);
 ```
 
 ### C API
