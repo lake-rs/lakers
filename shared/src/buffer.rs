@@ -50,7 +50,7 @@ pub enum LakeBufferError {
     SliceTooShort,
 }
 
-/// A fixed-size (but parameterized) buffer for EDHOC messages.
+/// A fixed-size (but parameterized) buffer for LAKE messages.
 ///
 /// Trying to have an API as similar as possible to `heapless::Vec`,
 /// so that in the future it can be hot-swappable by the application.

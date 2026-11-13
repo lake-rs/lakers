@@ -1,4 +1,4 @@
-//! Implementation of [EDHOC] (Ephemeral Diffie-Hellman Over COSE, RFC9528), a lightweight authenticated key
+//! Implementation of [LAKE] (Lightweight Authenticated Key Exchange, RFC9528), a lightweight authenticated key
 //! exchange for the Internet of Things.
 //!
 //! The crate provides a high-level interface through the [LakeInitiator] and the [LakeResponder]
@@ -7,12 +7,12 @@
 //! subject of ongoing formal verification, whereas the high-level interfaces aim for good
 //! usability.
 //!
-//! Both [LakeInitiator] and [LakeResponder] are used in a type stated way. Following the EDHOC
+//! Both [LakeInitiator] and [LakeResponder] are used in a type stated way. Following the LAKE
 //! protocol, they generate (or process) messages, progressively provide more information about
 //! their peer, and on eventually devolve into an [LakeInitiatorDone] and [LakeResponderDone],
-//! respectively, through which the EDHOC key material can be obtained.
+//! respectively, through which the LAKE key material can be obtained.
 //!
-//! [EDHOC]: https://datatracker.ietf.org/doc/html/rfc9528
+//! [LAKE]: https://datatracker.ietf.org/doc/html/rfc9528
 #![cfg_attr(not(test), no_std)]
 
 use defmt_or_log::trace;
@@ -21,7 +21,7 @@ pub use {lakers_shared::Crypto as CryptoTrait, lakers_shared::*};
 mod lake;
 pub use lake::*;
 
-/// Starting point for performing EDHOC in the role of the Initiator.
+/// Starting point for performing LAKE in the role of the Initiator.
 #[derive(Debug)]
 pub struct LakeInitiator<Crypto: CryptoTrait> {
     state: InitiatorStart,        // opaque state
@@ -65,7 +65,7 @@ pub struct LakeInitiatorDone<Crypto: CryptoTrait> {
     crypto: Crypto,
 }
 
-/// Starting point for performing EDHOC in the role of the Responder.
+/// Starting point for performing LAKE in the role of the Responder.
 #[derive(Debug)]
 pub struct LakeResponder<Crypto: CryptoTrait> {
     state: ResponderStart, // opaque state
@@ -574,7 +574,7 @@ pub fn credential_check_or_fetch(
         // 4. Is the trust model Pre-knowledge + TOFU? YES (hardcoded to YES for now)
         // 6. Validate CRED_X. Generally a CCS has to be validated only syntactically and semantically, unlike a certificate or a CWT.
         //    Is the validation successful?
-        // 5. Is the authentication credential authorized for use in the context of this EDHOC session?
+        // 5. Is the authentication credential authorized for use in the context of this LAKE session?
         // IMPL,TODO: we just skip this step for now
         // 7. Store CRED_X as valid and trusted.
         //   Pair it with consistent credential identifiers, for each supported type of credential identifier.
@@ -582,7 +582,7 @@ pub fn credential_check_or_fetch(
         id_cred_received.get_ccs()
     }
 
-    // 8. Is this authentication credential good to use in the context of this EDHOC session?
+    // 8. Is this authentication credential good to use in the context of this LAKE session?
     // IMPL,TODO: we just skip this step for now
 }
 
@@ -1003,7 +1003,7 @@ mod test_authz {
             }
         };
 
-        // ==== initialize edhoc ====
+        // ==== initialize lake ====
         let mut initiator = LakeInitiator::new(
             default_crypto(),
             LAKEMethod::StatStat,
@@ -1033,7 +1033,7 @@ mod test_authz {
             Some(acl),
         );
 
-        // ==== begin edhoc with ead-authz ====
+        // ==== begin lake with ead-authz ====
 
         let (mut device, ead_item) = device.prepare_ead_1(
             &mut default_crypto(),

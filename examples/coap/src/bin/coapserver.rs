@@ -16,7 +16,7 @@ const W_TV: &[u8] = &hex!("4E5E15AB35008C15B89E91F9F329164D4AACD53D9923672CE0019
 
 fn main() {
     env_logger::init();
-    info!("Starting EDHOC CoAP Server");
+    info!("Starting LAKE CoAP Server");
 
     let mut buf = [0; MAX_MESSAGE_SIZE_LEN];
     let socket = UdpSocket::bind("127.0.0.1:5683").unwrap();
@@ -42,7 +42,7 @@ fn main() {
 
         if path == ".well-known/edhoc" {
             println!("Received message from {}", src);
-            // This is an EDHOC message
+            // This is a LAKE message
             if request.message.payload[0] == 0xf5 {
                 let cred_r: Credential = Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
                 let responder = LakeResponder::new(
@@ -107,7 +107,7 @@ fn main() {
                 let message_3 = LakeBuffer::new_from_slice(&request.message.payload[1..]).unwrap();
                 let Ok((responder, id_cred_i, ead_3)) = responder.parse_message_3(&message_3)
                 else {
-                    println!("EDHOC error at parse_message_3: {:?}", message_3);
+                    println!("LAKE error at parse_message_3: {:?}", message_3);
                     // We don't get another chance, it's popped and can't be used any further
                     // anyway legally
                     continue;
@@ -118,7 +118,7 @@ fn main() {
                 // FIXME: instead of cloning, take by reference
                 let Ok((responder, prk_out)) = responder.verify_message_3(valid_cred_i.clone())
                 else {
-                    println!("EDHOC error at verify_message_3: {:?}", valid_cred_i);
+                    println!("LAKE error at verify_message_3: {:?}", valid_cred_i);
                     continue;
                 };
                 let (mut responder, message_4) =
@@ -126,7 +126,7 @@ fn main() {
                 // send empty ack back
                 response.message.payload = Vec::from(message_4.as_slice());
 
-                println!("EDHOC exchange successfully completed");
+                println!("LAKE exchange successfully completed");
                 println!("PRK_out: {:02x?}", prk_out);
 
                 let mut oscore_secret = [0; 16];

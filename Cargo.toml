@@ -37,7 +37,7 @@ version = "0.8.0"
 repository = "https://github.com/lake-rs/lakers/"
 license = "BSD-3-Clause"
 readme = "shared/README.md"
-keywords = ["iot", "security", "protocol", "crypto", "edhoc"]
+keywords = ["iot", "security", "protocol", "crypto", "lake"]
 categories = [ "no-std::no-alloc", "network-programming", "embedded" ]
 
 [workspace.dependencies]

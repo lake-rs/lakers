@@ -359,7 +359,7 @@ pub fn i_verify_message_2(
     i: InitiatorIdentity, // I's static private DH key when required by method
 ) -> Result<ProcessedM2, LAKEError> {
     // The overall verification flow is shared across methods, but `prk_3e2m`,
-    // `th_3`, and `prk_4e3m` still depend on the EDHOC method, so the match keeps
+    // `th_3`, and `prk_4e3m` still depend on the LAKE method, so the match keeps
     // the method-specific derivation in the child modules and only shares the final
     // `ProcessedM2` assembly here.
     let verified = match (&state.method_specifics, &i) {
@@ -540,7 +540,7 @@ fn compute_th_3(
     hash.finalize().into()
 }
 
-// TH_4 depends on the EDHOC method: STAT uses plaintext_3 directly, while
+// TH_4 depends on the LAKE method: STAT uses plaintext_3 directly, while
 // PSK uses the tuple ID_CRED_PSK || EAD_3 || CRED_I || CRED_R. We model
 // these as enum variants to keep the method-specific inputs explicit.
 enum Th4Input<'a> {
@@ -679,7 +679,7 @@ fn build_external_aad(
 }
 
 // FIXME: The encoded Enc_structure is no longer a fixed-size array because the
-// external_aad depends on the EDHOC method, so we return an `LakeBuffer`.
+// external_aad depends on the LAKE method, so we return a `LakeBuffer`.
 fn encode_enc_structure(external_aad: &[u8]) -> Result<LakeBuffer<MAX_BUFFER_LEN>, LAKEError> {
     let encrypt0 = b"Encrypt0";
     let mut enc_structure = LakeBuffer::<MAX_BUFFER_LEN>::new();
@@ -736,10 +736,10 @@ fn compute_k_3_iv_3(
     prk_3e2m: &BytesHashLen,
     th_3: &BytesHashLen,
 ) -> (BytesCcmKeyLen, BytesCcmIvLen) {
-    // K_3 = EDHOC-KDF( PRK_3e2m, 3, TH_3,      key_length )
+    // K_3 = LAKE-KDF( PRK_3e2m, 3, TH_3,      key_length )
     let k_3: BytesCcmKeyLen = lake_kdf_owned(crypto, prk_3e2m, 3u8, th_3);
 
-    // IV_3 = EDHOC-KDF( PRK_3e2m, 4, TH_3,      iv_length )
+    // IV_3 = LAKE-KDF( PRK_3e2m, 4, TH_3,      iv_length )
     let iv_3: BytesCcmIvLen = lake_kdf_owned(crypto, prk_3e2m, 4u8, th_3);
 
     (k_3, iv_3)
@@ -750,13 +750,13 @@ fn compute_k_4_iv_4(
     prk_4e3m: &BytesHashLen,
     th_4: &BytesHashLen,
 ) -> (BytesCcmKeyLen, BytesCcmIvLen) {
-    // K_4 = EDHOC-KDF( PRK_4e3m, ?? , TH_4,      key_length )
+    // K_4 = LAKE-KDF( PRK_4e3m, ?? , TH_4,      key_length )
     let k_4: BytesCcmKeyLen = lake_kdf_owned(
         crypto, prk_4e3m, 8u8, // FIXME
         th_4,
     );
 
-    // IV_3 = EDHOC-KDF( PRK_4e3m, ?? , TH_4,      iv_length )
+    // IV_3 = LAKE-KDF( PRK_4e3m, ?? , TH_4,      iv_length )
     let iv_4: BytesCcmIvLen = lake_kdf_owned(crypto, prk_4e3m, 9u8, th_4);
 
     (k_4, iv_4)
@@ -942,7 +942,7 @@ fn compute_mac_3(
     cred_i: &[u8],
     ead_3: &EadItems,
 ) -> BytesMac3 {
-    // MAC_3 = EDHOC-KDF( PRK_4e3m, 6, context_3, mac_length_3 )
+    // MAC_3 = LAKE-KDF( PRK_4e3m, 6, context_3, mac_length_3 )
     let context = encode_kdf_context(None, id_cred_i, th_3, cred_i, ead_3);
 
     // compute mac_3
@@ -966,7 +966,7 @@ fn compute_mac_2(
     // compute MAC_2
     let context = encode_kdf_context(Some(c_r), id_cred_r, th_2, cred_r, ead_2);
 
-    // MAC_2 = EDHOC-KDF( PRK_3e2m, 2, context_2, mac_length_2 )
+    // MAC_2 = LAKE-KDF( PRK_3e2m, 2, context_2, mac_length_2 )
     lake_kdf_owned(crypto, prk_3e2m, 2_u8, context.as_slice())
 }
 
@@ -1019,7 +1019,7 @@ fn encrypt_decrypt_ciphertext_2(
     th_2: &BytesHashLen,
     ciphertext_2: &BufferCiphertext2,
 ) -> BufferCiphertext2 {
-    // KEYSTREAM_2 = EDHOC-KDF( PRK_2e,   0, TH_2,      plaintext_length )
+    // KEYSTREAM_2 = LAKE-KDF( PRK_2e,   0, TH_2,      plaintext_length )
     let mut keystream_2 = BufferCiphertext2::new();
     let range = keystream_2.extend_reserve(ciphertext_2.len()).unwrap();
     // FIXME can we do this w/o having a full message on the stack?
@@ -1039,7 +1039,7 @@ fn encrypt_decrypt_ciphertext_3a(
     th_3: &BytesHashLen,
     ciphertext_3a: &BufferCiphertext2,
 ) -> BufferCiphertext2 {
-    // KEYSTREAM_3 = EDHOC-KDF( PRK_2e,   0, TH_2,      plaintext_length )
+    // KEYSTREAM_3 = LAKE-KDF( PRK_2e,   0, TH_2,      plaintext_length )
     let mut keystream_3 = BufferCiphertext3::new();
     let range = keystream_3.extend_reserve(ciphertext_3a.len()).unwrap();
     #[allow(deprecated, reason = "using extend_reserve")]
@@ -1127,7 +1127,7 @@ mod tests {
     use lakers_crypto::default_crypto;
     // test vectors (TV)
 
-    // EDHOC-PSK
+    // LAKE-PSK
     const METHOD_PSK_TV: LAKEMethod = LAKEMethod::PSK; //0x04;
     const SUITES_I_PSK_TV: LakeBuffer<MAX_SUITES_LEN> = LakeBuffer::new_from_array(&hex!("02"));
     // === Initiator ephemeral private key X ===

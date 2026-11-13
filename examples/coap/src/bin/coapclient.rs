@@ -19,7 +19,7 @@ const _G_R: &[u8] = &hex!("bbc34960526ea4d32e940cad2a234148ddc21791a12afbcbac936
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     env_logger::init();
-    info!("Starting EDHOC CoAP Client");
+    info!("Starting LAKE CoAP Client");
     match client_handshake().await {
         Ok(_) => println!("Handshake completed"),
         Err(e) => panic!("Handshake failed with error: {:?}", e),
@@ -41,7 +41,7 @@ async fn client_handshake() -> Result<(), LAKEError> {
     );
 
     // Send Message 1 over CoAP and convert the response to byte
-    let mut msg_1_buf = Vec::from([0xf5u8]); // EDHOC message_1 when transported over CoAP is prepended with CBOR true
+    let mut msg_1_buf = Vec::from([0xf5u8]); // LAKE message_1 when transported over CoAP is prepended with CBOR true
     let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
     let (initiator, message_1) = initiator.prepare_message_1(Some(c_i), &EadItems::new())?;
     msg_1_buf.extend_from_slice(message_1.as_slice());
@@ -85,7 +85,7 @@ async fn client_handshake() -> Result<(), LAKEError> {
     let (mut initiator, ead_4) = initiator.process_message_4(&message_4).unwrap();
     ead_4.processed_critical_items().unwrap();
 
-    println!("EDHOC exchange successfully completed");
+    println!("LAKE exchange successfully completed");
     println!("PRK_out: {:02x?}", prk_out);
 
     let mut oscore_secret = [0; 16];

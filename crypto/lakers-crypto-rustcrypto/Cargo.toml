@@ -4,7 +4,7 @@ version.workspace = true
 edition = "2021"
 authors = [ "Christian Amsüss <chrysn@fsfe.org>" ]
 license.workspace = true
-description = "EDHOC crypto library backend based on the RustCrypto crates"
+description = "LAKE crypto library backend based on the RustCrypto crates"
 repository.workspace = true
 readme.workspace = true
 

@@ -7,7 +7,7 @@ use lakers_shared::{Crypto as CryptoTrait, *};
 #[derive(Default, Debug)]
 #[repr(C)]
 pub struct ZeroTouchDevice {
-    pub id_u: LakeMessageBuffer, // identifier of the device (U), equivalent to ID_CRED_I in EDHOC
+    pub id_u: LakeMessageBuffer, // identifier of the device (U), equivalent to ID_CRED_I in LAKE
     pub g_w: BytesP256ElemLen,   // public key of the enrollment server (W)
     pub loc_w: LakeMessageBuffer, // address of the enrollment server (W)
 }
@@ -38,7 +38,7 @@ impl ZeroTouchDevice {
         ss: u8,
     ) -> (ZeroTouchDeviceWaitEAD2, EADItem) {
         trace!("Enter prepare_ead_1");
-        // PRK = EDHOC-Extract(salt, IKM)
+        // PRK = LAKE-Extract(salt, IKM)
         let prk = compute_prk_from_secret(crypto, &secret);
 
         // plaintext = (ID_U: bstr)

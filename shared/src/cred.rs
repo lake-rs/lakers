@@ -184,7 +184,7 @@ impl IdCred {
     }
 }
 
-/// A credential for use in EDHOC.
+/// A credential for use in LAKE.
 ///
 /// For now supports CCS credentials only.
 /// Experimental support for CCS_PSK credentials is also available.

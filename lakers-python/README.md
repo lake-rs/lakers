@@ -13,7 +13,7 @@ import lakers
 # generate a keypair
 lakers.p256_generate_key_pair()
 
-# instantiate a initiator and prepare EDHOC's message 1
+# instantiate a initiator and prepare LAKE's message 1
 initiator = lakers.LakeInitiator()
 message_1 = initiator.prepare_message_1(c_i=None, ead_1=None)
 

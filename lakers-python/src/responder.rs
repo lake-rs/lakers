@@ -5,7 +5,7 @@ use pyo3::{prelude::*, types::PyBytes};
 
 use super::{ErrExt as _, StateMismatch};
 
-/// An implementation of the EDHOC protocol for the responder side.
+/// An implementation of the LAKE protocol for the responder side.
 #[pyclass(name = "LakeResponder")]
 pub struct PyLakeResponder {
     r: Vec<u8>,

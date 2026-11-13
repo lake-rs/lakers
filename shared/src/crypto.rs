@@ -32,7 +32,7 @@ pub fn prepare_suites_i(
 /// implementations that can only perform a single operation at a time.
 ///
 /// Many implementations will have a Default constructor or will be Clone (even Copy); either
-/// facilitates storing multiple EDHOC exchanges at a time. When neither is an option, the
+/// facilitates storing multiple LAKE exchanges at a time. When neither is an option, the
 /// remaining options are to wrap a Crypto implementation into interior mutability using the
 /// platform's mutex, or to refactor the main initiator and responder objects into a form where the
 /// cryptography implementation can be taken out and stored separately.

@@ -1,6 +1,6 @@
 use crate::{LakeBuffer, LakeBufferError, MAX_PSK_LEN, MIN_PSK_LEN};
 
-/// A pre-shared key for the EDHOC PSK method.
+/// A pre-shared key for the LAKE PSK method.
 ///
 /// This wraps an [`LakeBuffer`] rather than being an alias for one, so that the key material is
 /// covered by two guarantees that a bare buffer cannot give:

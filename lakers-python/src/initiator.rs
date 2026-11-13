@@ -7,7 +7,7 @@ use pyo3::{prelude::*, types::PyBytes};
 use super::{ErrExt as _, StateMismatch};
 use crate::parse_credential;
 
-/// An implementation of the EDHOC protocol for the initiator side.
+/// An implementation of the LAKE protocol for the initiator side.
 #[pyclass(name = "LakeInitiator")]
 pub struct PyLakeInitiator {
     cred_i: Option<Credential>,
@@ -203,7 +203,7 @@ impl PyLakeInitiator {
     /// Declares the protocol to have completed without the need of a message 4.
     ///
     /// Key material can be extracted after this point, but some properties of the protocol only
-    /// hold when non-EDHOC messages protected with the extracted key material are received from
+    /// hold when non-LAKE messages protected with the extracted key material are received from
     /// the peer.
     pub fn completed_without_message_4<'a>(&mut self) -> PyResult<()> {
         let state = i_complete_without_message_4(&self.take_wait_m4()?)?;

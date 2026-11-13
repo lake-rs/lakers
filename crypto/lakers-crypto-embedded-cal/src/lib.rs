@@ -1,4 +1,4 @@
-//! EDHOC crypto backend backed by the [`embedded-cal`](embedded_cal) Cryptographic Abstraction
+//! LAKE crypto backend backed by the [`embedded-cal`](embedded_cal) Cryptographic Abstraction
 //! Layer.
 //!
 //! [`Crypto`] is generic over any [`embedded_cal::Cal`] instance. This lets lakers use

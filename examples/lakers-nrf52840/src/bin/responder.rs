@@ -108,7 +108,7 @@ async fn main(_spawner: Spawner) {
                         let Ok((responder, id_cred_i, _ead_3)) =
                             responder.parse_message_3(&message_3)
                         else {
-                            info!("EDHOC error at parse_message_3");
+                            info!("LAKE error at parse_message_3");
                             // We don't get another chance, it's popped and can't be used any further
                             // anyway legally
                             continue;
@@ -120,7 +120,7 @@ async fn main(_spawner: Spawner) {
                             credential_check_or_fetch(Some(cred_i), id_cred_i).unwrap();
                         let Ok((responder, r_prk_out)) = responder.verify_message_3(valid_cred_i)
                         else {
-                            info!("EDHOC error at parse_message_3");
+                            info!("LAKE error at parse_message_3");
                             continue;
                         };
 
@@ -155,7 +155,7 @@ async fn main(_spawner: Spawner) {
 #[embassy_executor::task]
 async fn example_application_task(secret: BytesHashLen) {
     info!(
-        "Successfully spawned an application task. EDHOC prk_out: {:X}",
+        "Successfully spawned an application task. LAKE prk_out: {:X}",
         secret
     );
 }

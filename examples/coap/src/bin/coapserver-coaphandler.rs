@@ -36,9 +36,9 @@ fn too_small(_e: LakeBufferError) -> Error {
     Error::bad_request()
 }
 
-/// Render an LAKEError into the common Error type.
+/// Render a LAKEError into the common Error type.
 ///
-/// It is yet to be decided based on the EDHOC specification which LAKEError values would be
+/// It is yet to be decided based on the LAKE specification which LAKEError values would be
 /// reported with precise data, and which should rather produce a generic response.
 ///
 /// Places using this function may be simplified if From/Into is specified (possibly after
@@ -60,7 +60,7 @@ impl LakeHandler {
 
     fn new_c_r(&self) -> ConnId {
         // FIXME: We'll need to do better, but a) that'll be more practical when we can do more
-        // than u8, and b) that'll best be coordinated with a storage that not only stores EDHOC
+        // than u8, and b) that'll best be coordinated with a storage that not only stores LAKE
         // contexts but also OSCORE ones.
         let result = self.connections.len();
         if result >= 24 {
@@ -159,7 +159,7 @@ impl coap_handler::Handler for LakeHandler {
             let (c_r_rcvd, message_3) = request
                 .payload()
                 .split_first()
-                // FIXME: Being way too short, is that an EDHOC error or a CoAP error?
+                // FIXME: Being way too short, is that a LAKE error or a CoAP error?
                 .ok_or_else(Error::bad_request)?;
 
             // FIXME: This panics or creates an in valid ConnId (but once we fix
@@ -177,7 +177,7 @@ impl coap_handler::Handler for LakeHandler {
             let message_3 = LakeBuffer::new_from_slice(&message_3).map_err(too_small)?;
             let result = responder.parse_message_3(&message_3);
             let (responder, id_cred_i, ead_3) = result.map_err(|e| {
-                println!("EDHOC processing error: {:?}", e);
+                println!("LAKE processing error: {:?}", e);
                 render_error(e)
             })?;
             ead_3.processed_critical_items().map_err(|e| {
@@ -190,13 +190,13 @@ impl coap_handler::Handler for LakeHandler {
             let valid_cred_i =
                 credential_check_or_fetch(Some(cred_i), id_cred_i).map_err(render_error)?;
             let (responder, prk_out) = responder.verify_message_3(valid_cred_i).map_err(|e| {
-                println!("EDHOC processing error: {:?}", e);
+                println!("LAKE processing error: {:?}", e);
                 render_error(e)
             })?;
 
             let (mut responder, _message_4) =
                 responder.prepare_message_4(&EadItems::new()).unwrap();
-            println!("EDHOC exchange successfully completed");
+            println!("LAKE exchange successfully completed");
             println!("PRK_out: {:02x?}", prk_out);
 
             let mut oscore_secret = [0; 16];

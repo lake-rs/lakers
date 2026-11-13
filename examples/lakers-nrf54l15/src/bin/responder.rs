@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 
-//! EDHOC Responder on the nRF54L15.
+//! LAKE Responder on the nRF54L15.
 
 use defmt::info;
 use lakers::*;

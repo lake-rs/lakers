@@ -1,5 +1,5 @@
 =======================================================
-lakers -- An implementation of EDHOC (RFC 9528) in Rust
+lakers -- An implementation of LAKE (RFC 9528) in Rust
 =======================================================
 
 This is the documentation of the Python bindings for Lakers,

@@ -12,22 +12,22 @@
 
 [docs.rs]: https://docs.rs/lakers
 
-An implementation of [EDHOC (RFC 9528)](https://datatracker.ietf.org/doc/html/rfc9528) in Rust.
+An implementation of [LAKE (RFC 9528)](https://datatracker.ietf.org/doc/html/rfc9528) in Rust.
 
-# What is EDHOC?
+# What is LAKE?
 
-Ephemeral Diffie-Hellman Over COSE (EDHOC) is a new IETF standard that provides
+Lightweight Authenticated Key Exchange (LAKE) is a new IETF standard that provides
 a [very lightweight](https://hal.science/hal-04382397/document) authenticated key exchange, ideal for usage in
 constrained scenarios, such as in Internet of Things environments.
 
-# EDHOC Features
+# LAKE Features
 
 - lightweight: full authenticated key exchange in as few as 101 bytes
 - secure: mutual authentication, forward secrecy, and identity protection
-- transport-agnostic: can be used on scenarios with or without IP connectivity; a common way to transport EDHOC
+- transport-agnostic: can be used on scenarios with or without IP connectivity; a common way to transport LAKE
   is [over reliable CoAP](https://www.rfc-editor.org/rfc/rfc9528.html#coap)
 - code re-use: achieved due to re-using technologies common in IoT scenarios, such as COSE, CBOR, and CoAP
-- finally, a main use case of EDHOC is to establish an [OSCORE](https://datatracker.ietf.org/doc/rfc8613/) security
+- finally, a main use case of LAKE is to establish an [OSCORE](https://datatracker.ietf.org/doc/rfc8613/) security
   context
 
 # lakers features
@@ -36,7 +36,7 @@ constrained scenarios, such as in Internet of Things environments.
 - microcontroller-optimized: `no_std`, no heap allocations, zero-dependencies (other than crypto backends)
 - configurable crypto backends
 - bindings for [C](https://github.com/lake-rs/lakers/releases/) and [Python](https://pypi.org/project/lakers-python/)
-- support for EDHOC extensions,
+- support for LAKE extensions,
   including [zero-touch authorization](https://datatracker.ietf.org/doc/draft-ietf-lake-authz/)
 
 It currently supports authentication mode STAT-STAT and Cipher Suite 2 (AES-CCM-16-64-128, SHA-256, 8, P-256, ES256,
@@ -96,7 +96,7 @@ cargo test
 available features and how to select them for several configurations of build and test,
 check [the Github Actions file](./.github/workflows/rust.yml).
 
-## Example: EDHOC over CoAP on native host
+## Example: LAKE over CoAP on native host
 
 In one terminal, run an example CoAP server:
 
@@ -110,11 +110,11 @@ In another one, run the client:
 cargo run --bin coapclient
 ```
 
-In the output you should find the EDHOC handshake messages and the derived OSCORE secret/salt.
+In the output you should find the LAKE handshake messages and the derived OSCORE secret/salt.
 
 The source code for these examples is at `examples/coap/src/bin`.
 
-## Example: EDHOC on nRF52840 device with different crypto backends
+## Example: LAKE on nRF52840 device with different crypto backends
 
 To build an example application that works on
 the [nrf52840dk](https://www.nordicsemi.com/Products/Development-hardware/nrf52840-dk), do as follows:
@@ -162,9 +162,9 @@ DEFMT_LOG=trace,lakers=info cargo run --bin initiator
 This library is structured as a [cargo workspace](https://doc.rust-lang.org/book/ch14-03-cargo-workspaces.html).
 Its main members are:
 
-- `lib`: The main library providing the EDHOC implementation.
+- `lib`: The main library providing the LAKE implementation.
 - `crypto`: Diferent cryptographic backends (e.g. psa, cryptocell310, rustcrypto).
-- `ead`: Implementation of extensions to EDHOC via the External Authorization Data (EAD) field.
+- `ead`: Implementation of extensions to LAKE via the External Authorization Data (EAD) field.
 - `shared`: Defines shared structs and modules used throughout the workspace members.
 - `lakers-c`: Provides a foreign function interface that enables using `lakers` from C code.
 - `lakers-python`: API for using `lakers` in Python.
@@ -172,7 +172,7 @@ Its main members are:
 
 # Why the name?
 
-The EDHOC protocol was created by the IETF [LAKE](https://datatracker.ietf.org/wg/lake/about/) (Lightweight
+The LAKE protocol was created by the IETF [LAKE](https://datatracker.ietf.org/wg/lake/about/) (Lightweight
 Authenticated Key Exchange) Working Group, and one of the maintainers is a basketball fan :)
 
 # License

@@ -415,7 +415,7 @@ impl From<LAKESuite> for u8 {
 #[non_exhaustive]
 pub enum LAKEError {
     /// In an exchange, a credential was set as "expected", but the credential configured by the
-    /// peer did not match what was presented. This is more an application internal than an EDHOC
+    /// peer did not match what was presented. This is more an application internal than a LAKE
     /// error: When the application sets the expected credential, that process should be informed
     /// by the known details.
     UnexpectedCredential,
@@ -441,7 +441,7 @@ pub enum LAKEError {
     /// otherwise erroneous.
     EADUnprocessable,
     /// The credential or EADs could be processed (possibly by a third party), but the decision
-    /// based on that was to not to continue the EDHOC session.
+    /// based on that was to not to continue the LAKE session.
     ///
     /// See also
     /// <https://datatracker.ietf.org/doc/html/draft-ietf-lake-authz#name-edhoc-error-access-denied>
@@ -456,7 +456,7 @@ impl LAKEError {
     /// of the parser, and a constrained system can not be expected to differentiate between "the
     /// standard allows this but my number space is too small" and "this violates the standard".
     ///
-    /// If an LAKEError is returned through EDHOC, it will use this in its EDHOC error message.
+    /// If a LAKEError is returned through LAKE, it will use this in its LAKE error message.
     ///
     /// Note that this on its own is insufficient to create an error message: Additional ERR_INFO
     /// is needed, which may or may not be available with the LAKEError alone.
@@ -483,7 +483,7 @@ impl LAKEError {
     }
 }
 
-/// Representation of an EDHOC ERR_CODE
+/// Representation of a LAKE ERR_CODE
 #[repr(C)]
 pub struct ErrCode(pub NonZeroI16);
 
@@ -540,7 +540,7 @@ pub struct WaitM3 {
     pub th_3: BytesHashLen,
 }
 
-/// Method-specific details required to prepare EDHOC message_2.
+/// Method-specific details required to prepare LAKE message_2.
 #[derive(Copy, Clone, Debug)]
 pub enum PrepareMessage2Details<'a> {
     StatStat {

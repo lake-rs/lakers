@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 
-//! EDHOC Initiator on the nRF54L15.
+//! LAKE Initiator on the nRF54L15.
 
 use defmt::info;
 use lakers::*;

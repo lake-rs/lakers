@@ -38,11 +38,11 @@ pub(crate) fn compute_k_1_iv_1<Crypto: CryptoTrait>(
     crypto: &mut Crypto,
     prk: &BytesHashLen,
 ) -> (BytesCcmKeyLen, BytesCcmIvLen) {
-    // K_1 = EDHOC-Expand(PRK, info = (0, h'', AES_CCM_KEY_LEN), length)
+    // K_1 = LAKE-Expand(PRK, info = (0, h'', AES_CCM_KEY_LEN), length)
     let mut k_1: BytesCcmKeyLen = [0x00; AES_CCM_KEY_LEN];
     lake_kdf_expand(crypto, prk, EAD_AUTHZ_INFO_K_1_LABEL, &[], &mut k_1[..]);
 
-    // IV_1 = EDHOC-Expand(PRK, info = (1, h'', AES_CCM_IV_LEN), length)
+    // IV_1 = LAKE-Expand(PRK, info = (1, h'', AES_CCM_IV_LEN), length)
     let mut iv_1: BytesCcmIvLen = [0x00; AES_CCM_IV_LEN];
     lake_kdf_expand(crypto, prk, EAD_AUTHZ_INFO_IV_1_LABEL, &[], &mut iv_1[..]);
 
