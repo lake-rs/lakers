@@ -43,9 +43,9 @@ static coap_response_t message_handler(coap_session_t *session COAP_UNUSED,
     return COAP_RESPONSE_OK;
 }
 
-int coap_send_edhoc_message(uint8_t *edhoc_msg, size_t edhoc_msg_len, uint8_t value_to_prepend)
+int coap_send_lake_message(uint8_t *lake_msg, size_t lake_msg_len, uint8_t value_to_prepend)
 {
-    printf("sending coap message of size %zu+1\n", edhoc_msg_len);
+    printf("sending coap message of size %zu+1\n", lake_msg_len);
     coap_pdu_t *pdu = coap_pdu_init(COAP_MESSAGE_CON,
                                     COAP_REQUEST_CODE_POST,
                                     coap_new_message_id(session),
@@ -54,9 +54,9 @@ int coap_send_edhoc_message(uint8_t *edhoc_msg, size_t edhoc_msg_len, uint8_t va
     coap_add_option(pdu, COAP_OPTION_URI_PATH, 5, (const uint8_t *)"edhoc");
     uint8_t payload[MAX_MESSAGE_SIZE_LEN];
     payload[0] = value_to_prepend;
-    memcpy(payload + 1, edhoc_msg, edhoc_msg_len);
-    print_hex(payload, edhoc_msg_len+1);
-    coap_add_data(pdu, edhoc_msg_len + 1, payload);
+    memcpy(payload + 1, lake_msg, lake_msg_len);
+    print_hex(payload, lake_msg_len+1);
+    coap_add_data(pdu, lake_msg_len + 1, payload);
     // coap_show_pdu(COAP_LOG_WARN, pdu);
     if (coap_send(session, pdu) == COAP_INVALID_MID)
     {
@@ -111,11 +111,11 @@ int main(void)
         puts("Error loading responder PSK credential.");
         return 1;
     }
-    puts("creating edhoc initiator.");
+    puts("creating lake initiator.");
     LakeInitiator initiator = {0};
     initiator_new(&initiator, PSK);
 
-    puts("Begin test: edhoc initiator.");
+    puts("Begin test: lake initiator.");
     LakeMessageBuffer message_1 = {0};
 
     int res = initiator_prepare_message_1(&initiator, NULL, NULL, &message_1);
@@ -127,7 +127,7 @@ int main(void)
     print_hex(message_1.content, message_1.len);
 
     puts("sending msg1");
-    coap_send_edhoc_message(message_1.content, message_1.len, 0xf5);
+    coap_send_lake_message(message_1.content, message_1.len, 0xf5);
 
     puts("processing msg2");
     LakeMessageBuffer message_2 = {.len = coap_response_payload_len};
@@ -163,7 +163,7 @@ int main(void)
     print_hex(message_3.content, message_3.len);
 
     puts("sending msg3");
-    coap_send_edhoc_message(message_3.content, message_3.len, c_r);
+    coap_send_lake_message(message_3.content, message_3.len, c_r);
 
     puts("processing msg4");
     LakeMessageBuffer message_4 = {.len = coap_response_payload_len};

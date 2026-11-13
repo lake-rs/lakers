@@ -36,7 +36,7 @@ fn main() -> ! {
         let message_1: LakeMessageBuffer = pckt.payload().try_into().expect("wrong length");
 
         let Ok((responder, _c_i, _ead_1)) = responder.process_message_1(&message_1) else {
-            info!("edhoc error at process_message_1");
+            info!("lake error at process_message_1");
             continue;
         };
 
@@ -60,14 +60,14 @@ fn main() -> ! {
         // the packet was filtered on c_r, so its header byte matches by construction
         let message_3: LakeMessageBuffer = pckt_3.payload().try_into().expect("wrong length");
         let Ok((responder, id_cred_i, _ead_3)) = responder.parse_message_3(&message_3) else {
-            info!("edhoc error at parse_message_3");
+            info!("lake error at parse_message_3");
             continue;
         };
 
         let cred_i = Credential::parse_ccs(CRED_I.try_into().unwrap()).unwrap();
         let valid_cred_i = credential_check_or_fetch(Some(cred_i), id_cred_i).unwrap();
         let Ok((responder, r_prk_out)) = responder.verify_message_3(valid_cred_i) else {
-            info!("edhoc error at verify_message_3");
+            info!("lake error at verify_message_3");
             continue;
         };
 

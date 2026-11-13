@@ -18,7 +18,7 @@ fn main() {
     let socket = UdpSocket::bind("127.0.0.1:5683").unwrap();
     // let socket = UdpSocket::bind("0.0.0.0:5683").unwrap(); // Listen on all available network interfaces
 
-    let mut edhoc_connections = Vec::new();
+    let mut lake_connections = Vec::new();
 
     println!("Waiting for CoAP messages...");
     loop {
@@ -62,8 +62,8 @@ fn main() {
                         )
                         .unwrap();
                     response.message.payload = Vec::from(message_2.as_slice());
-                    // save edhoc connection
-                    edhoc_connections.push((c_r, responder));
+                    // save lake connection
+                    lake_connections.push((c_r, responder));
                     println!("message_2 : {:02x?}", message_2.as_slice());
                 } else {
                     println!("msg1 err");
@@ -75,7 +75,7 @@ fn main() {
                 println!("Received message 3");
                 #[allow(deprecated)]
                 let c_r_rcvd = ConnId::from_int_raw(request.message.payload[0]);
-                let responder = take_state(c_r_rcvd, &mut edhoc_connections).unwrap();
+                let responder = take_state(c_r_rcvd, &mut lake_connections).unwrap();
 
                 println!("Found state with connection identifier {:?}", c_r_rcvd);
                 let message_3 =
@@ -160,14 +160,14 @@ fn main() {
 
 fn take_state<R>(
     c_r_rcvd: ConnId,
-    edhoc_protocol_states: &mut Vec<(ConnId, R)>,
+    lake_protocol_states: &mut Vec<(ConnId, R)>,
 ) -> Result<R, &'static str> {
-    for (i, element) in edhoc_protocol_states.iter().enumerate() {
+    for (i, element) in lake_protocol_states.iter().enumerate() {
         let (c_r, _responder) = element;
         if *c_r == c_r_rcvd {
-            let max_index = edhoc_protocol_states.len() - 1;
-            edhoc_protocol_states.swap(i, max_index);
-            let Some((_c_r, responder)) = edhoc_protocol_states.pop() else {
+            let max_index = lake_protocol_states.len() - 1;
+            lake_protocol_states.swap(i, max_index);
+            let Some((_c_r, responder)) = lake_protocol_states.pop() else {
                 unreachable!();
             };
             return Ok(responder);

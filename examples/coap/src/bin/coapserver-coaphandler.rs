@@ -20,7 +20,7 @@ const R: &[u8] = &hex!("72cc4761dbd4c78f758931aa589d348d1ef874a7e303ede2f140dcf3
 const W_TV: &[u8] = &hex!("4E5E15AB35008C15B89E91F9F329164D4AACD53D9923672CE0019F9ACD98573F");
 
 #[derive(Debug)]
-struct EdhocHandler {
+struct LakeHandler {
     connections: Vec<(ConnId, LakeResponderWaitM3<Crypto>)>,
     mock_server: ZeroTouchServer,
 }
@@ -47,7 +47,7 @@ fn render_error(_e: LAKEError) -> Error {
     Error::bad_request()
 }
 
-impl EdhocHandler {
+impl LakeHandler {
     fn take_connection_by_c_r(&mut self, c_r: ConnId) -> Option<LakeResponderWaitM3<Crypto>> {
         let index = self
             .connections
@@ -71,7 +71,7 @@ impl EdhocHandler {
     }
 }
 
-enum EdhocResponse {
+enum LakeResponse {
     // We could also store the responder in the Vec (once we're done rendering the response, we'll
     // take up a slot there anyway) if we make it an enum.
     OkSend2 {
@@ -87,8 +87,8 @@ enum EdhocResponse {
     Message3Processed,
 }
 
-impl coap_handler::Handler for EdhocHandler {
-    type RequestData = EdhocResponse;
+impl coap_handler::Handler for LakeHandler {
+    type RequestData = LakeResponse;
 
     type ExtractRequestError = Error;
     type BuildResponseError<M: MinimalWritableMessage> = M::UnionError;
@@ -147,7 +147,7 @@ impl coap_handler::Handler for EdhocHandler {
             ead_1.processed_critical_items().map_err(render_error)?;
 
             let c_r = self.new_c_r();
-            Ok(EdhocResponse::OkSend2 {
+            Ok(LakeResponse::OkSend2 {
                 c_r,
                 responder,
                 ead_2,
@@ -218,7 +218,7 @@ impl coap_handler::Handler for EdhocHandler {
             responder.lake_exporter(1u8, &[], &mut oscore_salt); // label is 1
             println!("OSCORE salt after key update: {:02x?}", oscore_salt);
 
-            Ok(EdhocResponse::Message3Processed)
+            Ok(LakeResponse::Message3Processed)
         }
     }
     fn estimate_length(&mut self, _: &Self::RequestData) -> usize {
@@ -231,7 +231,7 @@ impl coap_handler::Handler for EdhocHandler {
     ) -> Result<(), Self::BuildResponseError<M>> {
         response.set_code(M::Code::new(coap_numbers::code::CHANGED)?);
         match req {
-            EdhocResponse::OkSend2 {
+            LakeResponse::OkSend2 {
                 c_r,
                 responder,
                 ead_2,
@@ -242,7 +242,7 @@ impl coap_handler::Handler for EdhocHandler {
                 self.connections.push((c_r, responder));
                 response.set_payload(message_2.as_slice())?;
             }
-            EdhocResponse::Message3Processed => (), // "send empty ack back"?
+            LakeResponse::Message3Processed => (), // "send empty ack back"?
         };
         Ok(())
     }
@@ -259,13 +259,13 @@ fn build_handler() -> impl coap_handler::Handler {
         Some(acl),
     );
 
-    let edhoc = EdhocHandler {
+    let lake = LakeHandler {
         connections: Vec::with_capacity(3),
         mock_server,
     };
 
     coap_handler_implementations::new_dispatcher()
-        .at_with_attributes(&[".well-known", "edhoc"], &[], edhoc)
+        .at_with_attributes(&[".well-known", "edhoc"], &[], lake)
         .with_wkc()
 }
 
