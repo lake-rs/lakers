@@ -7,7 +7,7 @@ Compile and run:
 make flash term
 ```
 
-Add `EDHOC_CRYPTO=psa` if you want the `crypto-psa-baremetal` configuration.
+Add `LAKE_CRYPTO=psa` if you want the `crypto-psa-baremetal` configuration.
 
 # Requirements
 

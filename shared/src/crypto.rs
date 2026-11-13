@@ -8,17 +8,17 @@ use super::*;
 /// - the selected suite at the last position
 /// - an ordered list of preferred suites in the first positions
 pub fn prepare_suites_i(
-    supported_suites: &EdhocBuffer<MAX_SUITES_LEN>,
+    supported_suites: &LakeBuffer<MAX_SUITES_LEN>,
     selected_suite: u8,
-) -> Result<EdhocBuffer<MAX_SUITES_LEN>, EDHOCError> {
+) -> Result<LakeBuffer<MAX_SUITES_LEN>, LAKEError> {
     // TODO: implement a re-positioning algorithm, considering preferred and selected suites (see Section 5.2.2 of RFC 9528)
     //       for now, we only support a single suite so we just return it
     // NOTE: should we assume that supported_suites == preferred_suites?
     if supported_suites.contains(&(selected_suite)) {
-        EdhocBuffer::<MAX_SUITES_LEN>::new_from_slice(&[selected_suite.into()])
-            .map_err(|_| EDHOCError::UnsupportedCipherSuite)
+        LakeBuffer::<MAX_SUITES_LEN>::new_from_slice(&[selected_suite.into()])
+            .map_err(|_| LAKEError::UnsupportedCipherSuite)
     } else {
-        Err(EDHOCError::UnsupportedCipherSuite)
+        Err(LAKEError::UnsupportedCipherSuite)
     }
 }
 
@@ -32,13 +32,13 @@ pub fn prepare_suites_i(
 /// implementations that can only perform a single operation at a time.
 ///
 /// Many implementations will have a Default constructor or will be Clone (even Copy); either
-/// facilitates storing multiple EDHOC exchanges at a time. When neither is an option, the
+/// facilitates storing multiple LAKE exchanges at a time. When neither is an option, the
 /// remaining options are to wrap a Crypto implementation into interior mutability using the
 /// platform's mutex, or to refactor the main initiator and responder objects into a form where the
 /// cryptography implementation can be taken out and stored separately.
 pub trait Crypto: core::fmt::Debug {
     /// Returns the list of cryptographic suites supported by the backend implementation.
-    fn supported_suites(&self) -> EdhocBuffer<MAX_SUITES_LEN>;
+    fn supported_suites(&self) -> LakeBuffer<MAX_SUITES_LEN>;
     /// Calculate a SHA256 hash from a slice.
     ///
     /// This should only be used when the slice is already at hand or very small; otherwise, use
@@ -71,7 +71,7 @@ pub trait Crypto: core::fmt::Debug {
         iv: &BytesCcmIvLen,
         ad: &[u8],
         plaintext: &[u8],
-    ) -> EdhocBuffer<N>;
+    ) -> LakeBuffer<N>;
     /// Decrypt `ciphertext`, which carries the trailing `TagLen::LEN`-byte authentication tag, and
     /// verify that tag.
     ///
@@ -83,7 +83,7 @@ pub trait Crypto: core::fmt::Debug {
         iv: &BytesCcmIvLen,
         ad: &[u8],
         ciphertext: &[u8],
-    ) -> Result<EdhocBuffer<N>, EDHOCError>;
+    ) -> Result<LakeBuffer<N>, LAKEError>;
     fn p256_ecdh(
         &mut self,
         private_key: &BytesP256ElemLen,
@@ -119,7 +119,7 @@ impl<T: Crypto> Crypto for &mut T {
     where
         Self: 'a;
 
-    fn supported_suites(&self) -> EdhocBuffer<MAX_SUITES_LEN> {
+    fn supported_suites(&self) -> LakeBuffer<MAX_SUITES_LEN> {
         T::supported_suites(self)
     }
 
@@ -149,7 +149,7 @@ impl<T: Crypto> Crypto for &mut T {
         iv: &BytesCcmIvLen,
         ad: &[u8],
         plaintext: &[u8],
-    ) -> EdhocBuffer<N> {
+    ) -> LakeBuffer<N> {
         T::aes_ccm_encrypt::<N, TagLen>(self, key, iv, ad, plaintext)
     }
 
@@ -159,7 +159,7 @@ impl<T: Crypto> Crypto for &mut T {
         iv: &BytesCcmIvLen,
         ad: &[u8],
         ciphertext: &[u8],
-    ) -> Result<EdhocBuffer<N>, EDHOCError> {
+    ) -> Result<LakeBuffer<N>, LAKEError> {
         T::aes_ccm_decrypt::<N, TagLen>(self, key, iv, ad, ciphertext)
     }
 
@@ -244,7 +244,7 @@ pub mod test_helper {
         assert_eq!(ciphertext.len(), plaintext.len() + Tag::LEN);
         assert_eq!(
             ciphertext,
-            EdhocBuffer::new_from_slice(&expected_ct).expect("expected_ct.length() <= 64")
+            LakeBuffer::new_from_slice(&expected_ct).expect("expected_ct.length() <= 64")
         );
 
         let decrypted = crypto
@@ -285,7 +285,7 @@ pub mod test_helper {
         assert_eq!(ciphertext.len(), plaintext.len() + Tag::LEN);
         assert_eq!(
             ciphertext,
-            EdhocBuffer::new_from_slice(&expected_ct).expect("expected_ct.length() < 64")
+            LakeBuffer::new_from_slice(&expected_ct).expect("expected_ct.length() < 64")
         );
 
         let decrypted = crypto

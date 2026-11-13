@@ -10,26 +10,26 @@ use pyo3::{
     PyErr,
 };
 
-impl fmt::Display for EDHOCError {
+impl fmt::Display for LAKEError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "EDHOCError::{:?}", self)
+        write!(f, "LAKEError::{:?}", self)
     }
 }
 
-impl From<EDHOCError> for PyErr {
-    fn from(error: EDHOCError) -> Self {
+impl From<LAKEError> for PyErr {
+    fn from(error: LAKEError) -> Self {
         PyValueError::new_err(error.to_string())
     }
 }
 
-impl fmt::Display for EdhocBufferError {
+impl fmt::Display for LakeBufferError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "EdhocBufferError::{:?}", self)
+        write!(f, "LakeBufferError::{:?}", self)
     }
 }
 
-impl From<EdhocBufferError> for PyErr {
-    fn from(error: EdhocBufferError) -> Self {
+impl From<LakeBufferError> for PyErr {
+    fn from(error: LakeBufferError) -> Self {
         PyValueError::new_err(error.to_string())
     }
 }

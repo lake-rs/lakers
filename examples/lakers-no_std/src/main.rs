@@ -64,10 +64,10 @@ fn main() -> ! {
         &hex!("A20269726573706F6E64657208A101A30104024110205050930FF462A77A3540CF546325DEA214");
 
     fn test_new_initiator() {
-        let _initiator = EdhocInitiator::new(
+        let _initiator = LakeInitiator::new(
             lakers_crypto::default_crypto(),
-            EDHOCMethod::StatStat,
-            EDHOCSuite::CipherSuite2,
+            LAKEMethod::StatStat,
+            LAKESuite::CipherSuite2,
         );
     }
 
@@ -87,10 +87,10 @@ fn main() -> ! {
     info!("Test test_p256_keys passed.");
 
     fn test_prepare_message_1() {
-        let initiator = EdhocInitiator::new(
+        let initiator = LakeInitiator::new(
             lakers_crypto::default_crypto(),
-            EDHOCMethod::StatStat,
-            EDHOCSuite::CipherSuite2,
+            LAKEMethod::StatStat,
+            LAKESuite::CipherSuite2,
         );
 
         let _c_i =
@@ -106,12 +106,12 @@ fn main() -> ! {
         let cred_i = Credential::parse_ccs(CRED_I.try_into().unwrap()).unwrap();
         let cred_r = Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
 
-        let initiator = EdhocInitiator::new(
+        let initiator = LakeInitiator::new(
             lakers_crypto::default_crypto(),
-            EDHOCMethod::StatStat,
-            EDHOCSuite::CipherSuite2,
+            LAKEMethod::StatStat,
+            LAKESuite::CipherSuite2,
         );
-        let responder = EdhocResponder::new(
+        let responder = LakeResponder::new(
             lakers_crypto::default_crypto(),
             ResponderIdentity::StatStat {
                 r: R.try_into().expect("Wrong length of responder private key"),
@@ -153,14 +153,14 @@ fn main() -> ! {
 
         // derive OSCORE secret and salt at both sides and compare
         let mut i_oscore_secret = [0; 16];
-        initiator.edhoc_exporter(0u8, &[], &mut i_oscore_secret); // label is 0
+        initiator.lake_exporter(0u8, &[], &mut i_oscore_secret); // label is 0
         let mut i_oscore_salt = [0; 8];
-        initiator.edhoc_exporter(1u8, &[], &mut i_oscore_salt); // label is 1
+        initiator.lake_exporter(1u8, &[], &mut i_oscore_salt); // label is 1
 
         let mut r_oscore_secret = [0; 16];
-        responder.edhoc_exporter(0u8, &[], &mut r_oscore_secret); // label is 0
+        responder.lake_exporter(0u8, &[], &mut r_oscore_secret); // label is 0
         let mut r_oscore_salt = [0; 8];
-        responder.edhoc_exporter(1u8, &[], &mut r_oscore_salt); // label is 1
+        responder.lake_exporter(1u8, &[], &mut r_oscore_salt); // label is 1
 
         assert_eq!(i_oscore_secret, r_oscore_secret);
         assert_eq!(i_oscore_salt, r_oscore_salt);
@@ -170,12 +170,12 @@ fn main() -> ! {
         let cred_i = Credential::parse_ccs_symmetric(CRED_I_PSK.try_into().unwrap()).unwrap();
         let cred_r = Credential::parse_ccs_symmetric(CRED_R_PSK.try_into().unwrap()).unwrap();
 
-        let initiator = EdhocInitiator::new(
+        let initiator = LakeInitiator::new(
             lakers_crypto::default_crypto(),
-            EDHOCMethod::PSK,
-            EDHOCSuite::CipherSuite2,
+            LAKEMethod::PSK,
+            LAKESuite::CipherSuite2,
         );
-        let responder = EdhocResponder::new(
+        let responder = LakeResponder::new(
             lakers_crypto::default_crypto(),
             ResponderIdentity::Psk,
             cred_r.clone(),
@@ -214,14 +214,14 @@ fn main() -> ! {
 
         // derive OSCORE secret and salt at both sides and compare
         let mut i_oscore_secret = [0; 16];
-        initiator.edhoc_exporter(0u8, &[], &mut i_oscore_secret); // label is 0
+        initiator.lake_exporter(0u8, &[], &mut i_oscore_secret); // label is 0
         let mut i_oscore_salt = [0; 8];
-        initiator.edhoc_exporter(1u8, &[], &mut i_oscore_salt); // label is 1
+        initiator.lake_exporter(1u8, &[], &mut i_oscore_salt); // label is 1
 
         let mut r_oscore_secret = [0; 16];
-        responder.edhoc_exporter(0u8, &[], &mut r_oscore_secret); // label is 0
+        responder.lake_exporter(0u8, &[], &mut r_oscore_secret); // label is 0
         let mut r_oscore_salt = [0; 8];
-        responder.edhoc_exporter(1u8, &[], &mut r_oscore_salt); // label is 1
+        responder.lake_exporter(1u8, &[], &mut r_oscore_salt); // label is 1
 
         assert_eq!(i_oscore_secret, r_oscore_secret);
         assert_eq!(i_oscore_salt, r_oscore_salt);

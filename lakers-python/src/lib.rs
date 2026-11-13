@@ -122,7 +122,7 @@ pub enum AutoCredential {
 }
 
 impl AutoCredential {
-    pub fn to_credential(self) -> Result<Credential, EDHOCError> {
+    pub fn to_credential(self) -> Result<Credential, LAKEError> {
         use AutoCredential::*;
         Ok(match self {
             Existing(e) => e,
@@ -132,25 +132,25 @@ impl AutoCredential {
 }
 
 pub(crate) fn parse_credential(
-    method: EDHOCMethod,
+    method: LAKEMethod,
     credential: AutoCredential,
-) -> Result<Credential, EDHOCError> {
+) -> Result<Credential, LAKEError> {
     use AutoCredential::{Existing, Parse};
 
     Ok(match credential {
         Existing(existing) => existing,
         // The same Python API accepts both stat-stat CCS credentials and PSK CCS credentials.
-        // Parse according to the negotiated EDHOC method so callers don't need separate types.
+        // Parse according to the negotiated LAKE method so callers don't need separate types.
         Parse(v) => match method {
-            EDHOCMethod::StatStat => Credential::parse_ccs(v.as_slice())?,
-            EDHOCMethod::PSK => Credential::parse_ccs_symmetric(v.as_slice())?,
-            _ => return Err(EDHOCError::UnsupportedMethod),
+            LAKEMethod::StatStat => Credential::parse_ccs(v.as_slice())?,
+            LAKEMethod::PSK => Credential::parse_ccs_symmetric(v.as_slice())?,
+            _ => return Err(LAKEError::UnsupportedMethod),
         },
     })
 }
 
-/// The :class:`EdhocInitiator` and :class:`EdhocResponder` are entry points to this module. Both
-/// provided classes that represent one side of the EDHOC exchange, and are updated with and
+/// The :class:`LakeInitiator` and :class:`LakeResponder` are entry points to this module. Both
+/// provided classes that represent one side of the LAKE exchange, and are updated with and
 /// produce messages and information through a series of method calls on the object.
 ///
 /// Operations in this module produce logging entries on the ``lakers.initiator`` and
@@ -173,9 +173,11 @@ fn lakers_python(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     m.add_function(wrap_pyfunction!(p256_generate_key_pair, m)?)?;
     m.add_function(wrap_pyfunction!(py_credential_check_or_fetch, m)?)?;
-    // edhoc items
-    m.add_class::<initiator::PyEdhocInitiator>()?;
-    m.add_class::<responder::PyEdhocResponder>()?;
+    // lake items
+    m.add_class::<initiator::PyLakeInitiator>()?;
+    m.add_class::<responder::PyLakeResponder>()?;
+    m.add("EdhocInitiator", m.getattr("LakeInitiator")?)?;
+    m.add("EdhocResponder", m.getattr("LakeResponder")?)?;
     m.add_class::<lakers::CredentialTransfer>()?;
     m.add_class::<lakers::EADItem>()?;
     m.add_class::<lakers::Credential>()?;

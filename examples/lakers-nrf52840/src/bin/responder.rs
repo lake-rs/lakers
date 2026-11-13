@@ -65,7 +65,7 @@ async fn main(_spawner: Spawner) {
         info!("Received message_1");
 
         let cred_r = Credential::parse_ccs(lakers_nrf52840::CRED_R.try_into().unwrap()).unwrap();
-        let responder = EdhocResponder::new(
+        let responder = LakeResponder::new(
             lakers_crypto::default_crypto(),
             ResponderIdentity::StatStat {
                 r: lakers_nrf52840::R.try_into().unwrap(),
@@ -73,7 +73,7 @@ async fn main(_spawner: Spawner) {
             cred_r,
         );
 
-        let message_1: EdhocMessageBuffer = pckt.pdu[1..pckt.len].try_into().expect("wrong length"); // get rid of the TRUE byte
+        let message_1: LakeMessageBuffer = pckt.pdu[1..pckt.len].try_into().expect("wrong length"); // get rid of the TRUE byte
 
         let result = responder.process_message_1(&message_1);
 
@@ -102,13 +102,13 @@ async fn main(_spawner: Spawner) {
                     let rcvd_c_r: ConnId = ConnId::from_int_raw(message_3.pdu[0] as u8);
 
                     if rcvd_c_r == c_r.unwrap() {
-                        let message_3: EdhocMessageBuffer = message_3.pdu[1..message_3.len]
+                        let message_3: LakeMessageBuffer = message_3.pdu[1..message_3.len]
                             .try_into()
                             .expect("wrong length");
                         let Ok((responder, id_cred_i, _ead_3)) =
                             responder.parse_message_3(&message_3)
                         else {
-                            info!("EDHOC error at parse_message_3");
+                            info!("LAKE error at parse_message_3");
                             // We don't get another chance, it's popped and can't be used any further
                             // anyway legally
                             continue;
@@ -120,7 +120,7 @@ async fn main(_spawner: Spawner) {
                             credential_check_or_fetch(Some(cred_i), id_cred_i).unwrap();
                         let Ok((responder, r_prk_out)) = responder.verify_message_3(valid_cred_i)
                         else {
-                            info!("EDHOC error at parse_message_3");
+                            info!("LAKE error at parse_message_3");
                             continue;
                         };
 
@@ -155,7 +155,7 @@ async fn main(_spawner: Spawner) {
 #[embassy_executor::task]
 async fn example_application_task(secret: BytesHashLen) {
     info!(
-        "Successfully spawned an application task. EDHOC prk_out: {:X}",
+        "Successfully spawned an application task. LAKE prk_out: {:X}",
         secret
     );
 }

@@ -59,8 +59,7 @@ impl EADItemC {
         (*ead_c).label = ead.label();
         (*ead_c).is_critical = ead.is_critical();
         (*ead_c).has_value = ead.value_bytes().is_some();
-        (*ead_c).value =
-            EdhocBuffer::new_from_slice(ead.value_bytes().unwrap_or_default()).unwrap();
+        (*ead_c).value = LakeBuffer::new_from_slice(ead.value_bytes().unwrap_or_default()).unwrap();
     }
 }
 
@@ -136,7 +135,7 @@ pub struct ProcessingM2C {
     pub th_2: BytesHashLen,
     pub x: BytesP256ElemLen,
     pub g_y: BytesP256ElemLen,
-    pub plaintext_2: EdhocMessageBuffer,
+    pub plaintext_2: LakeMessageBuffer,
     pub c_r: u8,
     pub ead_2: *mut EadItemsC,
 }

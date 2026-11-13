@@ -18,7 +18,7 @@ impl PyAuthzEnrollmentServer {
         let mut w_arr = BytesP256ElemLen::default();
         w_arr.copy_from_slice(&w.as_slice());
         let acl = if let Some(acl) = acl {
-            Some(EdhocMessageBuffer::new_from_slice(acl.as_slice()).unwrap())
+            Some(LakeMessageBuffer::new_from_slice(acl.as_slice()).unwrap())
         } else {
             None
         };
@@ -33,7 +33,7 @@ impl PyAuthzEnrollmentServer {
         py: Python<'a>,
         vreq: Vec<u8>,
     ) -> PyResult<Bound<'a, PyBytes>> {
-        let vreq = EdhocMessageBuffer::new_from_slice(vreq.as_slice()).unwrap();
+        let vreq = LakeMessageBuffer::new_from_slice(vreq.as_slice()).unwrap();
         match self
             .server
             .handle_voucher_request(&mut default_crypto(), &vreq)
@@ -67,7 +67,7 @@ impl PyAuthzServerUserAcl {
         py: Python<'a>,
         vreq: Vec<u8>,
     ) -> PyResult<Bound<'a, PyBytes>> {
-        let vreq = EdhocMessageBuffer::new_from_slice(vreq.as_slice()).unwrap();
+        let vreq = LakeMessageBuffer::new_from_slice(vreq.as_slice()).unwrap();
         match self
             .server
             .decode_voucher_request(&mut default_crypto(), &vreq)
@@ -78,7 +78,7 @@ impl PyAuthzServerUserAcl {
     }
 
     fn prepare_voucher<'a>(&self, py: Python<'a>, vreq: Vec<u8>) -> PyResult<Bound<'a, PyBytes>> {
-        let vreq = EdhocMessageBuffer::new_from_slice(vreq.as_slice()).unwrap();
+        let vreq = LakeMessageBuffer::new_from_slice(vreq.as_slice()).unwrap();
         match self.server.prepare_voucher(&mut default_crypto(), &vreq) {
             Ok(voucher_response) => Ok(PyBytes::new(py, voucher_response.as_slice())),
             Err(error) => Err(error.into()),

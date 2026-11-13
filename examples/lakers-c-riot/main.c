@@ -44,8 +44,8 @@ int main(void)
     credential_new(&cred_i, CRED_I, 107);
     credential_new(&cred_r, CRED_R, 84);
 
-    puts("creating edhoc initiator.");
-    EdhocInitiator initiator = {0};
+    puts("creating lake initiator.");
+    LakeInitiator initiator = {0};
     initiator_new(&initiator);
 
     puts("creating ead-authz device.");
@@ -62,8 +62,8 @@ int main(void)
     authz_device_prepare_ead_1(&device, &authz_secret, SS, &ead_1);
     od_hex_dump(ead_1.value.content, ead_1.value.len, OD_WIDTH_DEFAULT);
 
-    puts("Begin test: edhoc initiator.");
-    EdhocMessageBuffer message_1 = {0};
+    puts("Begin test: lake initiator.");
+    LakeMessageBuffer message_1 = {0};
     int res = initiator_prepare_message_1(&initiator, NULL, &ead_1, &message_1);
     od_hex_dump(message_1.content, message_1.len, OD_WIDTH_DEFAULT);
     if (res != 0) printf("Error prep msg1: %d\n", res);

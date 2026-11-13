@@ -4,7 +4,7 @@ version.workspace = true
 edition = "2021"
 authors = ["Kaspar Schleiser <kaspar@schleiser.de>"]
 license.workspace = true
-description = "EDHOC crypto library PSA backend"
+description = "LAKE crypto library PSA backend"
 repository.workspace = true
 readme.workspace = true
 

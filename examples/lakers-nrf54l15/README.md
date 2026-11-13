@@ -1,6 +1,6 @@
 # lakers on nRF54L15
 
-Bare-metal (`no_std`) examples of EDHOC running on the nRF54L15, using the chip's
+Bare-metal (`no_std`) examples of LAKE running on the nRF54L15, using the chip's
 hardware-accelerated CRACEN crypto through the [`embedded-cal`](../../../embedded-cal) backend
 (the `lakers-crypto/nrf54l15` dispatch feature).
 
@@ -8,12 +8,12 @@ hardware-accelerated CRACEN crypto through the [`embedded-cal`](../../../embedde
 
 | Binary      | What it does                                                                              |
 | ----------- | ----------------------------------------------------------------------------------------- |
-| `initiator` | EDHOC Initiator: runs the full handshake (message_1 → message_4) over the raw radio.      |
-| `responder` | EDHOC Responder: waits for message_1 and completes the handshake, looping to serve again. |
+| `initiator` | LAKE Initiator: runs the full handshake (message_1 → message_4) over the raw radio.      |
+| `responder` | LAKE Responder: waits for message_1 and completes the handshake, looping to serve again. |
 
 The `initiator` and `responder` mirror the [nRF52840 example](../lakers-nrf52840): two separate
 boards talk to each other over a raw 2.4 GHz BLE-1Mbit radio link. Each board has its own CRACEN,
-so each runs one EDHOC party with its own hardware `Crypto` (a single chip cannot host both, as
+so each runs one LAKE party with its own hardware `Crypto` (a single chip cannot host both, as
 there is only one CRACEN).
 
 ## Prerequisites

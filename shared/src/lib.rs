@@ -12,8 +12,8 @@
 #![cfg_attr(not(feature = "python-bindings"), no_std)]
 
 pub use cbor_decoder::*;
-pub use edhoc_parser::*;
 pub use helpers::*;
+pub use lake_parser::*;
 
 use core::num::NonZeroI16;
 use defmt_or_log::trace;
@@ -31,6 +31,10 @@ pub use buffer::*;
 use pyo3::prelude::*;
 mod psk;
 pub use psk::*;
+#[cfg(not(hax))]
+mod deprecated;
+#[cfg(not(hax))]
+pub use deprecated::*;
 #[cfg(feature = "python-bindings")]
 mod python_bindings;
 
@@ -55,7 +59,7 @@ pub const MAX_MESSAGE_SIZE_LEN: usize = if cfg!(feature = "max_message_size_len_
 pub const ID_CRED_LEN: usize = 4;
 pub const SUITES_LEN: usize = 9;
 pub const SUPPORTED_SUITES_LEN: usize = 1;
-pub const EDHOC_METHOD: u8 = 3u8; // stat-stat is the only supported method
+pub const LAKE_METHOD: u8 = 3u8; // stat-stat is the only supported method
 pub const P256_ELEM_LEN: usize = 32;
 pub const SHA256_DIGEST_LEN: usize = 32;
 pub const AES_CCM_KEY_LEN: usize = 16;
@@ -164,25 +168,25 @@ const MAX_CONNID_ENCODED_LEN: usize = if cfg!(feature = "max_connid_encoded_len_
 
 pub type BytesSuites = [u8; SUITES_LEN];
 pub type BytesSupportedSuites = [u8; SUPPORTED_SUITES_LEN];
-pub const EDHOC_SUITES: BytesSuites = [0, 1, 2, 3, 4, 5, 6, 24, 25]; // all but private cipher suites
-pub const EDHOC_SUPPORTED_SUITES: BytesSupportedSuites = [0x2u8];
+pub const LAKE_SUITES: BytesSuites = [0, 1, 2, 3, 4, 5, 6, 24, 25]; // all but private cipher suites
+pub const LAKE_SUPPORTED_SUITES: BytesSupportedSuites = [0x2u8];
 
 pub type BytesCcmKeyLen = [u8; AES_CCM_KEY_LEN];
 pub type BytesCcmIvLen = [u8; AES_CCM_IV_LEN];
-pub type BufferPlaintext2 = EdhocMessageBuffer;
-pub type BufferPlaintext3 = EdhocMessageBuffer;
-pub type BufferPlaintext4 = EdhocMessageBuffer;
+pub type BufferPlaintext2 = LakeMessageBuffer;
+pub type BufferPlaintext3 = LakeMessageBuffer;
+pub type BufferPlaintext4 = LakeMessageBuffer;
 pub type BytesMac2 = [u8; MAC_LENGTH_2];
 pub type BytesMac3 = [u8; MAC_LENGTH_3];
-pub type BufferMessage1 = EdhocMessageBuffer;
-pub type BufferMessage3 = EdhocMessageBuffer;
-pub type BufferMessage4 = EdhocMessageBuffer;
-pub type BufferCiphertext2 = EdhocMessageBuffer;
-pub type BufferCiphertext3 = EdhocMessageBuffer;
-pub type BufferCiphertext4 = EdhocMessageBuffer;
+pub type BufferMessage1 = LakeMessageBuffer;
+pub type BufferMessage3 = LakeMessageBuffer;
+pub type BufferMessage4 = LakeMessageBuffer;
+pub type BufferCiphertext2 = LakeMessageBuffer;
+pub type BufferCiphertext3 = LakeMessageBuffer;
+pub type BufferCiphertext4 = LakeMessageBuffer;
 pub type BytesHashLen = [u8; SHA256_DIGEST_LEN];
 pub type BytesP256ElemLen = [u8; P256_ELEM_LEN];
-pub type BufferMessage2 = EdhocMessageBuffer;
+pub type BufferMessage2 = LakeMessageBuffer;
 /// Generic buffer type (soft-deprecated).
 ///
 /// The use of this type is discouraged, because it contributes to this library's excessive stack
@@ -192,21 +196,21 @@ pub type BufferMessage2 = EdhocMessageBuffer;
 ///   to be fed into the cryptography module's SHA256 computation. That computation is streamable
 ///   in the underlying APIs (i.e. there is no need to build a buffer, they could be fed
 ///   incrementally), but the cryptography abstraction doesn't expose that.
-/// * <del>As the return value of `edhoc_kdf_expand`. There, the data is taken up into some other buffer
+/// * <del>As the return value of `lake_kdf_expand`. There, the data is taken up into some other buffer
 ///   or type by the caller, so the caller could provide the place to expand into as a `&mut [u8]`,
 ///   but likewise, our crypto API doesn't work that way.</del>
 pub type BytesMaxBuffer = [u8; MAX_BUFFER_LEN];
-pub type BufferContext = EdhocBuffer<MAX_KDF_CONTEXT_LEN>;
+pub type BufferContext = LakeBuffer<MAX_KDF_CONTEXT_LEN>;
 /// Buffer returned by [`encode_info`]
-pub type BufferInfo = EdhocBuffer<MAX_INFO_LEN>;
+pub type BufferInfo = LakeBuffer<MAX_INFO_LEN>;
 /// A buffer holding a serialized COSE_Encrypt0 structure.
 ///
-/// This is an array and not an [`EdhocBuffer`] because it always has a fixed length.
+/// This is an array and not an [`LakeBuffer`] because it always has a fixed length.
 pub type BytesEncStructureLen = [u8; ENC_STRUCTURE_LEN];
 
 pub type BytesMac = [u8; MAC_LENGTH];
 pub type BytesVoucher = [u8; VOUCHER_LEN];
-pub type EADBuffer = EdhocBuffer<MAX_EAD_LEN>;
+pub type EADBuffer = LakeBuffer<MAX_EAD_LEN>;
 
 /// Value of C_R or C_I, as chosen by ourself or the peer.
 ///
@@ -375,47 +379,47 @@ impl ConnId {
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(C)]
 #[non_exhaustive]
-pub enum EDHOCMethod {
+pub enum LAKEMethod {
     StatStat = 3,
     PSK = 4,
 }
 
-impl TryFrom<u8> for EDHOCMethod {
-    type Error = EDHOCError;
+impl TryFrom<u8> for LAKEMethod {
+    type Error = LAKEError;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            3 => Ok(EDHOCMethod::StatStat),
-            4 => Ok(EDHOCMethod::PSK),
-            _ => Err(EDHOCError::UnsupportedMethod),
+            3 => Ok(LAKEMethod::StatStat),
+            4 => Ok(LAKEMethod::PSK),
+            _ => Err(LAKEError::UnsupportedMethod),
         }
     }
 }
 
-impl From<EDHOCMethod> for u8 {
-    fn from(method: EDHOCMethod) -> u8 {
+impl From<LAKEMethod> for u8 {
+    fn from(method: LAKEMethod) -> u8 {
         method as u8
     }
 }
 
 #[derive(PartialEq, Debug)]
-pub enum EDHOCSuite {
+pub enum LAKESuite {
     CipherSuite2 = 2,
     // add others, such as:
     // CiherSuite3 = 3,
 }
 
-impl From<EDHOCSuite> for u8 {
-    fn from(suite: EDHOCSuite) -> u8 {
+impl From<LAKESuite> for u8 {
+    fn from(suite: LAKESuite) -> u8 {
         suite as u8
     }
 }
 
 #[derive(PartialEq, Debug)]
 #[non_exhaustive]
-pub enum EDHOCError {
+pub enum LAKEError {
     /// In an exchange, a credential was set as "expected", but the credential configured by the
-    /// peer did not match what was presented. This is more an application internal than an EDHOC
+    /// peer did not match what was presented. This is more an application internal than a LAKE
     /// error: When the application sets the expected credential, that process should be informed
     /// by the known details.
     UnexpectedCredential,
@@ -423,7 +427,7 @@ pub enum EDHOCError {
     /// in particular a credential carrying a symmetric key (a PSK), sent by value rather than
     /// identified by reference.
     ///
-    /// Unlike [`EDHOCError::UnexpectedCredential`] this does not depend on what the application
+    /// Unlike [`LAKEError::UnexpectedCredential`] this does not depend on what the application
     /// was expecting. Such a credential is refused unconditionally, because honouring it would
     /// mean deriving key material from the peer's own message.
     WrongCredentialType,
@@ -441,14 +445,14 @@ pub enum EDHOCError {
     /// otherwise erroneous.
     EADUnprocessable,
     /// The credential or EADs could be processed (possibly by a third party), but the decision
-    /// based on that was to not to continue the EDHOC session.
+    /// based on that was to not to continue the LAKE session.
     ///
     /// See also
     /// <https://datatracker.ietf.org/doc/html/draft-ietf-lake-authz#name-edhoc-error-access-denied>
     AccessDenied,
 }
 
-impl EDHOCError {
+impl LAKEError {
     /// The ERR_CODE corresponding to the error
     ///
     /// Errors that refer to internal limitations (such as EadTooLongError) are treated the same
@@ -456,14 +460,14 @@ impl EDHOCError {
     /// of the parser, and a constrained system can not be expected to differentiate between "the
     /// standard allows this but my number space is too small" and "this violates the standard".
     ///
-    /// If an EDHOCError is returned through EDHOC, it will use this in its EDHOC error message.
+    /// If a LAKEError is returned through LAKE, it will use this in its LAKE error message.
     ///
     /// Note that this on its own is insufficient to create an error message: Additional ERR_INFO
-    /// is needed, which may or may not be available with the EDHOCError alone.
+    /// is needed, which may or may not be available with the LAKEError alone.
     ///
-    /// TODO: Evolve the EDHOCError type such that all information needed is available.
+    /// TODO: Evolve the LAKEError type such that all information needed is available.
     pub fn err_code(&self) -> ErrCode {
-        use EDHOCError::*;
+        use LAKEError::*;
         match self {
             UnexpectedCredential => ErrCode::UNSPECIFIED,
             WrongCredentialType => ErrCode::UNSPECIFIED,
@@ -483,7 +487,7 @@ impl EDHOCError {
     }
 }
 
-/// Representation of an EDHOC ERR_CODE
+/// Representation of a LAKE ERR_CODE
 #[repr(C)]
 pub struct ErrCode(pub NonZeroI16);
 
@@ -498,8 +502,8 @@ impl ErrCode {
 #[derive(Debug)]
 #[repr(C)]
 pub struct InitiatorStart {
-    pub suites_i: EdhocBuffer<MAX_SUITES_LEN>,
-    pub method: EDHOCMethod,
+    pub suites_i: LakeBuffer<MAX_SUITES_LEN>,
+    pub method: LAKEMethod,
     pub x: BytesP256ElemLen,   // ephemeral private key of myself
     pub g_x: BytesP256ElemLen, // ephemeral public key of myself
 }
@@ -512,7 +516,7 @@ pub struct ResponderStart {
 
 #[derive(Debug)]
 pub struct ProcessingM1 {
-    pub method: EDHOCMethod,
+    pub method: LAKEMethod,
     pub y: BytesP256ElemLen,
     pub g_y: BytesP256ElemLen,
     pub c_i: ConnId,
@@ -523,7 +527,7 @@ pub struct ProcessingM1 {
 #[derive(Clone, Debug)]
 #[repr(C)]
 pub struct WaitM2 {
-    pub method: EDHOCMethod,
+    pub method: LAKEMethod,
     pub x: BytesP256ElemLen, // ephemeral private key of the initiator
     pub h_message_1: BytesHashLen,
 }
@@ -540,7 +544,7 @@ pub struct WaitM3 {
     pub th_3: BytesHashLen,
 }
 
-/// Method-specific details required to prepare EDHOC message_2.
+/// Method-specific details required to prepare LAKE message_2.
 #[derive(Copy, Clone, Debug)]
 pub enum PrepareMessage2Details<'a> {
     StatStat {
@@ -654,10 +658,10 @@ pub enum CredentialTransfer {
 }
 
 #[deprecated]
-pub type MessageBufferError = buffer::EdhocBufferError;
+pub type MessageBufferError = buffer::LakeBufferError;
 
-/// An [`EdhocBuffer`] used for messages.
-pub type EdhocMessageBuffer = EdhocBuffer<MAX_MESSAGE_SIZE_LEN>;
+/// An [`LakeBuffer`] used for messages.
+pub type LakeMessageBuffer = LakeBuffer<MAX_MESSAGE_SIZE_LEN>;
 
 /// An owned EAD item.
 #[cfg_attr(feature = "python-bindings", pyclass(from_py_object))]
@@ -686,8 +690,8 @@ impl EADItem {
         label: u16,
         is_critical: bool,
         value_bytes: Option<&[u8]>,
-    ) -> Result<Self, EdhocBufferError> {
-        let mut value = EdhocBuffer::new();
+    ) -> Result<Self, LakeBufferError> {
+        let mut value = LakeBuffer::new();
         if let Some(value_bytes) = value_bytes {
             let mut head = CBOR_MAJOR_BYTE_STRING;
             if value_bytes.len() <= 23 {
@@ -705,7 +709,7 @@ impl EADItem {
                     .unwrap();
             } else {
                 // EAD items do not grow beyond 64k
-                return Err(EdhocBufferError::SliceTooLong);
+                return Err(LakeBufferError::SliceTooLong);
             }
             value.extend_from_slice(value_bytes)?;
         };
@@ -746,8 +750,8 @@ impl EADItem {
         self.value.as_slice()
     }
 
-    pub fn encode(&self) -> Result<EADBuffer, EDHOCError> {
-        let mut output = EdhocBuffer::new();
+    pub fn encode(&self) -> Result<EADBuffer, LAKEError> {
+        let mut output = LakeBuffer::new();
 
         let argument_value = if self.is_critical {
             // We can express "critical padding" in the type, but that'll be just normal padding.
@@ -763,28 +767,28 @@ impl EADItem {
         if argument_value <= 23 {
             output
                 .push(head | argument_value as u8)
-                .map_err(|_| EDHOCError::EadTooLongError)?;
+                .map_err(|_| LAKEError::EadTooLongError)?;
         } else if argument_value <= u8::MAX as _ {
             output
                 .push(head | 24)
-                .map_err(|_| EDHOCError::EadTooLongError)?;
+                .map_err(|_| LAKEError::EadTooLongError)?;
             output
                 .push(argument_value as u8)
-                .map_err(|_| EDHOCError::EadTooLongError)?;
+                .map_err(|_| LAKEError::EadTooLongError)?;
         } else {
             output
                 .push(head | 25)
-                .map_err(|_| EDHOCError::EadTooLongError)?;
+                .map_err(|_| LAKEError::EadTooLongError)?;
             output
                 .extend_from_slice(&argument_value.to_be_bytes())
-                .map_err(|_| EDHOCError::EadTooLongError)?;
+                .map_err(|_| LAKEError::EadTooLongError)?;
         }
 
         // encode value (may be empty slice)
         let ead_1_value = &self.value_encoded();
         output
             .extend_from_slice(ead_1_value)
-            .map_err(|_| EDHOCError::EadTooLongError)?;
+            .map_err(|_| LAKEError::EadTooLongError)?;
 
         Ok(output)
     }
@@ -897,9 +901,9 @@ impl EadItems {
     /// error.
     ///
     /// Call this whenever processing EAD items after all processable items have been removed.
-    pub fn processed_critical_items(&self) -> Result<(), EDHOCError> {
+    pub fn processed_critical_items(&self) -> Result<(), LAKEError> {
         if self.iter().any(|i| i.is_critical) {
-            return Err(EDHOCError::EADUnprocessable);
+            return Err(LAKEError::EADUnprocessable);
         }
         Ok(())
     }
@@ -929,12 +933,12 @@ impl EadItems {
     /// Encodes all items of self into a buffer.
     ///
     /// If this errs, some EADs may already have been encoded.
-    pub fn encode<const N: usize>(&self, output: &mut EdhocBuffer<N>) -> Result<(), EDHOCError> {
+    pub fn encode<const N: usize>(&self, output: &mut LakeBuffer<N>) -> Result<(), LAKEError> {
         for ead_item in self {
             let encoded = ead_item.encode()?;
             output
                 .extend_from_slice(encoded.as_slice())
-                .map_err(|_| EDHOCError::EadTooLongError)?;
+                .map_err(|_| LAKEError::EadTooLongError)?;
         }
         Ok(())
     }
@@ -982,10 +986,10 @@ mod helpers {
 }
 
 // TODO: move to own file (or even to the main crate, once EAD is extracted as an external dependency)
-mod edhoc_parser {
+mod lake_parser {
     use super::*;
 
-    pub fn parse_eads(buffer: &[u8]) -> Result<EadItems, EDHOCError> {
+    pub fn parse_eads(buffer: &[u8]) -> Result<EadItems, LAKEError> {
         let mut count = 0;
         let mut cursor = 0;
         let mut eads = EadItems::new();
@@ -1002,11 +1006,9 @@ mod edhoc_parser {
         Ok(eads)
     }
 
-    fn parse_single_ead(input: &[u8]) -> Result<(EADItem, usize), EDHOCError> {
+    fn parse_single_ead(input: &[u8]) -> Result<(EADItem, usize), LAKEError> {
         let mut decoder = CBORDecoder::new(input);
-        let label = decoder
-            .i32_limited()
-            .map_err(|_| EDHOCError::ParsingError)?;
+        let label = decoder.i32_limited().map_err(|_| LAKEError::ParsingError)?;
 
         let is_critical = label < 0;
         let label = label.unsigned_abs();
@@ -1016,15 +1018,15 @@ mod edhoc_parser {
             // It's not just from `slice`, because EADItem::value is an *encoded* value. (FIXME: It
             // shouldn't be).
             (
-                EdhocBuffer::new_from_slice(&input[position_after_label..decoder.position()])
-                    .map_err(|_| EDHOCError::ParsingError)?,
+                LakeBuffer::new_from_slice(&input[position_after_label..decoder.position()])
+                    .map_err(|_| LAKEError::ParsingError)?,
                 decoder.position(),
             )
         } else {
             // If it's not just at the end but a different type, that's an error, but that error is
             // not for us to raise: Instead, the next item being parsed will trip over its label
             // not being an integer.
-            (EdhocBuffer::new(), position_after_label)
+            (LakeBuffer::new(), position_after_label)
         };
 
         let item = EADItem {
@@ -1032,7 +1034,7 @@ mod edhoc_parser {
                 .try_into()
                 // That's really only for 0xffff; we could accommodate that if we handled padding
                 // differently and stored the (positive label-1) value
-                .map_err(|_| EDHOCError::ParsingError)?,
+                .map_err(|_| LAKEError::ParsingError)?,
             is_critical,
             value: ead_value,
         };
@@ -1042,13 +1044,13 @@ mod edhoc_parser {
 
     pub fn parse_suites_i(
         mut decoder: CBORDecoder,
-    ) -> Result<(EdhocBuffer<MAX_SUITES_LEN>, CBORDecoder), EDHOCError> {
+    ) -> Result<(LakeBuffer<MAX_SUITES_LEN>, CBORDecoder), LAKEError> {
         trace!("Enter parse_suites_i");
-        let mut suites_i: EdhocBuffer<MAX_SUITES_LEN> = Default::default();
+        let mut suites_i: LakeBuffer<MAX_SUITES_LEN> = Default::default();
         if let Ok(curr) = decoder.current() {
             if CBOR_UINT_1BYTE_START == CBORDecoder::type_of(curr) {
                 let Ok(_) = suites_i.push(decoder.u8()?) else {
-                    return Err(EDHOCError::ParsingError);
+                    return Err(LAKEError::ParsingError);
                 };
                 Ok((suites_i, decoder))
             } else if CBOR_MAJOR_ARRAY == CBORDecoder::type_of(curr)
@@ -1058,17 +1060,17 @@ mod edhoc_parser {
                 let received_suites_i_len = decoder.array()?;
                 let write_range = suites_i
                     .extend_reserve(received_suites_i_len)
-                    .or(Err(EDHOCError::ParsingError))?;
+                    .or(Err(LAKEError::ParsingError))?;
                 #[allow(deprecated, reason = "hax complains about mutable references in loops")]
                 for i in write_range {
                     suites_i.content[i] = decoder.u8()?;
                 }
                 Ok((suites_i, decoder))
             } else {
-                Err(EDHOCError::ParsingError)
+                Err(LAKEError::ParsingError)
             }
         } else {
-            Err(EDHOCError::ParsingError)
+            Err(LAKEError::ParsingError)
         }
     }
 
@@ -1077,12 +1079,12 @@ mod edhoc_parser {
     ) -> Result<
         (
             u8,
-            EdhocBuffer<MAX_SUITES_LEN>,
+            LakeBuffer<MAX_SUITES_LEN>,
             BytesP256ElemLen,
             ConnId,
             EadItems,
         ),
-        EDHOCError,
+        LAKEError,
     > {
         trace!("Enter parse_message_1");
         let mut decoder = CBORDecoder::new(rcvd_message_1.as_slice());
@@ -1106,16 +1108,16 @@ mod edhoc_parser {
             } else if decoder.finished() {
                 Ok((method, suites_i, g_x, c_i, EadItems::new()))
             } else {
-                Err(EDHOCError::ParsingError)
+                Err(LAKEError::ParsingError)
             }
         } else {
-            Err(EDHOCError::ParsingError)
+            Err(LAKEError::ParsingError)
         }
     }
 
     pub fn parse_message_2(
         rcvd_message_2: &BufferMessage2,
-    ) -> Result<(BytesP256ElemLen, BufferCiphertext2), EDHOCError> {
+    ) -> Result<(BytesP256ElemLen, BufferCiphertext2), LAKEError> {
         trace!("Enter parse_message_2");
         // FIXME decode negative integers as well
         let mut ciphertext_2: BufferCiphertext2 = BufferCiphertext2::new();
@@ -1132,22 +1134,22 @@ mod edhoc_parser {
                     if ciphertext_2.fill_with_slice(c2).is_ok() {
                         Ok((g_y, ciphertext_2))
                     } else {
-                        Err(EDHOCError::ParsingError)
+                        Err(LAKEError::ParsingError)
                     }
                 } else {
-                    Err(EDHOCError::ParsingError)
+                    Err(LAKEError::ParsingError)
                 }
             } else {
-                Err(EDHOCError::ParsingError)
+                Err(LAKEError::ParsingError)
             }
         } else {
-            Err(EDHOCError::ParsingError)
+            Err(LAKEError::ParsingError)
         }
     }
 
     /// Decode a message consisting of a single CBOR byte string (message_3, message_4, or the PSK
     /// inner CIPHERTEXT_3B). Returns `ParsingError` unless `msg` is exactly one definite-length bstr.
-    pub fn parse_bstr_message(msg: &EdhocMessageBuffer) -> Result<&[u8], EDHOCError> {
+    pub fn parse_bstr_message(msg: &LakeMessageBuffer) -> Result<&[u8], LAKEError> {
         let mut decoder = CBORDecoder::new(msg.as_slice());
         let ciphertext = decoder.bytes()?;
         decoder.ensure_finished()?;
@@ -1156,15 +1158,15 @@ mod edhoc_parser {
 
     pub fn parse_message_3(
         rcvd_message_3: &BufferMessage3,
-    ) -> Result<BufferCiphertext3, EDHOCError> {
+    ) -> Result<BufferCiphertext3, LAKEError> {
         trace!("Enter parse_message_3");
         let ciphertext_3a = parse_bstr_message(rcvd_message_3)?;
-        BufferCiphertext3::new_from_slice(ciphertext_3a).map_err(|_| EDHOCError::ParsingError)
+        BufferCiphertext3::new_from_slice(ciphertext_3a).map_err(|_| LAKEError::ParsingError)
     }
 
     pub fn decode_plaintext_2(
         plaintext_2: &BufferCiphertext2,
-    ) -> Result<(ConnId, IdCred, BytesMac2, EadItems), EDHOCError> {
+    ) -> Result<(ConnId, IdCred, BytesMac2, EadItems), LAKEError> {
         trace!("Enter decode_plaintext_2");
         let mut mac_2: BytesMac2 = [0x00; MAC_LENGTH_2];
 
@@ -1188,13 +1190,13 @@ mod edhoc_parser {
         } else if decoder.finished() {
             Ok((c_r, id_cred_r, mac_2, EadItems::new()))
         } else {
-            Err(EDHOCError::ParsingError)
+            Err(LAKEError::ParsingError)
         }
     }
 
     pub fn decode_plaintext_2_psk(
         plaintext_2: &BufferCiphertext2,
-    ) -> Result<(ConnId, EadItems), EDHOCError> {
+    ) -> Result<(ConnId, EadItems), LAKEError> {
         trace!("Enter decode_plaintext_2");
         let mut decoder = CBORDecoder::new(plaintext_2.as_slice());
 
@@ -1211,13 +1213,13 @@ mod edhoc_parser {
         } else if decoder.finished() {
             Ok((c_r, EadItems::new()))
         } else {
-            Err(EDHOCError::ParsingError)
+            Err(LAKEError::ParsingError)
         }
     }
 
     pub fn decode_plaintext_3(
         plaintext_3: &BufferPlaintext3,
-    ) -> Result<(IdCred, BytesMac3, EadItems), EDHOCError> {
+    ) -> Result<(IdCred, BytesMac3, EadItems), LAKEError> {
         trace!("Enter decode_plaintext_3");
         let mut mac_3: BytesMac3 = [0x00; MAC_LENGTH_3];
 
@@ -1239,11 +1241,11 @@ mod edhoc_parser {
         } else if decoder.finished() {
             Ok((id_cred_i, mac_3, EadItems::new()))
         } else {
-            Err(EDHOCError::ParsingError)
+            Err(LAKEError::ParsingError)
         }
     }
 
-    pub fn decode_plaintext_3_psk(plaintext_3: &BufferPlaintext3) -> Result<EadItems, EDHOCError> {
+    pub fn decode_plaintext_3_psk(plaintext_3: &BufferPlaintext3) -> Result<EadItems, LAKEError> {
         trace!("Enter decode_plaintext_3");
         let decoder = CBORDecoder::new(plaintext_3.as_slice());
 
@@ -1258,10 +1260,10 @@ mod edhoc_parser {
         } else if decoder.finished() {
             Ok(EadItems::new())
         } else {
-            Err(EDHOCError::ParsingError)
+            Err(LAKEError::ParsingError)
         }
     }
-    pub fn decode_plaintext_3a(plaintext_3: &BufferPlaintext3) -> Result<&[u8], EDHOCError> {
+    pub fn decode_plaintext_3a(plaintext_3: &BufferPlaintext3) -> Result<&[u8], LAKEError> {
         trace!("Enter decode_plaintext_3");
         let mut decoder = CBORDecoder::new(plaintext_3.as_slice());
         // the id_cred may have been encoded as a single int, a byte string, or a map
@@ -1269,7 +1271,7 @@ mod edhoc_parser {
         Ok(id_cred)
     }
 
-    pub fn decode_plaintext_4(plaintext_4: &BufferPlaintext4) -> Result<EadItems, EDHOCError> {
+    pub fn decode_plaintext_4(plaintext_4: &BufferPlaintext4) -> Result<EadItems, LAKEError> {
         trace!("Enter decode_plaintext_4");
         let decoder = CBORDecoder::new(plaintext_4.as_slice());
 
@@ -1283,7 +1285,7 @@ mod edhoc_parser {
         } else if decoder.finished() {
             Ok(EadItems::new())
         } else {
-            Err(EDHOCError::ParsingError)
+            Err(LAKEError::ParsingError)
         }
     }
 }
@@ -1297,10 +1299,10 @@ mod cbor_decoder {
         DecodingError,
     }
 
-    impl From<CBORError> for EDHOCError {
+    impl From<CBORError> for LAKEError {
         fn from(error: CBORError) -> Self {
             match error {
-                CBORError::DecodingError => EDHOCError::ParsingError,
+                CBORError::DecodingError => LAKEError::ParsingError,
             }
         }
     }
@@ -1734,14 +1736,14 @@ mod test_ead_items {
             .try_push(EADItem::new_full(1234, false, None).unwrap())
             .unwrap_err();
 
-        let mut output_buffer = EdhocMessageBuffer::new();
+        let mut output_buffer = LakeMessageBuffer::new();
         items.encode(&mut output_buffer).unwrap();
         assert_eq!(output_buffer.as_slice(), hex!("20081840442e2e2e2e190200")); // -1, 8, 64, '....', 512
 
         assert_eq!(items.len(), MAX_EAD_ITEMS);
 
         // Check round-tripping
-        let decoded = edhoc_parser::parse_eads(output_buffer.as_slice()).unwrap();
+        let decoded = lake_parser::parse_eads(output_buffer.as_slice()).unwrap();
         assert_eq!(
             make_comparable(&decoded),
             make_comparable(&items),
@@ -1759,14 +1761,14 @@ mod test_ead_items {
 
     #[test]
     fn test_parse_eads_negative_label_bounds() {
-        let decoded = edhoc_parser::parse_eads(&hex!("39fffe")).unwrap();
+        let decoded = lake_parser::parse_eads(&hex!("39fffe")).unwrap();
         let item = decoded.iter().next().unwrap();
         assert_eq!(item.label(), 0xffff);
         assert!(item.is_critical());
 
         assert_eq!(
-            edhoc_parser::parse_eads(&hex!("39ffff")).unwrap_err(),
-            EDHOCError::ParsingError
+            lake_parser::parse_eads(&hex!("39ffff")).unwrap_err(),
+            LAKEError::ParsingError
         );
     }
 

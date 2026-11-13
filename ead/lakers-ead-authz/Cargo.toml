@@ -4,7 +4,7 @@ version.workspace = true
 edition = "2021"
 authors = ["Geovane Fedrecheski <geonnave@gmail.com>"]
 license.workspace = true
-description = "EDHOC EAD zero touch authorization for network join (draf-lake-authz)"
+description = "LAKE EAD zero touch authorization for network join (draf-lake-authz)"
 repository.workspace = true
 
 [dependencies]

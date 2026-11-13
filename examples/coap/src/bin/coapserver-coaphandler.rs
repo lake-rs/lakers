@@ -20,8 +20,8 @@ const R: &[u8] = &hex!("72cc4761dbd4c78f758931aa589d348d1ef874a7e303ede2f140dcf3
 const W_TV: &[u8] = &hex!("4E5E15AB35008C15B89E91F9F329164D4AACD53D9923672CE0019F9ACD98573F");
 
 #[derive(Debug)]
-struct EdhocHandler {
-    connections: Vec<(ConnId, EdhocResponderWaitM3<Crypto>)>,
+struct LakeHandler {
+    connections: Vec<(ConnId, LakeResponderWaitM3<Crypto>)>,
     mock_server: ZeroTouchServer,
 }
 
@@ -32,23 +32,23 @@ struct EdhocHandler {
 ///
 /// Places using this function may be simplified if From/Into is specified (possibly after
 /// enlarging the Error type)
-fn too_small(_e: EdhocBufferError) -> Error {
+fn too_small(_e: LakeBufferError) -> Error {
     Error::bad_request()
 }
 
-/// Render an EDHOCError into the common Error type.
+/// Render a LAKEError into the common Error type.
 ///
-/// It is yet to be decided based on the EDHOC specification which EDHOCError values would be
+/// It is yet to be decided based on the LAKE specification which LAKEError values would be
 /// reported with precise data, and which should rather produce a generic response.
 ///
 /// Places using this function may be simplified if From/Into is specified (possibly after
 /// enlarging the Error type)
-fn render_error(_e: EDHOCError) -> Error {
+fn render_error(_e: LAKEError) -> Error {
     Error::bad_request()
 }
 
-impl EdhocHandler {
-    fn take_connection_by_c_r(&mut self, c_r: ConnId) -> Option<EdhocResponderWaitM3<Crypto>> {
+impl LakeHandler {
+    fn take_connection_by_c_r(&mut self, c_r: ConnId) -> Option<LakeResponderWaitM3<Crypto>> {
         let index = self
             .connections
             .iter()
@@ -60,7 +60,7 @@ impl EdhocHandler {
 
     fn new_c_r(&self) -> ConnId {
         // FIXME: We'll need to do better, but a) that'll be more practical when we can do more
-        // than u8, and b) that'll best be coordinated with a storage that not only stores EDHOC
+        // than u8, and b) that'll best be coordinated with a storage that not only stores LAKE
         // contexts but also OSCORE ones.
         let result = self.connections.len();
         if result >= 24 {
@@ -71,12 +71,12 @@ impl EdhocHandler {
     }
 }
 
-enum EdhocResponse {
+enum LakeResponse {
     // We could also store the responder in the Vec (once we're done rendering the response, we'll
     // take up a slot there anyway) if we make it an enum.
     OkSend2 {
         c_r: ConnId,
-        responder: EdhocResponderProcessedM1<Crypto>,
+        responder: LakeResponderProcessedM1<Crypto>,
         // FIXME: Is the ead_2 the most practical data to store here? An easy alternative is the
         // voucher_response; ideal would be the voucher, bu that is only internal to prepare_ead_2.
         //
@@ -87,8 +87,8 @@ enum EdhocResponse {
     Message3Processed,
 }
 
-impl coap_handler::Handler for EdhocHandler {
-    type RequestData = EdhocResponse;
+impl coap_handler::Handler for LakeHandler {
+    type RequestData = LakeResponse;
 
     type ExtractRequestError = Error;
     type BuildResponseError<M: MinimalWritableMessage> = M::UnionError;
@@ -112,9 +112,9 @@ impl coap_handler::Handler for EdhocHandler {
                     .expect("Static credential is not processable");
 
             let message_1 =
-                &EdhocBuffer::new_from_slice(&request.payload()[1..]).map_err(too_small)?;
+                &LakeBuffer::new_from_slice(&request.payload()[1..]).map_err(too_small)?;
 
-            let (responder, _c_i, mut ead_1) = EdhocResponder::new(
+            let (responder, _c_i, mut ead_1) = LakeResponder::new(
                 lakers_crypto::default_crypto(),
                 ResponderIdentity::StatStat {
                     r: R.try_into().expect("Wrong length of responder private key"),
@@ -147,7 +147,7 @@ impl coap_handler::Handler for EdhocHandler {
             ead_1.processed_critical_items().map_err(render_error)?;
 
             let c_r = self.new_c_r();
-            Ok(EdhocResponse::OkSend2 {
+            Ok(LakeResponse::OkSend2 {
                 c_r,
                 responder,
                 ead_2,
@@ -159,7 +159,7 @@ impl coap_handler::Handler for EdhocHandler {
             let (c_r_rcvd, message_3) = request
                 .payload()
                 .split_first()
-                // FIXME: Being way too short, is that an EDHOC error or a CoAP error?
+                // FIXME: Being way too short, is that a LAKE error or a CoAP error?
                 .ok_or_else(Error::bad_request)?;
 
             // FIXME: This panics or creates an in valid ConnId (but once we fix
@@ -174,10 +174,10 @@ impl coap_handler::Handler for EdhocHandler {
 
             println!("Found state with connection identifier {:?}", c_r_rcvd);
 
-            let message_3 = EdhocBuffer::new_from_slice(&message_3).map_err(too_small)?;
+            let message_3 = LakeBuffer::new_from_slice(&message_3).map_err(too_small)?;
             let result = responder.parse_message_3(&message_3);
             let (responder, id_cred_i, ead_3) = result.map_err(|e| {
-                println!("EDHOC processing error: {:?}", e);
+                println!("LAKE processing error: {:?}", e);
                 render_error(e)
             })?;
             ead_3.processed_critical_items().map_err(|e| {
@@ -190,35 +190,35 @@ impl coap_handler::Handler for EdhocHandler {
             let valid_cred_i =
                 credential_check_or_fetch(Some(cred_i), id_cred_i).map_err(render_error)?;
             let (responder, prk_out) = responder.verify_message_3(valid_cred_i).map_err(|e| {
-                println!("EDHOC processing error: {:?}", e);
+                println!("LAKE processing error: {:?}", e);
                 render_error(e)
             })?;
 
             let (mut responder, _message_4) =
                 responder.prepare_message_4(&EadItems::new()).unwrap();
-            println!("EDHOC exchange successfully completed");
+            println!("LAKE exchange successfully completed");
             println!("PRK_out: {:02x?}", prk_out);
 
             let mut oscore_secret = [0; 16];
-            responder.edhoc_exporter(0u8, &[], &mut oscore_secret); // label is 0
+            responder.lake_exporter(0u8, &[], &mut oscore_secret); // label is 0
             println!("OSCORE secret: {:02x?}", oscore_secret);
             let mut oscore_salt = [0; 8];
-            responder.edhoc_exporter(1u8, &[], &mut oscore_salt); // label is 1
+            responder.lake_exporter(1u8, &[], &mut oscore_salt); // label is 1
             println!("OSCORE salt: {:02x?}", oscore_salt);
 
             // context of key update is a test vector from draft-ietf-lake-traces
-            let prk_out_new = responder.edhoc_key_update(&[
+            let prk_out_new = responder.lake_key_update(&[
                 0xa0, 0x11, 0x58, 0xfd, 0xb8, 0x20, 0x89, 0x0c, 0xd6, 0xbe, 0x16, 0x96, 0x02, 0xb8,
                 0xbc, 0xea,
             ]);
             println!("PRK_out after key update: {:02x?}?", prk_out_new);
 
-            responder.edhoc_exporter(0u8, &[], &mut oscore_secret); // label is 0
+            responder.lake_exporter(0u8, &[], &mut oscore_secret); // label is 0
             println!("OSCORE secret after key update: {:02x?}", oscore_secret);
-            responder.edhoc_exporter(1u8, &[], &mut oscore_salt); // label is 1
+            responder.lake_exporter(1u8, &[], &mut oscore_salt); // label is 1
             println!("OSCORE salt after key update: {:02x?}", oscore_salt);
 
-            Ok(EdhocResponse::Message3Processed)
+            Ok(LakeResponse::Message3Processed)
         }
     }
     fn estimate_length(&mut self, _: &Self::RequestData) -> usize {
@@ -231,7 +231,7 @@ impl coap_handler::Handler for EdhocHandler {
     ) -> Result<(), Self::BuildResponseError<M>> {
         response.set_code(M::Code::new(coap_numbers::code::CHANGED)?);
         match req {
-            EdhocResponse::OkSend2 {
+            LakeResponse::OkSend2 {
                 c_r,
                 responder,
                 ead_2,
@@ -242,7 +242,7 @@ impl coap_handler::Handler for EdhocHandler {
                 self.connections.push((c_r, responder));
                 response.set_payload(message_2.as_slice())?;
             }
-            EdhocResponse::Message3Processed => (), // "send empty ack back"?
+            LakeResponse::Message3Processed => (), // "send empty ack back"?
         };
         Ok(())
     }
@@ -252,20 +252,20 @@ fn build_handler() -> impl coap_handler::Handler {
     use coap_handler_implementations::{HandlerBuilder, ReportingHandlerBuilder};
 
     // ead authz server (W)
-    let acl = EdhocMessageBuffer::new_from_slice(&[ID_CRED_I[3]]).unwrap(); // [kid]
+    let acl = LakeMessageBuffer::new_from_slice(&[ID_CRED_I[3]]).unwrap(); // [kid]
     let mock_server = ZeroTouchServer::new(
         W_TV.try_into().unwrap(),
         CRED_R.try_into().unwrap(),
         Some(acl),
     );
 
-    let edhoc = EdhocHandler {
+    let lake = LakeHandler {
         connections: Vec::with_capacity(3),
         mock_server,
     };
 
     coap_handler_implementations::new_dispatcher()
-        .at_with_attributes(&[".well-known", "edhoc"], &[], edhoc)
+        .at_with_attributes(&[".well-known", "edhoc"], &[], lake)
         .with_wkc()
 }
 

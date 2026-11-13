@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 
-//! EDHOC Initiator on the nRF54L15.
+//! LAKE Initiator on the nRF54L15.
 
 use defmt::info;
 use lakers::*;
@@ -18,10 +18,10 @@ fn main() -> ! {
     let cred_i = Credential::parse_ccs(CRED_I.try_into().unwrap()).unwrap();
     let cred_r = Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
 
-    let mut initiator = EdhocInitiator::new(
+    let mut initiator = LakeInitiator::new(
         hardware_crypto(),
-        EDHOCMethod::StatStat,
-        EDHOCSuite::CipherSuite2,
+        LAKEMethod::StatStat,
+        LAKESuite::CipherSuite2,
     );
     initiator
         .set_identity(
@@ -41,7 +41,7 @@ fn main() -> ! {
     let pckt_2 = radio.transmit_and_wait_response(pckt_1, 0xf5);
 
     info!("received message_2");
-    let message_2: EdhocMessageBuffer = pckt_2.payload().try_into().expect("wrong length");
+    let message_2: LakeMessageBuffer = pckt_2.payload().try_into().expect("wrong length");
     info!("message_2 :{:?}", message_2.as_slice());
 
     let (initiator, c_r, _ead_2) = initiator.parse_message_2(&message_2).unwrap();
@@ -58,7 +58,7 @@ fn main() -> ! {
     let pckt_4 = radio.transmit_and_wait_response(pckt_3, c_r.as_slice()[0]);
 
     info!("received message_4");
-    let message_4: EdhocMessageBuffer = pckt_4.payload().try_into().expect("wrong length");
+    let message_4: LakeMessageBuffer = pckt_4.payload().try_into().expect("wrong length");
 
     let (_initiator, _ead_4) = initiator.process_message_4(&message_4).unwrap();
 

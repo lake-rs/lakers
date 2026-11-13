@@ -64,10 +64,10 @@ async fn main(_spawner: Spawner) {
     let cred_i = Credential::parse_ccs(lakers_nrf52840::CRED_I.try_into().unwrap()).unwrap();
     let cred_r = Credential::parse_ccs(lakers_nrf52840::CRED_R.try_into().unwrap()).unwrap();
 
-    let mut initiator = EdhocInitiator::new(
+    let mut initiator = LakeInitiator::new(
         lakers_crypto::default_crypto(),
-        EDHOCMethod::StatStat,
-        EDHOCSuite::CipherSuite2,
+        LAKEMethod::StatStat,
+        LAKESuite::CipherSuite2,
     );
     initiator
         .set_identity(
@@ -90,7 +90,7 @@ async fn main(_spawner: Spawner) {
     match rcvd {
         Ok(pckt_2) => {
             info!("Received message_2");
-            let message_2: EdhocMessageBuffer =
+            let message_2: LakeMessageBuffer =
                 // starts in 1 to consider only the content and not the metadata
                 pckt_2.pdu[1..pckt_2.len].try_into().expect("wrong length");
             info!("message_2 :{:?}", message_2.as_slice());
@@ -117,7 +117,7 @@ async fn main(_spawner: Spawner) {
             match rcvd {
                 Ok(pckt_4) => {
                     info!("Received message_4");
-                    let message_4: EdhocMessageBuffer =
+                    let message_4: LakeMessageBuffer =
                         pckt_4.pdu[1..pckt_4.len].try_into().expect("wrong length");
 
                     let (_initiator, _ead_4) = initiator.process_message_4(&message_4).unwrap();
