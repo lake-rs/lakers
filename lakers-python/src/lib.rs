@@ -174,8 +174,8 @@ fn lakers_python(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(p256_generate_key_pair, m)?)?;
     m.add_function(wrap_pyfunction!(py_credential_check_or_fetch, m)?)?;
     // edhoc items
-    m.add_class::<initiator::PyEdhocInitiator>()?;
-    m.add_class::<responder::PyEdhocResponder>()?;
+    m.add_class::<initiator::PyLakeInitiator>()?;
+    m.add_class::<responder::PyLakeResponder>()?;
     m.add_class::<lakers::CredentialTransfer>()?;
     m.add_class::<lakers::EADItem>()?;
     m.add_class::<lakers::Credential>()?;

@@ -7,7 +7,7 @@ use super::{ErrExt as _, StateMismatch};
 
 /// An implementation of the EDHOC protocol for the responder side.
 #[pyclass(name = "LakeResponder")]
-pub struct PyEdhocResponder {
+pub struct PyLakeResponder {
     r: Vec<u8>,
     cred_r: Credential,
     start: Option<ResponderStart>,
@@ -18,13 +18,13 @@ pub struct PyEdhocResponder {
     completed: Option<Completed>,
 }
 
-/// Summary of a [`PyEdhocResponder`]'s state.
+/// Summary of a [`PyLakeResponder`]'s state.
 ///
 /// This is sorted along the typical (and, really, only) sequence of operations so that if the
 /// expected state is greater than the current state, the user forgot to do something, whereas the
 /// other way round, the user already did something and can't do that again.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
-pub(crate) enum PyEdhocResponderSummary {
+pub(crate) enum PyLakeResponderSummary {
     Start,
     ProcessingM1,
     WaitM3,
@@ -37,7 +37,7 @@ pub(crate) enum PyEdhocResponderSummary {
 }
 
 #[pymethods]
-impl PyEdhocResponder {
+impl PyLakeResponder {
     #[new]
     #[pyo3(signature = (cred_r, r=None))]
     fn new(py: Python<'_>, cred_r: super::AutoCredential, r: Option<Vec<u8>>) -> PyResult<Self> {
@@ -258,8 +258,8 @@ impl PyEdhocResponder {
 /// Tools for generating useful and readable reprs and errors.
 ///
 /// See [`StateMismatch`] for some more context.
-impl PyEdhocResponder {
-    fn summarize(&self) -> PyEdhocResponderSummary {
+impl PyLakeResponder {
+    fn summarize(&self) -> PyLakeResponderSummary {
         let start = self.start.is_some();
         let processing_m1 = self.processing_m1.is_some();
         let wait_m3 = self.wait_m3.is_some();
@@ -274,64 +274,60 @@ impl PyEdhocResponder {
             processed_m3,
             completed,
         ) {
-            (true, false, false, false, false, false) => PyEdhocResponderSummary::Start,
-            (false, true, false, false, false, false) => PyEdhocResponderSummary::ProcessingM1,
-            (false, false, true, false, false, false) => PyEdhocResponderSummary::WaitM3,
-            (false, false, false, true, false, false) => PyEdhocResponderSummary::ProcessingM3,
-            (false, false, false, false, true, false) => PyEdhocResponderSummary::ProcessedM3,
-            (false, false, false, false, false, true) => PyEdhocResponderSummary::Completed,
-            _ => PyEdhocResponderSummary::Invalid,
+            (true, false, false, false, false, false) => PyLakeResponderSummary::Start,
+            (false, true, false, false, false, false) => PyLakeResponderSummary::ProcessingM1,
+            (false, false, true, false, false, false) => PyLakeResponderSummary::WaitM3,
+            (false, false, false, true, false, false) => PyLakeResponderSummary::ProcessingM3,
+            (false, false, false, false, true, false) => PyLakeResponderSummary::ProcessedM3,
+            (false, false, false, false, false, true) => PyLakeResponderSummary::Completed,
+            _ => PyLakeResponderSummary::Invalid,
         }
     }
 
-    // FIXME: Those should be generated, or the PyEdhocResponder type changed to something more
+    // FIXME: Those should be generated, or the PyLakeResponder type changed to something more
     // annotated-enum-ish
 
-    fn take_start(&mut self) -> Result<ResponderStart, StateMismatch<PyEdhocResponderSummary>> {
+    fn take_start(&mut self) -> Result<ResponderStart, StateMismatch<PyLakeResponderSummary>> {
         let summary = self.summarize();
         match self.start.take() {
             Some(o) => Ok(o),
-            None => Err(StateMismatch::new(PyEdhocResponderSummary::Start, summary)),
+            None => Err(StateMismatch::new(PyLakeResponderSummary::Start, summary)),
         }
     }
 
-    fn as_ref_processing_m1(
-        &self,
-    ) -> Result<&ProcessingM1, StateMismatch<PyEdhocResponderSummary>> {
+    fn as_ref_processing_m1(&self) -> Result<&ProcessingM1, StateMismatch<PyLakeResponderSummary>> {
         let summary = self.summarize();
         match self.processing_m1.as_ref() {
             Some(o) => Ok(o),
             None => Err(StateMismatch::new(
-                PyEdhocResponderSummary::ProcessingM1,
+                PyLakeResponderSummary::ProcessingM1,
                 summary,
             )),
         }
     }
 
-    fn take_wait_m3(&mut self) -> Result<WaitM3, StateMismatch<PyEdhocResponderSummary>> {
+    fn take_wait_m3(&mut self) -> Result<WaitM3, StateMismatch<PyLakeResponderSummary>> {
         let summary = self.summarize();
         match self.wait_m3.take() {
             Some(o) => Ok(o),
-            None => Err(StateMismatch::new(PyEdhocResponderSummary::WaitM3, summary)),
+            None => Err(StateMismatch::new(PyLakeResponderSummary::WaitM3, summary)),
         }
     }
 
     fn take_processing_m3(
         &mut self,
-    ) -> Result<ProcessingM3, StateMismatch<PyEdhocResponderSummary>> {
+    ) -> Result<ProcessingM3, StateMismatch<PyLakeResponderSummary>> {
         let summary = self.summarize();
         match self.processing_m3.take() {
             Some(o) => Ok(o),
             None => Err(StateMismatch::new(
-                PyEdhocResponderSummary::ProcessingM3,
+                PyLakeResponderSummary::ProcessingM3,
                 summary,
             )),
         }
     }
 
-    fn as_ref_processing_m3(
-        &self,
-    ) -> Result<&ProcessingM3, StateMismatch<PyEdhocResponderSummary>> {
+    fn as_ref_processing_m3(&self) -> Result<&ProcessingM3, StateMismatch<PyLakeResponderSummary>> {
         // This is needed alongside `take_processing_m3()`: some callers must inspect the
         // negotiated method in `processing_m3` to choose how to parse credentials before the
         // state is consumed by the actual verification step.
@@ -339,18 +335,18 @@ impl PyEdhocResponder {
         match self.processing_m3.as_ref() {
             Some(o) => Ok(o),
             None => Err(StateMismatch::new(
-                PyEdhocResponderSummary::ProcessingM3,
+                PyLakeResponderSummary::ProcessingM3,
                 summary,
             )),
         }
     }
 
-    fn take_processed_m3(&mut self) -> Result<ProcessedM3, StateMismatch<PyEdhocResponderSummary>> {
+    fn take_processed_m3(&mut self) -> Result<ProcessedM3, StateMismatch<PyLakeResponderSummary>> {
         let summary = self.summarize();
         match self.processed_m3.take() {
             Some(o) => Ok(o),
             None => Err(StateMismatch::new(
-                PyEdhocResponderSummary::ProcessedM3,
+                PyLakeResponderSummary::ProcessedM3,
                 summary,
             )),
         }
@@ -358,12 +354,12 @@ impl PyEdhocResponder {
 
     fn as_mut_completed(
         &mut self,
-    ) -> Result<&mut Completed, StateMismatch<PyEdhocResponderSummary>> {
+    ) -> Result<&mut Completed, StateMismatch<PyLakeResponderSummary>> {
         let summary = self.summarize();
         match self.completed.as_mut() {
             Some(o) => Ok(o),
             None => Err(StateMismatch::new(
-                PyEdhocResponderSummary::Completed,
+                PyLakeResponderSummary::Completed,
                 summary,
             )),
         }

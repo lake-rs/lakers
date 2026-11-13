@@ -9,7 +9,7 @@ use crate::parse_credential;
 
 /// An implementation of the EDHOC protocol for the initiator side.
 #[pyclass(name = "LakeInitiator")]
-pub struct PyEdhocInitiator {
+pub struct PyLakeInitiator {
     cred_i: Option<Credential>,
     // FIXME: This does *not* get taken out, so some data stays available for longer than it needs
     // to be -- but that is apparently needed in selected_cipher_suite and
@@ -22,13 +22,13 @@ pub struct PyEdhocInitiator {
     completed: Option<Completed>,
 }
 
-/// Summary of a [`PyEdhocInitiator`]'s state.
+/// Summary of a [`PyLakeInitiator`]'s state.
 ///
 /// This is sorted along the typical (and, really, only) sequence of operations so that if the
 /// expected state is greater than the current state, the user forgot to do something, whereas the
 /// other way round, the user already did something and can't do that again.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
-pub(crate) enum PyEdhocInitiatorSummary {
+pub(crate) enum PyLakeInitiatorSummary {
     Start,
     WaitM2,
     ProcessingM2,
@@ -41,7 +41,7 @@ pub(crate) enum PyEdhocInitiatorSummary {
 }
 
 #[pymethods]
-impl PyEdhocInitiator {
+impl PyLakeInitiator {
     #[new]
     #[pyo3(signature = (method="statstat"))]
     fn new(method: &str) -> PyResult<Self> {
@@ -295,83 +295,83 @@ fn parse_method(method: &str) -> PyResult<LAKEMethod> {
 /// Tools for generating useful and readable reprs and errors.
 ///
 /// See [`StateMismatch`] for some more context.
-impl PyEdhocInitiator {
-    fn summarize(&self) -> PyEdhocInitiatorSummary {
+impl PyLakeInitiator {
+    fn summarize(&self) -> PyLakeInitiatorSummary {
         let wait_m2 = self.wait_m2.is_some();
         let processing_m2 = self.processing_m2.is_some();
         let processed_m2 = self.processed_m2.is_some();
         let wait_m4 = self.wait_m4.is_some();
         let completed = self.completed.is_some();
         match (wait_m2, processing_m2, processed_m2, wait_m4, completed) {
-            (false, false, false, false, false) => PyEdhocInitiatorSummary::Start,
-            (true, false, false, false, false) => PyEdhocInitiatorSummary::WaitM2,
-            (false, true, false, false, false) => PyEdhocInitiatorSummary::ProcessingM2,
-            (false, false, true, false, false) => PyEdhocInitiatorSummary::ProcessedM2,
-            (false, false, false, true, false) => PyEdhocInitiatorSummary::WaitM4,
-            (false, false, false, false, true) => PyEdhocInitiatorSummary::Completed,
-            _ => PyEdhocInitiatorSummary::Invalid,
+            (false, false, false, false, false) => PyLakeInitiatorSummary::Start,
+            (true, false, false, false, false) => PyLakeInitiatorSummary::WaitM2,
+            (false, true, false, false, false) => PyLakeInitiatorSummary::ProcessingM2,
+            (false, false, true, false, false) => PyLakeInitiatorSummary::ProcessedM2,
+            (false, false, false, true, false) => PyLakeInitiatorSummary::WaitM4,
+            (false, false, false, false, true) => PyLakeInitiatorSummary::Completed,
+            _ => PyLakeInitiatorSummary::Invalid,
         }
     }
 
-    // FIXME: Those should be generated, or the PyEdhocInitiator type changed to something more
+    // FIXME: Those should be generated, or the PyLakeInitiator type changed to something more
     // annotated-enum-ish
 
-    fn take_wait_m2(&mut self) -> Result<WaitM2, StateMismatch<PyEdhocInitiatorSummary>> {
+    fn take_wait_m2(&mut self) -> Result<WaitM2, StateMismatch<PyLakeInitiatorSummary>> {
         let summary = self.summarize();
         match self.wait_m2.take() {
             Some(o) => Ok(o),
-            None => Err(StateMismatch::new(PyEdhocInitiatorSummary::WaitM2, summary)),
+            None => Err(StateMismatch::new(PyLakeInitiatorSummary::WaitM2, summary)),
         }
     }
 
-    fn as_ref_wait_m2(&self) -> Result<&WaitM2, StateMismatch<PyEdhocInitiatorSummary>> {
+    fn as_ref_wait_m2(&self) -> Result<&WaitM2, StateMismatch<PyLakeInitiatorSummary>> {
         let summary = self.summarize();
         match self.wait_m2.as_ref() {
             Some(o) => Ok(o),
-            None => Err(StateMismatch::new(PyEdhocInitiatorSummary::WaitM2, summary)),
+            None => Err(StateMismatch::new(PyLakeInitiatorSummary::WaitM2, summary)),
         }
     }
 
     fn take_processing_m2(
         &mut self,
-    ) -> Result<ProcessingM2, StateMismatch<PyEdhocInitiatorSummary>> {
+    ) -> Result<ProcessingM2, StateMismatch<PyLakeInitiatorSummary>> {
         let summary = self.summarize();
         match self.processing_m2.take() {
             Some(o) => Ok(o),
             None => Err(StateMismatch::new(
-                PyEdhocInitiatorSummary::ProcessingM2,
+                PyLakeInitiatorSummary::ProcessingM2,
                 summary,
             )),
         }
     }
 
-    fn take_processed_m2(&mut self) -> Result<ProcessedM2, StateMismatch<PyEdhocInitiatorSummary>> {
+    fn take_processed_m2(&mut self) -> Result<ProcessedM2, StateMismatch<PyLakeInitiatorSummary>> {
         let summary = self.summarize();
         match self.processed_m2.take() {
             Some(o) => Ok(o),
             None => Err(StateMismatch::new(
-                PyEdhocInitiatorSummary::ProcessedM2,
+                PyLakeInitiatorSummary::ProcessedM2,
                 summary,
             )),
         }
     }
 
-    fn take_wait_m4(&mut self) -> Result<WaitM4, StateMismatch<PyEdhocInitiatorSummary>> {
+    fn take_wait_m4(&mut self) -> Result<WaitM4, StateMismatch<PyLakeInitiatorSummary>> {
         let summary = self.summarize();
         match self.wait_m4.take() {
             Some(o) => Ok(o),
-            None => Err(StateMismatch::new(PyEdhocInitiatorSummary::WaitM4, summary)),
+            None => Err(StateMismatch::new(PyLakeInitiatorSummary::WaitM4, summary)),
         }
     }
 
     fn as_mut_completed(
         &mut self,
-    ) -> Result<&mut Completed, StateMismatch<PyEdhocInitiatorSummary>> {
+    ) -> Result<&mut Completed, StateMismatch<PyLakeInitiatorSummary>> {
         let summary = self.summarize();
         match self.completed.as_mut() {
             Some(o) => Ok(o),
             None => Err(StateMismatch::new(
-                PyEdhocInitiatorSummary::Completed,
+                PyLakeInitiatorSummary::Completed,
                 summary,
             )),
         }
