@@ -148,7 +148,7 @@ impl PyEdhocInitiator {
         // The initiator identity format depends on the negotiated method:
         // stat-stat needs the static DH private key, PSK does not.
         let identity = match self.start.method {
-            EDHOCMethod::StatStat => {
+            LAKEMethod::StatStat => {
                 let i = i.ok_or_else(|| {
                     PyValueError::new_err("StatStat requires initiator private key I")
                 })?;
@@ -158,7 +158,7 @@ impl PyEdhocInitiator {
                         .map_err(|_| LAKEError::ParsingError)?,
                 }
             }
-            EDHOCMethod::PSK => InitiatorIdentity::Psk,
+            LAKEMethod::PSK => InitiatorIdentity::Psk,
             _ => return Err(LAKEError::UnsupportedMethod.into()),
         };
 
@@ -282,10 +282,10 @@ impl PyEdhocInitiator {
     }
 }
 
-fn parse_method(method: &str) -> PyResult<EDHOCMethod> {
+fn parse_method(method: &str) -> PyResult<LAKEMethod> {
     match method {
-        "statstat" => Ok(EDHOCMethod::StatStat),
-        "psk" => Ok(EDHOCMethod::PSK),
+        "statstat" => Ok(LAKEMethod::StatStat),
+        "psk" => Ok(LAKEMethod::PSK),
         _ => Err(PyValueError::new_err(
             "Unsupported method, expected 'statstat' or 'psk'",
         )),

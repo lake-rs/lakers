@@ -132,7 +132,7 @@ impl AutoCredential {
 }
 
 pub(crate) fn parse_credential(
-    method: EDHOCMethod,
+    method: LAKEMethod,
     credential: AutoCredential,
 ) -> Result<Credential, LAKEError> {
     use AutoCredential::{Existing, Parse};
@@ -142,8 +142,8 @@ pub(crate) fn parse_credential(
         // The same Python API accepts both stat-stat CCS credentials and PSK CCS credentials.
         // Parse according to the negotiated EDHOC method so callers don't need separate types.
         Parse(v) => match method {
-            EDHOCMethod::StatStat => Credential::parse_ccs(v.as_slice())?,
-            EDHOCMethod::PSK => Credential::parse_ccs_symmetric(v.as_slice())?,
+            LAKEMethod::StatStat => Credential::parse_ccs(v.as_slice())?,
+            LAKEMethod::PSK => Credential::parse_ccs_symmetric(v.as_slice())?,
             _ => return Err(LAKEError::UnsupportedMethod),
         },
     })

@@ -48,9 +48,9 @@ impl PyEdhocResponder {
 
         let cred_r = match parse_responder_identity(&r) {
             Ok(ResponderIdentity::StatStat { .. }) => {
-                super::parse_credential(EDHOCMethod::StatStat, cred_r)
+                super::parse_credential(LAKEMethod::StatStat, cred_r)
             }
-            Ok(ResponderIdentity::Psk) => super::parse_credential(EDHOCMethod::PSK, cred_r),
+            Ok(ResponderIdentity::Psk) => super::parse_credential(LAKEMethod::PSK, cred_r),
             Err(err) => Err(err),
         }
         .with_cause(py, "Failed to ingest CRED_R")?;
@@ -113,7 +113,7 @@ impl PyEdhocResponder {
         let ead_2 = ead_2.try_into()?;
         let processing_m1 = self.as_ref_processing_m1()?;
         let (state, message_2) = match processing_m1.method {
-            EDHOCMethod::StatStat => {
+            LAKEMethod::StatStat => {
                 let r: BytesP256ElemLen = self
                     .r
                     .as_slice()
@@ -132,7 +132,7 @@ impl PyEdhocResponder {
                     &ead_2,
                 )?
             }
-            EDHOCMethod::PSK => r_prepare_message_2(
+            LAKEMethod::PSK => r_prepare_message_2(
                 processing_m1,
                 &mut default_crypto(),
                 // FIXME: take as reference rather than cloning
@@ -178,8 +178,8 @@ impl PyEdhocResponder {
         // Message 3 parsing has already established which method is in use, so reuse that to
         // parse the initiator credential with the correct CCS vs symmetric-CCS parser.
         let method = match &self.as_ref_processing_m3()?.method_specifics {
-            ProcessingM3MethodSpecifics::StatStat { .. } => EDHOCMethod::StatStat,
-            ProcessingM3MethodSpecifics::Psk { .. } => EDHOCMethod::PSK,
+            ProcessingM3MethodSpecifics::StatStat { .. } => LAKEMethod::StatStat,
+            ProcessingM3MethodSpecifics::Psk { .. } => LAKEMethod::PSK,
         };
         let valid_cred_i = super::parse_credential(method, valid_cred_i)
             .with_cause(py, "Failed to ingest CRED_I")?;

@@ -87,10 +87,10 @@ pub fn r_process_message_1(
     // g_x will be saved to the state
     if let Ok((method, suites_i, g_x, c_i, ead_1)) = parse_message_1(message_1) {
         // verify that the method is supported
-        let method = EDHOCMethod::try_from(method)?;
+        let method = LAKEMethod::try_from(method)?;
 
         match method {
-            EDHOCMethod::StatStat | EDHOCMethod::PSK => {
+            LAKEMethod::StatStat | LAKEMethod::PSK => {
                 // Step 2: verify that the selected cipher suite is supported
                 if suites_i[suites_i.len() - 1] == EDHOC_SUPPORTED_SUITES[0] {
                     // hash message_1 and save the hash to the state to avoid saving the whole message
@@ -131,7 +131,7 @@ pub fn r_prepare_message_2(
     let prk_2e = compute_prk_2e(crypto, &state.y, &state.g_x, &th_2);
 
     let prepared = match (state.method, method_details) {
-        (EDHOCMethod::StatStat, PrepareMessage2Details::StatStat { r, cred_transfer }) => {
+        (LAKEMethod::StatStat, PrepareMessage2Details::StatStat { r, cred_transfer }) => {
             r_prepare_message_2_statstat(
                 state,
                 crypto,
@@ -144,7 +144,7 @@ pub fn r_prepare_message_2(
                 &prk_2e,
             )?
         }
-        (EDHOCMethod::PSK, PrepareMessage2Details::Psk) => {
+        (LAKEMethod::PSK, PrepareMessage2Details::Psk) => {
             r_prepare_message_2_psk(crypto, cred_r, c_r, ead_2, &th_2, &prk_2e)?
         }
         _ => return Err(LAKEError::UnsupportedMethod),
@@ -330,8 +330,8 @@ pub fn i_parse_message_2<'a>(
     let plaintext_2 = encrypt_decrypt_ciphertext_2(crypto, &prk_2e, &th_2, &ciphertext_2);
 
     let decoded = match state.method {
-        EDHOCMethod::StatStat => i_parse_message_2_statstat(&plaintext_2),
-        EDHOCMethod::PSK => i_parse_message_2_psk(&plaintext_2),
+        LAKEMethod::StatStat => i_parse_message_2_statstat(&plaintext_2),
+        LAKEMethod::PSK => i_parse_message_2_psk(&plaintext_2),
         _ => Err(LAKEError::UnsupportedMethod),
     }?;
 
@@ -444,7 +444,7 @@ pub fn i_complete_without_message_4(state: &WaitM4) -> Result<Completed, LAKEErr
 }
 
 fn encode_message_1(
-    method: EDHOCMethod,
+    method: LAKEMethod,
     suites: &LakeBuffer<MAX_SUITES_LEN>,
     g_x: &BytesP256ElemLen,
     c_i: ConnId,
@@ -1128,7 +1128,7 @@ mod tests {
     // test vectors (TV)
 
     // EDHOC-PSK
-    const METHOD_PSK_TV: EDHOCMethod = EDHOCMethod::PSK; //0x04;
+    const METHOD_PSK_TV: LAKEMethod = LAKEMethod::PSK; //0x04;
     const SUITES_I_PSK_TV: LakeBuffer<MAX_SUITES_LEN> = LakeBuffer::new_from_array(&hex!("02"));
     // === Initiator ephemeral private key X ===
     const X_PSK_TV: BytesP256ElemLen =
@@ -1248,7 +1248,7 @@ mod tests {
 
     // STAT-STAT METHOD
     // message_1 (first_time)
-    const METHOD_TV_FIRST_TIME: EDHOCMethod = EDHOCMethod::StatStat;
+    const METHOD_TV_FIRST_TIME: LAKEMethod = LAKEMethod::StatStat;
     const SUITES_I_TV_FIRST_TIME: LakeBuffer<MAX_SUITES_LEN> =
         LakeBuffer::new_from_array(&hex!("06"));
     const G_X_TV_FIRST_TIME: BytesP256ElemLen =
@@ -1260,7 +1260,7 @@ mod tests {
     ));
 
     // message_1 (second time)
-    const METHOD_TV: EDHOCMethod = EDHOCMethod::StatStat;
+    const METHOD_TV: LAKEMethod = LAKEMethod::StatStat;
     // manually modified test vector to include a single supported cipher suite
     const SUITES_I_TV: LakeBuffer<MAX_SUITES_LEN> = LakeBuffer::new_from_array(&hex!("0602"));
     const G_X_TV: BytesP256ElemLen =

@@ -66,7 +66,7 @@ fn main() -> ! {
     fn test_new_initiator() {
         let _initiator = EdhocInitiator::new(
             lakers_crypto::default_crypto(),
-            EDHOCMethod::StatStat,
+            LAKEMethod::StatStat,
             EDHOCSuite::CipherSuite2,
         );
     }
@@ -89,7 +89,7 @@ fn main() -> ! {
     fn test_prepare_message_1() {
         let initiator = EdhocInitiator::new(
             lakers_crypto::default_crypto(),
-            EDHOCMethod::StatStat,
+            LAKEMethod::StatStat,
             EDHOCSuite::CipherSuite2,
         );
 
@@ -108,7 +108,7 @@ fn main() -> ! {
 
         let initiator = EdhocInitiator::new(
             lakers_crypto::default_crypto(),
-            EDHOCMethod::StatStat,
+            LAKEMethod::StatStat,
             EDHOCSuite::CipherSuite2,
         );
         let responder = EdhocResponder::new(
@@ -172,7 +172,7 @@ fn main() -> ! {
 
         let initiator = EdhocInitiator::new(
             lakers_crypto::default_crypto(),
-            EDHOCMethod::PSK,
+            LAKEMethod::PSK,
             EDHOCSuite::CipherSuite2,
         );
         let responder = EdhocResponder::new(

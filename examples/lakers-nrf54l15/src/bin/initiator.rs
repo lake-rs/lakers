@@ -20,7 +20,7 @@ fn main() -> ! {
 
     let mut initiator = EdhocInitiator::new(
         hardware_crypto(),
-        EDHOCMethod::StatStat,
+        LAKEMethod::StatStat,
         EDHOCSuite::CipherSuite2,
     );
     initiator

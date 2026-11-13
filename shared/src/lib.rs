@@ -375,25 +375,25 @@ impl ConnId {
 #[derive(PartialEq, Debug, Copy, Clone)]
 #[repr(C)]
 #[non_exhaustive]
-pub enum EDHOCMethod {
+pub enum LAKEMethod {
     StatStat = 3,
     PSK = 4,
 }
 
-impl TryFrom<u8> for EDHOCMethod {
+impl TryFrom<u8> for LAKEMethod {
     type Error = LAKEError;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            3 => Ok(EDHOCMethod::StatStat),
-            4 => Ok(EDHOCMethod::PSK),
+            3 => Ok(LAKEMethod::StatStat),
+            4 => Ok(LAKEMethod::PSK),
             _ => Err(LAKEError::UnsupportedMethod),
         }
     }
 }
 
-impl From<EDHOCMethod> for u8 {
-    fn from(method: EDHOCMethod) -> u8 {
+impl From<LAKEMethod> for u8 {
+    fn from(method: LAKEMethod) -> u8 {
         method as u8
     }
 }
@@ -499,7 +499,7 @@ impl ErrCode {
 #[repr(C)]
 pub struct InitiatorStart {
     pub suites_i: LakeBuffer<MAX_SUITES_LEN>,
-    pub method: EDHOCMethod,
+    pub method: LAKEMethod,
     pub x: BytesP256ElemLen,   // ephemeral private key of myself
     pub g_x: BytesP256ElemLen, // ephemeral public key of myself
 }
@@ -512,7 +512,7 @@ pub struct ResponderStart {
 
 #[derive(Debug)]
 pub struct ProcessingM1 {
-    pub method: EDHOCMethod,
+    pub method: LAKEMethod,
     pub y: BytesP256ElemLen,
     pub g_y: BytesP256ElemLen,
     pub c_i: ConnId,
@@ -523,7 +523,7 @@ pub struct ProcessingM1 {
 #[derive(Clone, Debug)]
 #[repr(C)]
 pub struct WaitM2 {
-    pub method: EDHOCMethod,
+    pub method: LAKEMethod,
     pub x: BytesP256ElemLen, // ephemeral private key of the initiator
     pub h_message_1: BytesHashLen,
 }
