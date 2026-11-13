@@ -7,9 +7,9 @@ use lakers_shared::{Crypto as CryptoTrait, *};
 #[derive(Default, Debug)]
 #[repr(C)]
 pub struct ZeroTouchDevice {
-    pub id_u: EdhocMessageBuffer, // identifier of the device (U), equivalent to ID_CRED_I in EDHOC
-    pub g_w: BytesP256ElemLen,    // public key of the enrollment server (W)
-    pub loc_w: EdhocMessageBuffer, // address of the enrollment server (W)
+    pub id_u: LakeMessageBuffer, // identifier of the device (U), equivalent to ID_CRED_I in EDHOC
+    pub g_w: BytesP256ElemLen,   // public key of the enrollment server (W)
+    pub loc_w: LakeMessageBuffer, // address of the enrollment server (W)
 }
 
 #[derive(Default, Debug)]
@@ -26,7 +26,7 @@ pub struct ZeroTouchDeviceDone {
 }
 
 impl ZeroTouchDevice {
-    pub fn new(id_u: EdhocMessageBuffer, g_w: BytesP256ElemLen, loc_w: EdhocMessageBuffer) -> Self {
+    pub fn new(id_u: LakeMessageBuffer, g_w: BytesP256ElemLen, loc_w: LakeMessageBuffer) -> Self {
         trace!("Initializing ZeroTouchDevice");
         ZeroTouchDevice { id_u, g_w, loc_w }
     }
@@ -84,9 +84,9 @@ impl ZeroTouchDeviceWaitEAD2 {
     }
 }
 
-fn encode_id_u(id_u: &EdhocMessageBuffer) -> EdhocMessageBuffer {
+fn encode_id_u(id_u: &LakeMessageBuffer) -> LakeMessageBuffer {
     // plaintext = (ID_U: bstr)
-    let mut plaintext = EdhocMessageBuffer::new();
+    let mut plaintext = LakeMessageBuffer::new();
     plaintext
         .push(CBOR_MAJOR_BYTE_STRING + id_u.len() as u8)
         .unwrap();
@@ -98,9 +98,9 @@ fn encode_id_u(id_u: &EdhocMessageBuffer) -> EdhocMessageBuffer {
 fn encrypt_enc_id<Crypto: CryptoTrait>(
     crypto: &mut Crypto,
     prk: &BytesHashLen,
-    plaintext: &EdhocMessageBuffer,
+    plaintext: &LakeMessageBuffer,
     ss: u8,
-) -> EdhocMessageBuffer {
+) -> LakeMessageBuffer {
     let (k_1, iv_1) = compute_k_1_iv_1(crypto, &prk);
 
     // external_aad = (SS: int)
@@ -115,7 +115,7 @@ fn encrypt_enc_id<Crypto: CryptoTrait>(
     )
 }
 
-fn encode_ead_1_value(loc_w: &EdhocMessageBuffer, enc_id: &EdhocMessageBuffer) -> EADBuffer {
+fn encode_ead_1_value(loc_w: &LakeMessageBuffer, enc_id: &LakeMessageBuffer) -> EADBuffer {
     let mut output = LakeBuffer::new();
 
     output.push(CBOR_TEXT_STRING).unwrap();
@@ -153,7 +153,7 @@ mod test_device {
 
     #[test]
     fn test_encrypt_enc_id() {
-        let enc_id_tv: EdhocMessageBuffer = ENC_ID_TV.try_into().unwrap();
+        let enc_id_tv: LakeMessageBuffer = ENC_ID_TV.try_into().unwrap();
 
         let enc_id = encrypt_enc_id(
             &mut default_crypto(),

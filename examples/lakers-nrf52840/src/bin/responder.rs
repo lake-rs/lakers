@@ -73,7 +73,7 @@ async fn main(_spawner: Spawner) {
             cred_r,
         );
 
-        let message_1: EdhocMessageBuffer = pckt.pdu[1..pckt.len].try_into().expect("wrong length"); // get rid of the TRUE byte
+        let message_1: LakeMessageBuffer = pckt.pdu[1..pckt.len].try_into().expect("wrong length"); // get rid of the TRUE byte
 
         let result = responder.process_message_1(&message_1);
 
@@ -102,7 +102,7 @@ async fn main(_spawner: Spawner) {
                     let rcvd_c_r: ConnId = ConnId::from_int_raw(message_3.pdu[0] as u8);
 
                     if rcvd_c_r == c_r.unwrap() {
-                        let message_3: EdhocMessageBuffer = message_3.pdu[1..message_3.len]
+                        let message_3: LakeMessageBuffer = message_3.pdu[1..message_3.len]
                             .try_into()
                             .expect("wrong length");
                         let Ok((responder, id_cred_i, _ead_3)) =

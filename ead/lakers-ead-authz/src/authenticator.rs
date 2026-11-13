@@ -16,13 +16,13 @@ impl ZeroTouchAuthenticator {
     ) -> Result<
         (
             ZeroTouchAuthenticatorWaitVoucherResp,
-            EdhocMessageBuffer,
-            EdhocMessageBuffer,
+            LakeMessageBuffer,
+            LakeMessageBuffer,
         ),
         EDHOCError,
     > {
         trace!("Enter process_ead_1");
-        let opaque_state: Option<EdhocMessageBuffer> = None; // TODO: receive as parameter
+        let opaque_state: Option<LakeMessageBuffer> = None; // TODO: receive as parameter
 
         if ead_1.label() != EAD_AUTHZ_LABEL || ead_1.value_bytes().is_none() {
             return Err(EDHOCError::EADUnprocessable);
@@ -42,7 +42,7 @@ impl ZeroTouchAuthenticator {
 impl ZeroTouchAuthenticatorWaitVoucherResp {
     pub fn prepare_ead_2(
         &self,
-        voucher_response: &EdhocMessageBuffer,
+        voucher_response: &LakeMessageBuffer,
     ) -> Result<EADItem, EDHOCError> {
         trace!("Enter prepare_ead_2");
         let (_message_1, voucher, _opaque_state) = parse_voucher_response(&voucher_response)?;
@@ -53,9 +53,9 @@ impl ZeroTouchAuthenticatorWaitVoucherResp {
 
 pub fn encode_voucher_request(
     message_1: &BufferMessage1,
-    opaque_state: &Option<EdhocMessageBuffer>,
-) -> Result<EdhocMessageBuffer, EDHOCError> {
-    let mut output = EdhocMessageBuffer::new();
+    opaque_state: &Option<LakeMessageBuffer>,
+) -> Result<LakeMessageBuffer, EDHOCError> {
+    let mut output = LakeMessageBuffer::new();
 
     if opaque_state.is_some() {
         output
@@ -102,8 +102,8 @@ pub fn encode_voucher_request(
 }
 
 fn parse_voucher_response(
-    voucher_response: &EdhocMessageBuffer,
-) -> Result<(EdhocMessageBuffer, BytesVoucher, Option<EdhocMessageBuffer>), EDHOCError> {
+    voucher_response: &LakeMessageBuffer,
+) -> Result<(LakeMessageBuffer, BytesVoucher, Option<LakeMessageBuffer>), EDHOCError> {
     let mut decoder = CBORDecoder::new(voucher_response.as_slice());
 
     let array_size = decoder.array()?;
@@ -111,7 +111,7 @@ fn parse_voucher_response(
         return Err(EDHOCError::EADUnprocessable);
     }
 
-    let message_1: EdhocMessageBuffer = decoder.bytes()?.try_into().unwrap();
+    let message_1: LakeMessageBuffer = decoder.bytes()?.try_into().unwrap();
     // The voucher is double-wrapped in bytes; see
     // <https://github.com/openwsn-berkeley/lakers/issues/382>
     let outer_voucher = decoder.bytes()?;
@@ -119,7 +119,7 @@ fn parse_voucher_response(
     let voucher: BytesVoucher = inner_decoder.bytes_sized(VOUCHER_LEN)?.try_into().unwrap();
 
     if array_size == 3 {
-        let opaque_state: EdhocMessageBuffer = decoder.bytes()?.try_into().unwrap();
+        let opaque_state: LakeMessageBuffer = decoder.bytes()?.try_into().unwrap();
         return Ok((message_1, voucher, Some(opaque_state)));
     } else {
         return Ok((message_1, voucher, None));
@@ -133,8 +133,8 @@ mod test_authenticator {
 
     #[test]
     fn test_parse_ead_1_value() {
-        let loc_w_tv: EdhocMessageBuffer = LOC_W_TV.try_into().unwrap();
-        let enc_id_tv: EdhocMessageBuffer = ENC_ID_TV.try_into().unwrap();
+        let loc_w_tv: LakeMessageBuffer = LOC_W_TV.try_into().unwrap();
+        let enc_id_tv: LakeMessageBuffer = ENC_ID_TV.try_into().unwrap();
 
         let res = parse_ead_1_value(&EAD1_VALUE_TV);
         assert!(res.is_ok());
@@ -145,7 +145,7 @@ mod test_authenticator {
 
     #[test]
     fn test_encode_voucher_request() {
-        let voucher_request_tv: EdhocMessageBuffer = VOUCHER_REQUEST_TV.try_into().unwrap();
+        let voucher_request_tv: LakeMessageBuffer = VOUCHER_REQUEST_TV.try_into().unwrap();
 
         let voucher_request =
             encode_voucher_request(&MESSAGE_1_WITH_EAD_TV.try_into().unwrap(), &None).unwrap();
@@ -180,8 +180,8 @@ mod test_authenticator {
 
     #[test]
     fn test_parse_voucher_response() {
-        let voucher_response_tv: EdhocMessageBuffer = VOUCHER_RESPONSE_TV.try_into().unwrap();
-        let message_1_tv: EdhocMessageBuffer = MESSAGE_1_WITH_EAD_TV.try_into().unwrap();
+        let voucher_response_tv: LakeMessageBuffer = VOUCHER_RESPONSE_TV.try_into().unwrap();
+        let message_1_tv: LakeMessageBuffer = MESSAGE_1_WITH_EAD_TV.try_into().unwrap();
 
         let res = parse_voucher_response(&voucher_response_tv);
         assert!(res.is_ok());
@@ -193,7 +193,7 @@ mod test_authenticator {
 
     #[test]
     fn test_r_prepare_ead_2() {
-        let voucher_response_tv: EdhocMessageBuffer = VOUCHER_RESPONSE_TV.try_into().unwrap();
+        let voucher_response_tv: LakeMessageBuffer = VOUCHER_RESPONSE_TV.try_into().unwrap();
 
         let ead_authenticator = ZeroTouchAuthenticatorWaitVoucherResp::default();
 
@@ -214,8 +214,8 @@ mod test_responder_stateless_operation {
     #[test]
     fn test_slo_encode_voucher_request() {
         let message_1_tv = MESSAGE_1_WITH_EAD_TV.try_into().unwrap();
-        let opaque_state_tv: EdhocMessageBuffer = SLO_OPAQUE_STATE_TV.try_into().unwrap();
-        let voucher_request_tv: EdhocMessageBuffer = SLO_VOUCHER_REQUEST_TV.try_into().unwrap();
+        let opaque_state_tv: LakeMessageBuffer = SLO_OPAQUE_STATE_TV.try_into().unwrap();
+        let voucher_request_tv: LakeMessageBuffer = SLO_VOUCHER_REQUEST_TV.try_into().unwrap();
 
         let voucher_request =
             encode_voucher_request(&message_1_tv, &Some(opaque_state_tv)).unwrap();
@@ -224,9 +224,9 @@ mod test_responder_stateless_operation {
 
     #[test]
     fn test_slo_parse_voucher_response() {
-        let voucher_response_tv: EdhocMessageBuffer = SLO_VOUCHER_RESPONSE_TV.try_into().unwrap();
-        let message_1_tv: EdhocMessageBuffer = MESSAGE_1_WITH_EAD_TV.try_into().unwrap();
-        let opaque_state_tv: EdhocMessageBuffer = SLO_OPAQUE_STATE_TV.try_into().unwrap();
+        let voucher_response_tv: LakeMessageBuffer = SLO_VOUCHER_RESPONSE_TV.try_into().unwrap();
+        let message_1_tv: LakeMessageBuffer = MESSAGE_1_WITH_EAD_TV.try_into().unwrap();
+        let opaque_state_tv: LakeMessageBuffer = SLO_OPAQUE_STATE_TV.try_into().unwrap();
 
         let res = parse_voucher_response(&voucher_response_tv);
         assert!(res.is_ok());

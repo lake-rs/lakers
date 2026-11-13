@@ -116,7 +116,7 @@ int main(void)
     initiator_new(&initiator, PSK);
 
     puts("Begin test: edhoc initiator.");
-    EdhocMessageBuffer message_1 = {0};
+    LakeMessageBuffer message_1 = {0};
 
     int res = initiator_prepare_message_1(&initiator, NULL, NULL, &message_1);
 
@@ -130,7 +130,7 @@ int main(void)
     coap_send_edhoc_message(message_1.content, message_1.len, 0xf5);
 
     puts("processing msg2");
-    EdhocMessageBuffer message_2 = {.len = coap_response_payload_len};
+    LakeMessageBuffer message_2 = {.len = coap_response_payload_len};
     memcpy(message_2.content, coap_response_payload, coap_response_payload_len);
     EadItemsC ead_2 = {0};
     uint8_t c_r;
@@ -153,7 +153,7 @@ int main(void)
     }
 
     puts("preparing msg3");
-    EdhocMessageBuffer message_3 = {0};
+    LakeMessageBuffer message_3 = {0};
     uint8_t prk_out[SHA256_DIGEST_LEN] = {0};
     res = initiator_prepare_message_3(&initiator, ByReference, NULL, &message_3, &prk_out);
     if (res != 0) {
@@ -166,7 +166,7 @@ int main(void)
     coap_send_edhoc_message(message_3.content, message_3.len, c_r);
 
     puts("processing msg4");
-    EdhocMessageBuffer message_4 = {.len = coap_response_payload_len};
+    LakeMessageBuffer message_4 = {.len = coap_response_payload_len};
     memcpy(message_4.content, coap_response_payload, coap_response_payload_len);
     EadItemsC ead_4 = {0};
     res = initiator_process_message_4(&initiator, &message_4, &ead_4);

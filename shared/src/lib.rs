@@ -169,20 +169,20 @@ pub const EDHOC_SUPPORTED_SUITES: BytesSupportedSuites = [0x2u8];
 
 pub type BytesCcmKeyLen = [u8; AES_CCM_KEY_LEN];
 pub type BytesCcmIvLen = [u8; AES_CCM_IV_LEN];
-pub type BufferPlaintext2 = EdhocMessageBuffer;
-pub type BufferPlaintext3 = EdhocMessageBuffer;
-pub type BufferPlaintext4 = EdhocMessageBuffer;
+pub type BufferPlaintext2 = LakeMessageBuffer;
+pub type BufferPlaintext3 = LakeMessageBuffer;
+pub type BufferPlaintext4 = LakeMessageBuffer;
 pub type BytesMac2 = [u8; MAC_LENGTH_2];
 pub type BytesMac3 = [u8; MAC_LENGTH_3];
-pub type BufferMessage1 = EdhocMessageBuffer;
-pub type BufferMessage3 = EdhocMessageBuffer;
-pub type BufferMessage4 = EdhocMessageBuffer;
-pub type BufferCiphertext2 = EdhocMessageBuffer;
-pub type BufferCiphertext3 = EdhocMessageBuffer;
-pub type BufferCiphertext4 = EdhocMessageBuffer;
+pub type BufferMessage1 = LakeMessageBuffer;
+pub type BufferMessage3 = LakeMessageBuffer;
+pub type BufferMessage4 = LakeMessageBuffer;
+pub type BufferCiphertext2 = LakeMessageBuffer;
+pub type BufferCiphertext3 = LakeMessageBuffer;
+pub type BufferCiphertext4 = LakeMessageBuffer;
 pub type BytesHashLen = [u8; SHA256_DIGEST_LEN];
 pub type BytesP256ElemLen = [u8; P256_ELEM_LEN];
-pub type BufferMessage2 = EdhocMessageBuffer;
+pub type BufferMessage2 = LakeMessageBuffer;
 /// Generic buffer type (soft-deprecated).
 ///
 /// The use of this type is discouraged, because it contributes to this library's excessive stack
@@ -657,7 +657,7 @@ pub enum CredentialTransfer {
 pub type MessageBufferError = buffer::LakeBufferError;
 
 /// An [`LakeBuffer`] used for messages.
-pub type EdhocMessageBuffer = LakeBuffer<MAX_MESSAGE_SIZE_LEN>;
+pub type LakeMessageBuffer = LakeBuffer<MAX_MESSAGE_SIZE_LEN>;
 
 /// An owned EAD item.
 #[cfg_attr(feature = "python-bindings", pyclass(from_py_object))]
@@ -1147,7 +1147,7 @@ mod edhoc_parser {
 
     /// Decode a message consisting of a single CBOR byte string (message_3, message_4, or the PSK
     /// inner CIPHERTEXT_3B). Returns `ParsingError` unless `msg` is exactly one definite-length bstr.
-    pub fn parse_bstr_message(msg: &EdhocMessageBuffer) -> Result<&[u8], EDHOCError> {
+    pub fn parse_bstr_message(msg: &LakeMessageBuffer) -> Result<&[u8], EDHOCError> {
         let mut decoder = CBORDecoder::new(msg.as_slice());
         let ciphertext = decoder.bytes()?;
         decoder.ensure_finished()?;
@@ -1734,7 +1734,7 @@ mod test_ead_items {
             .try_push(EADItem::new_full(1234, false, None).unwrap())
             .unwrap_err();
 
-        let mut output_buffer = EdhocMessageBuffer::new();
+        let mut output_buffer = LakeMessageBuffer::new();
         items.encode(&mut output_buffer).unwrap();
         assert_eq!(output_buffer.as_slice(), hex!("20081840442e2e2e2e190200")); // -1, 8, 64, '....', 512
 

@@ -83,7 +83,7 @@ impl PyEdhocResponder {
         py: Python<'a>,
         message_1: Vec<u8>,
     ) -> PyResult<(Bound<'a, PyBytes>, EadItems)> {
-        let message_1 = EdhocMessageBuffer::new_from_slice(message_1.as_slice())
+        let message_1 = LakeMessageBuffer::new_from_slice(message_1.as_slice())
             .with_cause(py, "Message 1 too long")?;
         let (state, c_i, ead_1) =
             r_process_message_1(&self.take_start()?, &mut default_crypto(), &message_1)?;
@@ -158,7 +158,7 @@ impl PyEdhocResponder {
         py: Python<'a>,
         message_3: Vec<u8>,
     ) -> PyResult<(Bound<'a, PyBytes>, EadItems)> {
-        let message_3 = EdhocMessageBuffer::new_from_slice(message_3.as_slice())
+        let message_3 = LakeMessageBuffer::new_from_slice(message_3.as_slice())
             .with_cause(py, "Message 3 too long")?;
         let (state, id_cred_i, ead_3) =
             r_parse_message_3(&mut self.take_wait_m3()?, &mut default_crypto(), &message_3)?;

@@ -135,7 +135,7 @@ pub struct ProcessingM2C {
     pub th_2: BytesHashLen,
     pub x: BytesP256ElemLen,
     pub g_y: BytesP256ElemLen,
-    pub plaintext_2: EdhocMessageBuffer,
+    pub plaintext_2: LakeMessageBuffer,
     pub c_r: u8,
     pub ead_2: *mut EadItemsC,
 }

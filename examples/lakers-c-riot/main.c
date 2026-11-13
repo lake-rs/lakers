@@ -63,7 +63,7 @@ int main(void)
     od_hex_dump(ead_1.value.content, ead_1.value.len, OD_WIDTH_DEFAULT);
 
     puts("Begin test: edhoc initiator.");
-    EdhocMessageBuffer message_1 = {0};
+    LakeMessageBuffer message_1 = {0};
     int res = initiator_prepare_message_1(&initiator, NULL, &ead_1, &message_1);
     od_hex_dump(message_1.content, message_1.len, OD_WIDTH_DEFAULT);
     if (res != 0) printf("Error prep msg1: %d\n", res);

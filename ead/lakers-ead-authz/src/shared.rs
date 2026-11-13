@@ -51,7 +51,7 @@ pub(crate) fn compute_k_1_iv_1<Crypto: CryptoTrait>(
 
 pub(crate) fn parse_ead_1_value(
     value: &[u8],
-) -> Result<(EdhocMessageBuffer, EdhocMessageBuffer), EDHOCError> {
+) -> Result<(LakeMessageBuffer, LakeMessageBuffer), EDHOCError> {
     let mut seq_decoder = CBORDecoder::new(value);
     Ok((
         seq_decoder.str()?.try_into().unwrap(),
@@ -86,8 +86,8 @@ pub(crate) fn encode_enc_structure(ss: u8) -> [u8; EAD_AUTHZ_ENC_STRUCTURE_LEN] 
 
 // private functions
 
-fn encode_voucher_input(h_message_1: &BytesHashLen, cred_v: &[u8]) -> EdhocMessageBuffer {
-    let mut voucher_input = EdhocMessageBuffer::new();
+fn encode_voucher_input(h_message_1: &BytesHashLen, cred_v: &[u8]) -> LakeMessageBuffer {
+    let mut voucher_input = LakeMessageBuffer::new();
 
     voucher_input.push(CBOR_BYTE_STRING).unwrap();
     voucher_input.push(SHA256_DIGEST_LEN as u8).unwrap();
@@ -105,7 +105,7 @@ fn encode_voucher_input(h_message_1: &BytesHashLen, cred_v: &[u8]) -> EdhocMessa
 fn compute_voucher_mac<Crypto: CryptoTrait>(
     crypto: &mut Crypto,
     prk: &BytesHashLen,
-    voucher_input: &EdhocMessageBuffer,
+    voucher_input: &LakeMessageBuffer,
 ) -> BytesMac {
     let mut voucher_mac: BytesMac = [0x00; MAC_LENGTH];
 
@@ -159,7 +159,7 @@ mod test_shared {
     #[test]
     fn test_encode_voucher_input() {
         let h_message_1_tv: BytesHashLen = H_MESSAGE_1_TV.try_into().unwrap();
-        let voucher_input_tv: EdhocMessageBuffer = VOUCHER_INPUT_TV.try_into().unwrap();
+        let voucher_input_tv: LakeMessageBuffer = VOUCHER_INPUT_TV.try_into().unwrap();
 
         let voucher_input = encode_voucher_input(&h_message_1_tv, &CRED_V_TV);
         assert_eq!(voucher_input, voucher_input_tv);
@@ -168,7 +168,7 @@ mod test_shared {
     #[test]
     fn test_compute_voucher_mac() {
         let prk_tv: BytesHashLen = PRK_TV.try_into().unwrap();
-        let voucher_input_tv: EdhocMessageBuffer = VOUCHER_INPUT_TV.try_into().unwrap();
+        let voucher_input_tv: LakeMessageBuffer = VOUCHER_INPUT_TV.try_into().unwrap();
         let voucher_mac_tv: BytesMac = VOUCHER_MAC_TV.try_into().unwrap();
 
         let voucher_mac = compute_voucher_mac(&mut default_crypto(), &prk_tv, &voucher_input_tv);

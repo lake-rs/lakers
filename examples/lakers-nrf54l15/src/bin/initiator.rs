@@ -41,7 +41,7 @@ fn main() -> ! {
     let pckt_2 = radio.transmit_and_wait_response(pckt_1, 0xf5);
 
     info!("received message_2");
-    let message_2: EdhocMessageBuffer = pckt_2.payload().try_into().expect("wrong length");
+    let message_2: LakeMessageBuffer = pckt_2.payload().try_into().expect("wrong length");
     info!("message_2 :{:?}", message_2.as_slice());
 
     let (initiator, c_r, _ead_2) = initiator.parse_message_2(&message_2).unwrap();
@@ -58,7 +58,7 @@ fn main() -> ! {
     let pckt_4 = radio.transmit_and_wait_response(pckt_3, c_r.as_slice()[0]);
 
     info!("received message_4");
-    let message_4: EdhocMessageBuffer = pckt_4.payload().try_into().expect("wrong length");
+    let message_4: LakeMessageBuffer = pckt_4.payload().try_into().expect("wrong length");
 
     let (_initiator, _ead_4) = initiator.process_message_4(&message_4).unwrap();
 

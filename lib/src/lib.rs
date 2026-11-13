@@ -1026,7 +1026,7 @@ mod test_authz {
         let authenticator = ZeroTouchAuthenticator::default();
 
         let single_byte_kid = cred_i.kid.as_ref().unwrap()[0]; // FIXME: add longer kid support in ACL
-        let acl = EdhocMessageBuffer::new_from_array(&[single_byte_kid]);
+        let acl = LakeMessageBuffer::new_from_array(&[single_byte_kid]);
         let server = ZeroTouchServer::new(
             W_TV.try_into().unwrap(),
             CRED_R.try_into().unwrap(),

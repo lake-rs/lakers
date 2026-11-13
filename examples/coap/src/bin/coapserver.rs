@@ -24,7 +24,7 @@ fn main() {
     let mut edhoc_connections = Vec::new();
 
     // ead authz server (W)
-    let acl = EdhocMessageBuffer::new_from_slice(&[ID_CRED_I[3]]).unwrap(); // [kid]
+    let acl = LakeMessageBuffer::new_from_slice(&[ID_CRED_I[3]]).unwrap(); // [kid]
     let server = ZeroTouchServer::new(
         W_TV.try_into().unwrap(),
         CRED_R.try_into().unwrap(),

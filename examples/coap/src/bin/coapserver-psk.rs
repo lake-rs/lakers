@@ -42,7 +42,7 @@ fn main() {
                 // println!("cred:{:?}", cred_psk);
 
                 println!("\n---------MESSAGE_1-----------\n");
-                let message_1: EdhocMessageBuffer = request.message.payload[1..]
+                let message_1: LakeMessageBuffer = request.message.payload[1..]
                     .try_into()
                     .expect("wrong length");
                 // println!("message_1_rcvd:{:?}", message_1);
@@ -79,7 +79,7 @@ fn main() {
 
                 println!("Found state with connection identifier {:?}", c_r_rcvd);
                 let message_3 =
-                    EdhocMessageBuffer::new_from_slice(&request.message.payload[1..]).unwrap();
+                    LakeMessageBuffer::new_from_slice(&request.message.payload[1..]).unwrap();
                 println!("message_3: {:02x?}", message_3.as_slice());
                 let cred_i: Credential =
                     Credential::parse_ccs_symmetric(CRED_I.try_into().unwrap()).unwrap();

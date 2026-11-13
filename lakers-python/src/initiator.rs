@@ -111,7 +111,7 @@ impl PyEdhocInitiator {
         py: Python<'a>,
         message_2: Vec<u8>,
     ) -> PyResult<(Bound<'a, PyBytes>, Bound<'a, PyBytes>, EadItems)> {
-        let message_2 = EdhocMessageBuffer::new_from_slice(message_2.as_slice())
+        let message_2 = LakeMessageBuffer::new_from_slice(message_2.as_slice())
             .with_cause(py, "Message 2 too long")?;
 
         let (state, c_r, details, ead_2) =
@@ -219,7 +219,7 @@ impl PyEdhocInitiator {
         py: Python<'a>,
         message_4: Vec<u8>,
     ) -> PyResult<EadItems> {
-        let message_4 = EdhocMessageBuffer::new_from_slice(message_4.as_slice())
+        let message_4 = LakeMessageBuffer::new_from_slice(message_4.as_slice())
             .with_cause(py, "Message 4 too long")?;
         let (state, ead_4) =
             i_process_message_4(&mut self.take_wait_m4()?, &mut default_crypto(), &message_4)?;

@@ -999,7 +999,7 @@ fn encode_plaintext_2(
     Ok(plaintext_2)
 }
 
-fn encode_ciphertext_3a(ciphertext: EdhocMessageBuffer) -> Result<BufferCiphertext3, EDHOCError> {
+fn encode_ciphertext_3a(ciphertext: LakeMessageBuffer) -> Result<BufferCiphertext3, EDHOCError> {
     let mut ciphertext_3a: BufferCiphertext3 = BufferCiphertext3::new();
     // plaintext_3a: P = ( ID_CRED_PSK / bstr / int )
     encode_bstr_header(&mut ciphertext_3a, ciphertext.len())?;
@@ -1140,7 +1140,7 @@ mod tests {
     #[allow(deprecated)]
     const C_I_PSK_TV: ConnId = ConnId::from_int_raw(0x0A);
     // === Message 1 ===
-    const MESSAGE_1_PSK_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!(
+    const MESSAGE_1_PSK_TV: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!(
         "040258207ec68102940602aab548539bf42a35992d957249eb7f1888406d178a04c912db0a"
     ));
     // === Responder ephemeral private key Y ===
@@ -1178,11 +1178,11 @@ mod tests {
     // === KEYSTREAM_2A ===
     const _KEYSTREAM_2_PSK_TV: [u8; MESSAGE_2_PSK_TV.len() - P256_ELEM_LEN - 2] = hex!("ec");
     // === PLAINTEXT_2A ===
-    const PLAINTEXT_2_PSK_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!("05"));
+    const PLAINTEXT_2_PSK_TV: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!("05"));
     // === CIPHERTEXT_2B ===
-    const CIPHERTEXT_2_PSK_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!("e9"));
+    const CIPHERTEXT_2_PSK_TV: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!("e9"));
     // === message_2 ===
-    const MESSAGE_2_PSK_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!(
+    const MESSAGE_2_PSK_TV: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!(
         "5821ed156a6243e0afec9efbaabce8429d5ad5e4e1c432f76a6ede8f79247bb97d83e9"
     ));
     // === SALT_4e3m ===
@@ -1208,20 +1208,20 @@ mod tests {
     const _K_3_PSK_TV: BytesCcmKeyLen = hex!("966a579cea26ca3ceb442ac727eab232");
     // === IV_3 (13 bytes) ===
     const _IV_3_PSK_TV: BytesCcmIvLen = hex!("5bf1ad0e4ffb9676d78df23f6e");
-    const PLAINTEXT_3B_PSK_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!(""));
+    const PLAINTEXT_3B_PSK_TV: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!(""));
     // === CIPHERTEXT_3B (9 bytes) ===
-    const CIPHERTEXT_3B_PSK_TV: EdhocMessageBuffer =
+    const CIPHERTEXT_3B_PSK_TV: LakeMessageBuffer =
         LakeBuffer::new_from_array(&hex!("487f34496f3f69c288"));
     // === KEYSTREAM_3A (10 bytes) ===
     const _KEYSTREAM_3A_PSK_TV: [u8; _MESSAGE_3_PSK_TV.len() - 1] = hex!("03e5d1571bbc9332471b");
     // === PLAINTEXT_3A (10 bytes) ===
-    const PLAINTEXT_3A_PSK_TV: EdhocMessageBuffer =
+    const PLAINTEXT_3A_PSK_TV: LakeMessageBuffer =
         LakeBuffer::new_from_array(&hex!("10487f34496f3f69c288"));
     // === CIPHERTEXT_3A (10 bytes) ===
-    const CIPHERTEXT_3A_PSK_TV: EdhocMessageBuffer =
+    const CIPHERTEXT_3A_PSK_TV: LakeMessageBuffer =
         LakeBuffer::new_from_array(&hex!("13adae6352d3ac5b8593"));
     // === message_3 (11 bytes) ===
-    const _MESSAGE_3_PSK_TV: EdhocMessageBuffer =
+    const _MESSAGE_3_PSK_TV: LakeMessageBuffer =
         LakeBuffer::new_from_array(&hex!("4a13adae6352d3ac5b8593"));
     // === TH_4 ===
     const TH_4_PSK_TV: BytesHashLen =
@@ -1230,9 +1230,9 @@ mod tests {
     const K_4_PSK_TV: BytesCcmKeyLen = hex!("bcab1df0138dc05c885fd371e950c67f");
     // === IV_4 (13 bytes) ===
     const IV_4_PSK_TV: BytesCcmIvLen = hex!("411134d0e0c508d95da7c3acdc");
-    const PLAINTEXT_4_PSK_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!(""));
+    const PLAINTEXT_4_PSK_TV: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!(""));
     // === message_4 (9 bytes) ===
-    const MESSAGE_4_PSK_TV: EdhocMessageBuffer =
+    const MESSAGE_4_PSK_TV: LakeMessageBuffer =
         LakeBuffer::new_from_array(&hex!("488add93db404859f9"));
     // === PRK_out ===
     const PRK_OUT_PSK_TV: BytesHashLen =
@@ -1255,7 +1255,7 @@ mod tests {
         hex!("741a13d7ba048fbb615e94386aa3b61bea5b3d8f65f32620b749bee8d278efa9");
     #[allow(deprecated)]
     const C_I_TV_FIRST_TIME: ConnId = ConnId::from_int_raw(0x0e);
-    const MESSAGE_1_TV_FIRST_TIME: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!(
+    const MESSAGE_1_TV_FIRST_TIME: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!(
         "03065820741a13d7ba048fbb615e94386aa3b61bea5b3d8f65f32620b749bee8d278efa90e"
     ));
 
@@ -1272,35 +1272,35 @@ mod tests {
     ));
     // below are a few truncated messages for the purpose of testing cipher suites
     // message with one cipher suite (23..=255)
-    const MESSAGE_1_TV_SUITE_ONLY_A: EdhocMessageBuffer =
+    const MESSAGE_1_TV_SUITE_ONLY_A: LakeMessageBuffer =
         LakeBuffer::new_from_array(&hex!("031818"));
     // message with an array having two cipher suites with small values (0..=23)
-    const MESSAGE_1_TV_SUITE_ONLY_B: EdhocMessageBuffer =
+    const MESSAGE_1_TV_SUITE_ONLY_B: LakeMessageBuffer =
         LakeBuffer::new_from_array(&hex!("03820201"));
     // message with an array having two cipher suites, where one is a large value (23..=255)
-    const MESSAGE_1_TV_SUITE_ONLY_C: EdhocMessageBuffer =
+    const MESSAGE_1_TV_SUITE_ONLY_C: LakeMessageBuffer =
         LakeBuffer::new_from_array(&hex!("0382021819"));
     // message with an array having too many cipher suites (more than 9)
-    const MESSAGE_1_TV_SUITE_ONLY_ERR: EdhocMessageBuffer =
+    const MESSAGE_1_TV_SUITE_ONLY_ERR: LakeMessageBuffer =
         LakeBuffer::new_from_array(&hex!("038A02020202020202020202"));
     const EAD_DUMMY_LABEL_TV: u16 = 0x01;
     const EAD_DUMMY_VALUE_TV: &[u8] = &hex!("cccccc");
     const EAD_DUMMY_CRITICAL_TV: LakeBuffer<MAX_EAD_LEN> =
         LakeBuffer::new_from_array(&hex!("2043cccccc"));
-    const MESSAGE_1_WITH_DUMMY_EAD_NO_VALUE_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(
+    const MESSAGE_1_WITH_DUMMY_EAD_NO_VALUE_TV: LakeMessageBuffer = LakeBuffer::new_from_array(
         &hex!("0382060258208af6f430ebe18d34184017a9a11bf511c8dff8f834730b96c1b7c8dbca2fc3b63701"),
     );
-    const MESSAGE_1_WITH_DUMMY_EAD_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!(
+    const MESSAGE_1_WITH_DUMMY_EAD_TV: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!(
         "0382060258208af6f430ebe18d34184017a9a11bf511c8dff8f834730b96c1b7c8dbca2fc3b6370143cccccc"
     ));
-    const MESSAGE_1_WITH_DUMMY_CRITICAL_EAD_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!("0382060258208af6f430ebe18d34184017a9a11bf511c8dff8f834730b96c1b7c8dbca2fc3b6372043cccccc"));
-    const MESSAGE_1_WITH_TWO_EADS: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!("0382060258208af6f430ebe18d34184017a9a11bf511c8dff8f834730b96c1b7c8dbca2fc3b6370143cccccc2043cccccc"));
+    const MESSAGE_1_WITH_DUMMY_CRITICAL_EAD_TV: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!("0382060258208af6f430ebe18d34184017a9a11bf511c8dff8f834730b96c1b7c8dbca2fc3b6372043cccccc"));
+    const MESSAGE_1_WITH_TWO_EADS: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!("0382060258208af6f430ebe18d34184017a9a11bf511c8dff8f834730b96c1b7c8dbca2fc3b6370143cccccc2043cccccc"));
     const G_Y_TV: BytesP256ElemLen =
         hex!("419701d7f00a26c2dc587a36dd752549f33763c893422c8ea0f955a13a4ff5d5");
     #[allow(deprecated)]
     const C_R_TV: ConnId = ConnId::from_int_raw(0x27);
-    const MESSAGE_2_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!("582b419701d7f00a26c2dc587a36dd752549f33763c893422c8ea0f955a13a4ff5d59862a1eef9e0e7e1886fcd"));
-    const CIPHERTEXT_2_TV: EdhocMessageBuffer =
+    const MESSAGE_2_TV: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!("582b419701d7f00a26c2dc587a36dd752549f33763c893422c8ea0f955a13a4ff5d59862a1eef9e0e7e1886fcd"));
+    const CIPHERTEXT_2_TV: LakeMessageBuffer =
         LakeBuffer::new_from_array(&hex!("9862a1eef9e0e7e1886fcd"));
     const H_MESSAGE_1_TV: BytesHashLen =
         hex!("ca02cabda5a8902749b42f711050bb4dbd52153e87527594b39f50cdf019888c");
@@ -1321,19 +1321,18 @@ mod tests {
     const MAC_2_TV: BytesMac2 = hex!("0943305c899f5c54");
     const ID_CRED_I_TV: [u8; 4] = hex!("a104412b");
     const MAC_3_TV: BytesMac3 = hex!("623c91df41e34c2f");
-    const MESSAGE_3_TV: EdhocMessageBuffer =
+    const MESSAGE_3_TV: LakeMessageBuffer =
         LakeBuffer::new_from_array(&hex!("52e562097bc417dd5919485ac7891ffd90a9fc"));
     const PRK_4E3M_TV: BytesP256ElemLen =
         hex!("81cc8a298e357044e3c466bb5c0a1e507e01d49238aeba138df94635407c0ff7");
-    const MESSAGE_4_TV: EdhocMessageBuffer =
-        LakeBuffer::new_from_array(&hex!("4828c966b7ca304f83"));
-    const PLAINTEXT_4_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!(""));
+    const MESSAGE_4_TV: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!("4828c966b7ca304f83"));
+    const PLAINTEXT_4_TV: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!(""));
     const K_4_TV: BytesCcmKeyLen = hex!("d3c77872b6eeb508911bdbd308b2e6a0");
     const IV_4_TV: BytesCcmIvLen = hex!("04ff0f44456e96e217853c3601");
     const CRED_I_TV : [u8; 107] = hex!("a2027734322d35302d33312d46462d45462d33372d33322d333908a101a5010202412b2001215820ac75e9ece3e50bfc8ed60399889522405c47bf16df96660a41298cb4307f7eb62258206e5de611388a4b8a8211334ac7d37ecb52a387d257e6db3c2a93df21ff3affc8");
     const ID_CRED_R_TV: [u8; 4] = hex!("a1044132");
     const CRED_R_TV : [u8; 95] = hex!("a2026b6578616d706c652e65647508a101a501020241322001215820bbc34960526ea4d32e940cad2a234148ddc21791a12afbcbac93622046dd44f02258204519e257236b2a0ce2023f0931f1f386ca7afda64fcde0108c224c51eabf6072");
-    const PLAINTEXT_2_TV: EdhocMessageBuffer =
+    const PLAINTEXT_2_TV: LakeMessageBuffer =
         LakeBuffer::new_from_array(&hex!("2732480943305c899f5c54"));
     const SK_I_TV: BytesP256ElemLen =
         hex!("fb13adeb6518cee5f88417660841142e830a81fe334380a953406a1305e8706b");
@@ -1341,7 +1340,7 @@ mod tests {
         hex!("368ec1f69aeb659ba37d5a8d45b21bdc0299dceaa8ef235f3ca42ce3530f9525");
     const G_R_TV: BytesP256ElemLen =
         hex!("bbc34960526ea4d32e940cad2a234148ddc21791a12afbcbac93622046dd44f0");
-    const PLAINTEXT_3_TV: EdhocMessageBuffer =
+    const PLAINTEXT_3_TV: LakeMessageBuffer =
         LakeBuffer::new_from_array(&hex!("2b48623c91df41e34c2f"));
     const SALT_3E2M_TV: BytesHashLen =
         hex!("af4e103a47cb3cf32570d5c25ad27732bd8d8178e9a69d061c31a27f8e3ca926");
@@ -1357,23 +1356,23 @@ mod tests {
     const OSCORE_MASTER_SALT_TV: [u8; 8] = hex!("ada24c7dbfc85eeb");
 
     // invalid test vectors, should result in a parsing error
-    const MESSAGE_1_INVALID_ARRAY_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!(
+    const MESSAGE_1_INVALID_ARRAY_TV: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!(
         "8403025820741a13d7ba048fbb615e94386aa3b61bea5b3d8f65f32620b749bee8d278efa90e"
     ));
     // This is invalid because the h'0e' byte string is a text string instead
-    const MESSAGE_1_INVALID_C_I_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!(
+    const MESSAGE_1_INVALID_C_I_TV: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!(
         "03025820741a13d7ba048fbb615e94386aa3b61bea5b3d8f65f32620b749bee8d278efa9610e"
     ));
-    const MESSAGE_1_INVALID_CIPHERSUITE_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!(
+    const MESSAGE_1_INVALID_CIPHERSUITE_TV: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!(
         "0381025820741a13d7ba048fbb615e94386aa3b61bea5b3d8f65f32620b749bee8d278efa90e"
     ));
-    const MESSAGE_1_INVALID_TEXT_EPHEMERAL_KEY_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(
+    const MESSAGE_1_INVALID_TEXT_EPHEMERAL_KEY_TV: LakeMessageBuffer = LakeBuffer::new_from_array(
         &hex!("0302782020616972207370656564206F66206120756E6C6164656E207377616C6C6F77200e"),
     );
-    const MESSAGE_2_INVALID_NUMBER_OF_CBOR_SEQUENCE_TV: EdhocMessageBuffer = LakeBuffer::new_from_array(&hex!("5820419701d7f00a26c2dc587a36dd752549f33763c893422c8ea0f955a13a4ff5d54B9862a11de42a95d785386a"));
-    const PLAINTEXT_2_SURPLUS_MAP_ID_CRED_TV: EdhocMessageBuffer =
+    const MESSAGE_2_INVALID_NUMBER_OF_CBOR_SEQUENCE_TV: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!("5820419701d7f00a26c2dc587a36dd752549f33763c893422c8ea0f955a13a4ff5d54B9862a11de42a95d785386a"));
+    const PLAINTEXT_2_SURPLUS_MAP_ID_CRED_TV: LakeMessageBuffer =
         LakeBuffer::new_from_array(&hex!("27a10442321048fa5efa2ebf920bf3"));
-    const PLAINTEXT_2_SURPLUS_BSTR_ID_CRED_TV: EdhocMessageBuffer =
+    const PLAINTEXT_2_SURPLUS_BSTR_ID_CRED_TV: LakeMessageBuffer =
         LakeBuffer::new_from_array(&hex!("27413248fa5efa2ebf920bf3"));
 
     #[test]
@@ -1742,19 +1741,19 @@ mod tests {
 
     /// Inputs that are not exactly one definite-length byte string, or whose payload is shorter than
     /// the AEAD tag. All must be rejected with `ParsingError` rather than panicking.
-    fn malformed_bstr_messages() -> [EdhocMessageBuffer; 9] {
+    fn malformed_bstr_messages() -> [LakeMessageBuffer; 9] {
         [
-            EdhocMessageBuffer::new(),                                  // empty
-            EdhocMessageBuffer::new_from_slice(&[0x41]).unwrap(), // declares 1 byte, none present
-            EdhocMessageBuffer::new_from_slice(&[0x58]).unwrap(), // truncated extended-length header
-            EdhocMessageBuffer::new_from_slice(&[0x58, 0x20]).unwrap(), // declares 32 bytes, none present
-            EdhocMessageBuffer::new_from_slice(&[0x59, 0x00]).unwrap(), // 16-bit length form, unsupported by the decoder
-            EdhocMessageBuffer::new_from_slice(&[0x00]).unwrap(),       // not a byte string
-            EdhocMessageBuffer::new_from_slice(&[0x40]).unwrap(), // empty bstr, shorter than tag
-            EdhocMessageBuffer::new_from_slice(&[0x41, 0x00]).unwrap(), // 1-byte bstr, shorter than tag
+            LakeMessageBuffer::new(),                                  // empty
+            LakeMessageBuffer::new_from_slice(&[0x41]).unwrap(), // declares 1 byte, none present
+            LakeMessageBuffer::new_from_slice(&[0x58]).unwrap(), // truncated extended-length header
+            LakeMessageBuffer::new_from_slice(&[0x58, 0x20]).unwrap(), // declares 32 bytes, none present
+            LakeMessageBuffer::new_from_slice(&[0x59, 0x00]).unwrap(), // 16-bit length form, unsupported by the decoder
+            LakeMessageBuffer::new_from_slice(&[0x00]).unwrap(),       // not a byte string
+            LakeMessageBuffer::new_from_slice(&[0x40]).unwrap(), // empty bstr, shorter than tag
+            LakeMessageBuffer::new_from_slice(&[0x41, 0x00]).unwrap(), // 1-byte bstr, shorter than tag
             // An otherwise valid tag-length bstr with a trailing byte: only the trailing-byte check
             // rejects it, so this catches a regression in that behaviour.
-            EdhocMessageBuffer::new_from_slice(&[0x48, 0, 0, 0, 0, 0, 0, 0, 0, 0x00]).unwrap(),
+            LakeMessageBuffer::new_from_slice(&[0x48, 0, 0, 0, 0, 0, 0, 0, 0, 0x00]).unwrap(),
         ]
     }
 
@@ -1762,7 +1761,7 @@ mod tests {
     fn test_decrypt_tag_length_payload_returns_mac_error() {
         // A payload of exactly one AEAD tag is well-formed and reaches the AEAD, which then fails
         // tag verification rather than being rejected as a parsing error.
-        let tag_only = EdhocMessageBuffer::new_from_slice(&[0x48, 0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
+        let tag_only = LakeMessageBuffer::new_from_slice(&[0x48, 0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
         assert_eq!(
             decrypt_message_3(
                 &mut default_crypto(),
@@ -1945,7 +1944,7 @@ mod tests {
 
     #[test]
     fn test_encode_parse_ciphertext_3a_extended_bstr_len() {
-        let ciphertext = EdhocMessageBuffer::new_from_slice(&[0xAA; 24]).unwrap();
+        let ciphertext = LakeMessageBuffer::new_from_slice(&[0xAA; 24]).unwrap();
 
         let encoded = encode_ciphertext_3a(ciphertext).unwrap();
 

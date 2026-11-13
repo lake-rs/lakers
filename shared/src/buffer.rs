@@ -1,7 +1,7 @@
 use core::ops::Index;
 
 // NOTE: This constant is only here for now because it is only ever used in instances of LakeBuffer.
-// TODO: move to lib.rs, once EdhocMessageBuffer is replaced by LakeBuffer.
+// TODO: move to lib.rs, once LakeMessageBuffer is replaced by LakeBuffer.
 pub const MAX_SUITES_LEN: usize = 9;
 
 /// Copies a short slice into the start of a long slice in a way both Rust's const fn and
@@ -114,14 +114,14 @@ impl<const N: usize> LakeBuffer<N> {
     ///
     /// ```
     /// # use lakers_shared::*;
-    /// const MY_CONST: EdhocMessageBuffer = EdhocMessageBuffer::new_from_array(&[0, 1, 2]);
+    /// const MY_CONST: LakeMessageBuffer = LakeMessageBuffer::new_from_array(&[0, 1, 2]);
     /// ```
     ///
     /// While this fails to build:
     ///
     /// ```compile_fail
     /// # use lakers_shared::*;
-    /// const MY_CONST: EdhocMessageBuffer = EdhocMessageBuffer::new_from_array(&[0; 10_000]);
+    /// const MY_CONST: LakeMessageBuffer = LakeMessageBuffer::new_from_array(&[0; 10_000]);
     /// ```
     #[hax_lib::requires(AN <= N)]
     pub const fn new_from_array<const AN: usize>(input: &[u8; AN]) -> Self {

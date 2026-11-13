@@ -41,7 +41,7 @@ impl PyAuthzAutenticator {
     }
 
     pub fn prepare_ead_2(&self, voucher_response: Vec<u8>) -> PyResult<EADItem> {
-        let voucher_response = EdhocMessageBuffer::new_from_slice(voucher_response.as_slice())?;
+        let voucher_response = LakeMessageBuffer::new_from_slice(voucher_response.as_slice())?;
         Ok(self.authenticator_wait.prepare_ead_2(&voucher_response)?)
     }
 }

@@ -134,7 +134,7 @@ int main(void)
 #endif
 
     puts("Begin test: edhoc initiator.");
-    EdhocMessageBuffer message_1 = {0};
+    LakeMessageBuffer message_1 = {0};
 #ifdef LAKERS_EAD_AUTHZ
     int res = initiator_prepare_message_1(&initiator, NULL, &ead_1, &message_1);
     memcpy(device.wait_ead2.h_message_1, initiator.wait_m2.h_message_1, SHA256_DIGEST_LEN);
@@ -151,7 +151,7 @@ int main(void)
     coap_send_edhoc_message(message_1.content, message_1.len, 0xf5);
 
     puts("processing msg2");
-    EdhocMessageBuffer message_2 = {.len = coap_response_payload_len};
+    LakeMessageBuffer message_2 = {.len = coap_response_payload_len};
     memcpy(message_2.content, coap_response_payload, coap_response_payload_len);
     EadItemsC ead_2 = {0};
     uint8_t c_r;
@@ -196,7 +196,7 @@ int main(void)
     }
 
     puts("preparing msg3");
-    EdhocMessageBuffer message_3 = {0};
+    LakeMessageBuffer message_3 = {0};
     uint8_t prk_out[SHA256_DIGEST_LEN] = {0};
     res = initiator_prepare_message_3(&initiator, ByReference, NULL, &message_3, &prk_out);
     if (res != 0) {

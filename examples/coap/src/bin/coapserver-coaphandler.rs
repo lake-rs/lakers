@@ -252,7 +252,7 @@ fn build_handler() -> impl coap_handler::Handler {
     use coap_handler_implementations::{HandlerBuilder, ReportingHandlerBuilder};
 
     // ead authz server (W)
-    let acl = EdhocMessageBuffer::new_from_slice(&[ID_CRED_I[3]]).unwrap(); // [kid]
+    let acl = LakeMessageBuffer::new_from_slice(&[ID_CRED_I[3]]).unwrap(); // [kid]
     let mock_server = ZeroTouchServer::new(
         W_TV.try_into().unwrap(),
         CRED_R.try_into().unwrap(),

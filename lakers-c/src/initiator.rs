@@ -45,7 +45,7 @@ pub unsafe extern "C" fn initiator_prepare_message_1(
     c_i: *mut u8,
     ead_1_c: *mut EadItemsC,
     // output params
-    message_1: *mut EdhocMessageBuffer,
+    message_1: *mut LakeMessageBuffer,
 ) -> i8 {
     if message_1.is_null() {
         return -1;
@@ -83,7 +83,7 @@ pub unsafe extern "C" fn initiator_prepare_message_1(
 pub unsafe extern "C" fn initiator_parse_message_2(
     // input params
     initiator_c: *mut EdhocInitiator,
-    message_2: *const EdhocMessageBuffer,
+    message_2: *const LakeMessageBuffer,
     // output params
     c_r_out: *mut u8,
     // `ID_CRED_R` is only present for the stat/stat method. C has no `Option<T>`,
@@ -202,7 +202,7 @@ pub unsafe extern "C" fn initiator_prepare_message_3(
     cred_transfer: CredentialTransfer,
     ead_3_c: *mut EadItemsC,
     // output params
-    message_3: *mut EdhocMessageBuffer,
+    message_3: *mut LakeMessageBuffer,
     prk_out_c: *mut [u8; SHA256_DIGEST_LEN],
 ) -> i8 {
     if initiator_c.is_null() || message_3.is_null() || prk_out_c.is_null() {
@@ -239,7 +239,7 @@ pub unsafe extern "C" fn initiator_prepare_message_3(
 pub unsafe extern "C" fn initiator_process_message_4(
     // input params
     initiator_c: *mut EdhocInitiator,
-    message_4: *const EdhocMessageBuffer,
+    message_4: *const LakeMessageBuffer,
     // output params
     ead_4_c_out: *mut EadItemsC,
 ) -> i8 {
@@ -347,9 +347,9 @@ mod tests {
         }
     }
 
-    fn prepare_message_2_for_method(method: EDHOCMethod) -> (EdhocInitiator, EdhocMessageBuffer) {
+    fn prepare_message_2_for_method(method: EDHOCMethod) -> (EdhocInitiator, LakeMessageBuffer) {
         let mut initiator = make_ffi_initiator();
-        let mut message_1 = EdhocMessageBuffer::default();
+        let mut message_1 = LakeMessageBuffer::default();
 
         unsafe {
             assert_eq!(initiator_new(&mut initiator, method), 0);
@@ -502,7 +502,7 @@ mod tests {
     #[test]
     fn initiator_verify_message_2_resolves_cred_for_statstat() {
         let mut initiator = make_ffi_initiator();
-        let mut message_1 = EdhocMessageBuffer::default();
+        let mut message_1 = LakeMessageBuffer::default();
         unsafe {
             assert_eq!(initiator_new(&mut initiator, EDHOCMethod::StatStat), 0);
             assert_eq!(

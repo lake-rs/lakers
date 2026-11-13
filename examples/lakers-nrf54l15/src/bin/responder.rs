@@ -33,7 +33,7 @@ fn main() -> ! {
             cred_r,
         );
 
-        let message_1: EdhocMessageBuffer = pckt.payload().try_into().expect("wrong length");
+        let message_1: LakeMessageBuffer = pckt.payload().try_into().expect("wrong length");
 
         let Ok((responder, _c_i, _ead_1)) = responder.process_message_1(&message_1) else {
             info!("edhoc error at process_message_1");
@@ -58,7 +58,7 @@ fn main() -> ! {
         info!("received message_3");
 
         // the packet was filtered on c_r, so its header byte matches by construction
-        let message_3: EdhocMessageBuffer = pckt_3.payload().try_into().expect("wrong length");
+        let message_3: LakeMessageBuffer = pckt_3.payload().try_into().expect("wrong length");
         let Ok((responder, id_cred_i, _ead_3)) = responder.parse_message_3(&message_3) else {
             info!("edhoc error at parse_message_3");
             continue;
