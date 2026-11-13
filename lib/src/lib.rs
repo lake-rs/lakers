@@ -3,7 +3,7 @@
 //!
 //! The crate provides a high-level interface through the [LakeInitiator] and the [LakeResponder]
 //! structs. Both these wrap the lower level [State] struct that is mainly used through internal
-//! functions in the `edhoc` module. This separation is relevant because the lower level tools are
+//! functions in the `lake` module. This separation is relevant because the lower level tools are
 //! subject of ongoing formal verification, whereas the high-level interfaces aim for good
 //! usability.
 //!
@@ -18,8 +18,8 @@
 use defmt_or_log::trace;
 pub use {lakers_shared::Crypto as CryptoTrait, lakers_shared::*};
 
-mod edhoc;
-pub use edhoc::*;
+mod lake;
+pub use lake::*;
 
 /// Starting point for performing EDHOC in the role of the Initiator.
 #[derive(Debug)]

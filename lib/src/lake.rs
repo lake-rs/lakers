@@ -587,7 +587,7 @@ fn compute_th_4(
     hash.finalize().into()
 }
 
-// TODO: consider moving this to a new 'edhoc crypto primitives' module
+// TODO: consider moving this to a new 'lake crypto primitives' module
 fn lake_kdf(
     crypto: &mut impl CryptoTrait,
     prk: &BytesHashLen,
