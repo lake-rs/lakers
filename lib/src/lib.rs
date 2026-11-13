@@ -134,7 +134,7 @@ impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
     pub fn process_message_1(
         mut self,
         message_1: &BufferMessage1,
-    ) -> Result<(EdhocResponderProcessedM1<Crypto>, ConnId, EadItems), EDHOCError> {
+    ) -> Result<(EdhocResponderProcessedM1<Crypto>, ConnId, EadItems), LAKEError> {
         trace!("Enter process_message_1");
         let (state, c_i, ead_1) = r_process_message_1(&self.state, &mut self.crypto, message_1)?;
 
@@ -157,7 +157,7 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM1<Crypto> {
         cred_transfer: CredentialTransfer,
         c_r: Option<ConnId>,
         ead_2: &EadItems,
-    ) -> Result<(EdhocResponderWaitM3<Crypto>, BufferMessage2), EDHOCError> {
+    ) -> Result<(EdhocResponderWaitM3<Crypto>, BufferMessage2), LAKEError> {
         trace!("Enter prepare_message_2");
         let c_r = match c_r {
             Some(c_r) => c_r,
@@ -170,7 +170,7 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM1<Crypto> {
             }
             (EDHOCMethod::PSK, ResponderIdentity::Psk) => PrepareMessage2Details::Psk {},
             // FIXME: Distinguish `MissingIdentity` from `MethodIdentityMismatch` here;
-            _ => return Err(EDHOCError::MissingIdentity), // or UnsupportedMethod
+            _ => return Err(LAKEError::MissingIdentity), // or UnsupportedMethod
         };
 
         match r_prepare_message_2(
@@ -202,7 +202,7 @@ impl<'a, Crypto: CryptoTrait> EdhocResponderWaitM3<Crypto> {
     pub fn parse_message_3(
         mut self,
         message_3: &'a BufferMessage3,
-    ) -> Result<(EdhocResponderProcessingM3<Crypto>, IdCred, EadItems), EDHOCError> {
+    ) -> Result<(EdhocResponderProcessingM3<Crypto>, IdCred, EadItems), LAKEError> {
         trace!("Enter parse_message_3");
         match r_parse_message_3(&mut self.state, &mut self.crypto, message_3) {
             Ok((state, id_cred_i, ead_3)) => Ok((
@@ -228,9 +228,9 @@ impl<'a, Crypto: CryptoTrait> EdhocResponderWaitM3<Crypto> {
         mut self,
         message_3: &'a BufferMessage3,
         resolve_cred_i: F, // we pass a function to look up for the credential: credential_lookup_or_fetch
-    ) -> Result<(EdhocResponderProcessingM3<Crypto>, IdCred, EadItems), EDHOCError>
+    ) -> Result<(EdhocResponderProcessingM3<Crypto>, IdCred, EadItems), LAKEError>
     where
-        F: Fn(&IdCred) -> Result<Credential, EDHOCError>,
+        F: Fn(&IdCred) -> Result<Credential, LAKEError>,
     {
         trace!("Enter parse_message_3_with_credential_lookup");
         match r_parse_message_3_with_cred_resolver(
@@ -256,7 +256,7 @@ impl<'a, Crypto: CryptoTrait> EdhocResponderProcessingM3<Crypto> {
     pub fn verify_message_3(
         mut self,
         cred_i: Credential,
-    ) -> Result<(EdhocResponderProcessedM3<Crypto>, [u8; SHA256_DIGEST_LEN]), EDHOCError> {
+    ) -> Result<(EdhocResponderProcessedM3<Crypto>, [u8; SHA256_DIGEST_LEN]), LAKEError> {
         trace!("Enter verify_message_3");
         match r_verify_message_3(&mut self.state, &mut self.crypto, cred_i) {
             Ok((state, prk_out)) => Ok((
@@ -275,7 +275,7 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM3<Crypto> {
     pub fn prepare_message_4(
         mut self,
         ead_4: &EadItems,
-    ) -> Result<(EdhocResponderDone<Crypto>, BufferMessage4), EDHOCError> {
+    ) -> Result<(EdhocResponderDone<Crypto>, BufferMessage4), LAKEError> {
         trace!("Enter prepare_message_4");
         match r_prepare_message_4(&self.state, &mut self.crypto, ead_4) {
             Ok((state, message_4)) => Ok((
@@ -289,7 +289,7 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM3<Crypto> {
         }
     }
 
-    pub fn completed_without_message_4(self) -> Result<EdhocResponderDone<Crypto>, EDHOCError> {
+    pub fn completed_without_message_4(self) -> Result<EdhocResponderDone<Crypto>, LAKEError> {
         trace!("Enter completed");
         match r_complete_without_message_4(&self.state) {
             Ok(state) => Ok(EdhocResponderDone {
@@ -334,9 +334,9 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiator<Crypto> {
         &mut self,
         identity: InitiatorIdentity,
         cred_i: Credential,
-    ) -> Result<(), EDHOCError> {
+    ) -> Result<(), LAKEError> {
         if self.i.is_some() || self.cred_i.is_some() {
-            return Err(EDHOCError::IdentityAlreadySet);
+            return Err(LAKEError::IdentityAlreadySet);
         }
         self.i = Some(identity);
         self.cred_i = Some(cred_i);
@@ -347,7 +347,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiator<Crypto> {
         mut self,
         c_i: Option<ConnId>,
         ead_1: &EadItems,
-    ) -> Result<(EdhocInitiatorWaitM2<Crypto>, BufferMessage1), EDHOCError> {
+    ) -> Result<(EdhocInitiatorWaitM2<Crypto>, BufferMessage1), LAKEError> {
         trace!("Enter prepare_message_1");
         let c_i = match c_i {
             Some(c_i) => c_i,
@@ -381,7 +381,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorWaitM2<Crypto> {
     pub fn parse_message_2(
         mut self,
         message_2: &'a BufferMessage2,
-    ) -> Result<(EdhocInitiatorProcessingM2<Crypto>, ConnId, EadItems), EDHOCError> {
+    ) -> Result<(EdhocInitiatorProcessingM2<Crypto>, ConnId, EadItems), LAKEError> {
         trace!("Enter parse_message_2");
         match i_parse_message_2(&self.state, &mut self.crypto, message_2) {
             Ok((state, c_r, _details, ead_2)) => Ok((
@@ -404,9 +404,9 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessingM2<Crypto> {
         &mut self,
         identity: InitiatorIdentity,
         cred_i: Credential,
-    ) -> Result<(), EDHOCError> {
+    ) -> Result<(), LAKEError> {
         if self.i.is_some() || self.cred_i.is_some() {
-            return Err(EDHOCError::IdentityAlreadySet);
+            return Err(LAKEError::IdentityAlreadySet);
         }
         self.i = Some(identity);
         self.cred_i = Some(cred_i);
@@ -416,15 +416,15 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessingM2<Crypto> {
     pub fn verify_message_2(
         mut self,
         cred_expected: Option<Credential>,
-    ) -> Result<EdhocInitiatorProcessedM2<Crypto>, EDHOCError> {
+    ) -> Result<EdhocInitiatorProcessedM2<Crypto>, LAKEError> {
         trace!("Enter verify_message_2");
-        let i = self.i.ok_or(EDHOCError::MissingIdentity)?;
+        let i = self.i.ok_or(LAKEError::MissingIdentity)?;
         let valid_cred_r = match &self.state.method_specifics {
             ProcessingM2MethodSpecifics::StatStat { id_cred_r, .. } => {
                 credential_check_or_fetch(cred_expected, id_cred_r.clone())?
             }
             ProcessingM2MethodSpecifics::Psk {} => {
-                cred_expected.ok_or(EDHOCError::MissingIdentity)?
+                cred_expected.ok_or(LAKEError::MissingIdentity)?
             }
         };
         match i_verify_message_2(&self.state, &mut self.crypto, valid_cred_r, i) {
@@ -449,11 +449,11 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessedM2<Crypto> {
             BufferMessage3,
             [u8; SHA256_DIGEST_LEN],
         ),
-        EDHOCError,
+        LAKEError,
     > {
         trace!("Enter prepare_message_3");
         let Some(cred_i) = self.cred_i else {
-            return Err(EDHOCError::MissingIdentity);
+            return Err(LAKEError::MissingIdentity);
         };
         match i_prepare_message_3(
             &mut self.state,
@@ -479,7 +479,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorWaitM4<Crypto> {
     pub fn process_message_4(
         mut self,
         message_4: &'a BufferMessage4,
-    ) -> Result<(EdhocInitiatorDone<Crypto>, EadItems), EDHOCError> {
+    ) -> Result<(EdhocInitiatorDone<Crypto>, EadItems), LAKEError> {
         trace!("Enter parse_message_4");
         match i_process_message_4(&mut self.state, &mut self.crypto, message_4) {
             Ok((state, ead_4)) => Ok((
@@ -493,7 +493,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorWaitM4<Crypto> {
         }
     }
 
-    pub fn completed_without_message_4(self) -> Result<EdhocResponderDone<Crypto>, EDHOCError> {
+    pub fn completed_without_message_4(self) -> Result<EdhocResponderDone<Crypto>, LAKEError> {
         trace!("Enter completed");
         match i_complete_without_message_4(&self.state) {
             Ok(state) => Ok(EdhocResponderDone {
@@ -541,7 +541,7 @@ pub fn generate_connection_identifier<Crypto: CryptoTrait>(crypto: &mut Crypto) 
 pub fn credential_check_or_fetch(
     cred_expected: Option<Credential>,
     id_cred_received: IdCred,
-) -> Result<Credential, EDHOCError> {
+) -> Result<Credential, LAKEError> {
     trace!("Enter credential_check_or_fetch");
     // Processing of auth credentials according to draft-tiloca-lake-implem-cons
     // Comments tagged with a number refer to steps in Section 4.3.1. of draft-tiloca-lake-implem-cons
@@ -564,7 +564,7 @@ pub fn credential_check_or_fetch(
         if credentials_match {
             Ok(cred_expected)
         } else {
-            Err(EDHOCError::UnexpectedCredential)
+            Err(LAKEError::UnexpectedCredential)
         }
     } else {
         // 1. Does ID_CRED_X point to a stored authentication credential? NO
@@ -594,7 +594,7 @@ pub fn credential_check_or_fetch(
 pub fn credential_lookup_or_fetch(
     credentials: &[Credential],
     id_cred_received: IdCred,
-) -> Result<Credential, EDHOCError> {
+) -> Result<Credential, LAKEError> {
     for cred in credentials {
         let candidate = if id_cred_received.reference_only()? {
             cred.by_kid()
@@ -691,7 +691,7 @@ mod test {
         // process message_1 first time, when unsupported suite is selected
         let error = responder.process_message_1(&MESSAGE_1_TV_FIRST_TIME);
         assert!(error.is_err());
-        assert_eq!(error.unwrap_err(), EDHOCError::UnsupportedCipherSuite);
+        assert_eq!(error.unwrap_err(), LAKEError::UnsupportedCipherSuite);
 
         // We need to create a new responder -- no message is supposed to be processed twice by a
         // responder or initiator
@@ -870,7 +870,7 @@ mod test {
         id_cred_attacker
             .bytes
             .extend_from_slice(&[CBOR_MAJOR_MAP + 1, KCCS_LABEL])
-            .map_err(|_| EDHOCError::CredentialTooLongError)
+            .map_err(|_| LAKEError::CredentialTooLongError)
             .unwrap();
         id_cred_attacker
             .bytes
@@ -878,7 +878,7 @@ mod test {
             .unwrap();
 
         let cred_fetch = credential_lookup_or_fetch(&[cred_i], id_cred_attacker);
-        assert!(matches!(cred_fetch, Err(EDHOCError::WrongCredentialType)))
+        assert!(matches!(cred_fetch, Err(LAKEError::WrongCredentialType)))
     }
 
     #[test]
@@ -889,7 +889,7 @@ mod test {
         id_cred_attacker
             .bytes
             .extend_from_slice(&[CBOR_MAJOR_MAP + 1, KCCS_LABEL])
-            .map_err(|_| EDHOCError::CredentialTooLongError)
+            .map_err(|_| LAKEError::CredentialTooLongError)
             .unwrap();
         id_cred_attacker
             .bytes
@@ -897,7 +897,7 @@ mod test {
             .unwrap();
 
         let cred_fetch = credential_check_or_fetch(Some(cred_i), id_cred_attacker);
-        assert!(matches!(cred_fetch, Err(EDHOCError::UnexpectedCredential)))
+        assert!(matches!(cred_fetch, Err(LAKEError::UnexpectedCredential)))
     }
 
     #[test]
@@ -906,7 +906,7 @@ mod test {
         id_cred_attacker
             .bytes
             .extend_from_slice(&[CBOR_MAJOR_MAP + 1, KCCS_LABEL])
-            .map_err(|_| EDHOCError::CredentialTooLongError)
+            .map_err(|_| LAKEError::CredentialTooLongError)
             .unwrap();
         id_cred_attacker
             .bytes
@@ -914,7 +914,7 @@ mod test {
             .unwrap();
 
         let cred_fetch = credential_check_or_fetch(None, id_cred_attacker);
-        assert!(matches!(cred_fetch, Err(EDHOCError::WrongCredentialType)))
+        assert!(matches!(cred_fetch, Err(LAKEError::WrongCredentialType)))
     }
 
     #[test]
@@ -936,7 +936,7 @@ mod test {
         let err = responder
             .parse_message_3_with_credential_lookup(&empty_message_3, |_| unreachable!())
             .unwrap_err();
-        assert_eq!(err, EDHOCError::ParsingError);
+        assert_eq!(err, LAKEError::ParsingError);
     }
 
     #[test]
@@ -965,7 +965,7 @@ mod test {
         // message_3 declares a 1-byte payload but carries none (#454)
         let truncated_message_3 = BufferMessage3::new_from_slice(&[0x41]).unwrap();
         let err = responder.parse_message_3(&truncated_message_3).unwrap_err();
-        assert_eq!(err, EDHOCError::ParsingError);
+        assert_eq!(err, LAKEError::ParsingError);
     }
 }
 
@@ -995,11 +995,11 @@ mod test_authz {
         let cred_i = Credential::parse_ccs(CRED_I.try_into().unwrap()).unwrap();
         let cred_r = Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
 
-        let mock_fetch_cred_i = |id_cred_i: IdCred| -> Result<Credential, EDHOCError> {
+        let mock_fetch_cred_i = |id_cred_i: IdCred| -> Result<Credential, LAKEError> {
             if id_cred_i.as_full_value() == cred_i.by_kid()?.as_full_value() {
                 Ok(cred_i.clone())
             } else {
-                Err(EDHOCError::UnexpectedCredential)
+                Err(LAKEError::UnexpectedCredential)
             }
         };
 

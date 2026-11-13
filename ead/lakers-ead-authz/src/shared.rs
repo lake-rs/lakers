@@ -51,7 +51,7 @@ pub(crate) fn compute_k_1_iv_1<Crypto: CryptoTrait>(
 
 pub(crate) fn parse_ead_1_value(
     value: &[u8],
-) -> Result<(LakeMessageBuffer, LakeMessageBuffer), EDHOCError> {
+) -> Result<(LakeMessageBuffer, LakeMessageBuffer), LAKEError> {
     let mut seq_decoder = CBORDecoder::new(value);
     Ok((
         seq_decoder.str()?.try_into().unwrap(),

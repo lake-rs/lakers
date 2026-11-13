@@ -32,7 +32,7 @@ impl ZeroTouchServer {
         &self,
         crypto: &mut Crypto,
         vreq: &LakeMessageBuffer,
-    ) -> Result<LakeMessageBuffer, EDHOCError> {
+    ) -> Result<LakeMessageBuffer, LAKEError> {
         trace!("Enter handle_voucher_request");
         let (message_1, opaque_state) = parse_voucher_request(vreq)?;
         let (_method, _suites_i, g_x, _c_i, mut ead_1) = parse_message_1(&message_1)?;
@@ -41,9 +41,9 @@ impl ZeroTouchServer {
         // Not so much "EAD Unprocessable" but more "we really would have needed that EAD"
         let ead_item = ead_1
             .pop_by_label(EAD_AUTHZ_LABEL)
-            .ok_or(EDHOCError::EADUnprocessable)?;
+            .ok_or(LAKEError::EADUnprocessable)?;
         ead_1.processed_critical_items()?;
-        let value = ead_item.value_bytes().ok_or(EDHOCError::EADUnprocessable)?;
+        let value = ead_item.value_bytes().ok_or(LAKEError::EADUnprocessable)?;
         let (_loc_w, enc_id) = parse_ead_1_value(value)?;
         let id_u_encoded = decrypt_enc_id(crypto, &prk, &enc_id, EDHOC_SUPPORTED_SUITES[0])?;
         let id_u = decode_id_u(id_u_encoded)?;
@@ -56,7 +56,7 @@ impl ZeroTouchServer {
             let voucher = prepare_voucher(crypto, &h_message_1, &self.cred_v.as_slice(), &prk);
             encode_voucher_response(&message_1, &voucher, &opaque_state)
         } else {
-            Err(EDHOCError::AccessDenied)
+            Err(LAKEError::AccessDenied)
         }
     }
 }
@@ -79,14 +79,14 @@ impl ZeroTouchServerUserAcl {
         &self,
         crypto: &mut Crypto,
         vreq: &LakeMessageBuffer,
-    ) -> Result<LakeMessageBuffer, EDHOCError> {
+    ) -> Result<LakeMessageBuffer, LAKEError> {
         trace!("Enter decode_voucher_request");
         let (message_1, _opaque_state) = parse_voucher_request(vreq)?;
         let (_method, _suites_i, g_x, _c_i, ead_1) = parse_message_1(&message_1)?;
         let prk = compute_prk(crypto, &self.w, &g_x);
 
-        let ead_item = ead_1.iter().next().ok_or(EDHOCError::EADUnprocessable)?;
-        let value = ead_item.value_bytes().ok_or(EDHOCError::EADUnprocessable)?;
+        let ead_item = ead_1.iter().next().ok_or(LAKEError::EADUnprocessable)?;
+        let value = ead_item.value_bytes().ok_or(LAKEError::EADUnprocessable)?;
         let (_loc_w, enc_id) = parse_ead_1_value(value)?;
         let id_u_encoded = decrypt_enc_id(crypto, &prk, &enc_id, EDHOC_SUPPORTED_SUITES[0])?;
 
@@ -97,7 +97,7 @@ impl ZeroTouchServerUserAcl {
         &self,
         crypto: &mut Crypto,
         vreq: &LakeMessageBuffer,
-    ) -> Result<LakeMessageBuffer, EDHOCError> {
+    ) -> Result<LakeMessageBuffer, LAKEError> {
         trace!("Enter prepare_voucher");
         let (message_1, opaque_state) = parse_voucher_request(vreq)?;
         let (_method, _suites_i, g_x, _c_i, _ead_1) = parse_message_1(&message_1)?;
@@ -112,11 +112,11 @@ impl ZeroTouchServerUserAcl {
 
 fn parse_voucher_request(
     vreq: &LakeMessageBuffer,
-) -> Result<(BufferMessage1, Option<LakeMessageBuffer>), EDHOCError> {
+) -> Result<(BufferMessage1, Option<LakeMessageBuffer>), LAKEError> {
     let mut decoder = CBORDecoder::new(vreq.as_slice());
     let array_size = decoder.array()?;
     if array_size != 1 && array_size != 2 {
-        return Err(EDHOCError::EADUnprocessable);
+        return Err(LAKEError::EADUnprocessable);
     }
 
     let message_1: BufferMessage1 = decoder.bytes()?.try_into().unwrap();
@@ -134,7 +134,7 @@ fn decrypt_enc_id<Crypto: CryptoTrait>(
     prk: &BytesHashLen,
     enc_id: &LakeMessageBuffer,
     ss: u8,
-) -> Result<LakeMessageBuffer, EDHOCError> {
+) -> Result<LakeMessageBuffer, LAKEError> {
     let (k_1, iv_1) = compute_k_1_iv_1(crypto, &prk);
 
     // external_aad = (SS: int)
@@ -149,7 +149,7 @@ fn decrypt_enc_id<Crypto: CryptoTrait>(
     )
 }
 
-fn decode_id_u(id_u_bstr: LakeMessageBuffer) -> Result<LakeMessageBuffer, EDHOCError> {
+fn decode_id_u(id_u_bstr: LakeMessageBuffer) -> Result<LakeMessageBuffer, LAKEError> {
     // id_u is encoded as bstr
     let mut decoder = CBORDecoder::new(id_u_bstr.as_slice());
     let id_u: LakeMessageBuffer = decoder.bytes()?.try_into().unwrap();
@@ -160,57 +160,57 @@ fn encode_voucher_response(
     message_1: &BufferMessage1,
     voucher: &BytesVoucher,
     opaque_state: &Option<LakeMessageBuffer>,
-) -> Result<LakeMessageBuffer, EDHOCError> {
+) -> Result<LakeMessageBuffer, LAKEError> {
     let mut output = LakeMessageBuffer::new();
 
     if opaque_state.is_some() {
         output
             .push(CBOR_MAJOR_ARRAY | 3)
-            .map_err(|_| EDHOCError::EncodingError)?;
+            .map_err(|_| LAKEError::EncodingError)?;
     } else {
         output
             .push(CBOR_MAJOR_ARRAY | 2)
-            .map_err(|_| EDHOCError::EncodingError)?;
+            .map_err(|_| LAKEError::EncodingError)?;
     }
     // A one-byte header cannot express a length over 255; reject rather than truncate.
     let message_1_len: u8 = message_1
         .len()
         .try_into()
-        .map_err(|_| EDHOCError::EncodingError)?;
+        .map_err(|_| LAKEError::EncodingError)?;
     output
         .push(CBOR_BYTE_STRING)
-        .map_err(|_| EDHOCError::EncodingError)?;
+        .map_err(|_| LAKEError::EncodingError)?;
     output
         .push(message_1_len)
-        .map_err(|_| EDHOCError::EncodingError)?;
+        .map_err(|_| LAKEError::EncodingError)?;
     output
         .extend_from_slice(message_1.as_slice())
-        .map_err(|_| EDHOCError::EncodingError)?;
+        .map_err(|_| LAKEError::EncodingError)?;
 
     output
         .push(CBOR_MAJOR_BYTE_STRING + 1 + VOUCHER_LEN as u8)
-        .map_err(|_| EDHOCError::EncodingError)?;
+        .map_err(|_| LAKEError::EncodingError)?;
     // The voucher is double-wrapped in bytes; see
     // <https://github.com/lake-rs/lakers/issues/382>
-    output.push(0x48).map_err(|_| EDHOCError::EncodingError)?;
+    output.push(0x48).map_err(|_| LAKEError::EncodingError)?;
     output
         .extend_from_slice(voucher)
-        .map_err(|_| EDHOCError::EncodingError)?;
+        .map_err(|_| LAKEError::EncodingError)?;
 
     if let Some(opaque_state) = opaque_state {
         let opaque_state_len: u8 = opaque_state
             .len()
             .try_into()
-            .map_err(|_| EDHOCError::EncodingError)?;
+            .map_err(|_| LAKEError::EncodingError)?;
         output
             .push(CBOR_BYTE_STRING)
-            .map_err(|_| EDHOCError::EncodingError)?;
+            .map_err(|_| LAKEError::EncodingError)?;
         output
             .push(opaque_state_len)
-            .map_err(|_| EDHOCError::EncodingError)?;
+            .map_err(|_| LAKEError::EncodingError)?;
         output
             .extend_from_slice(opaque_state.as_slice())
-            .map_err(|_| EDHOCError::EncodingError)?;
+            .map_err(|_| LAKEError::EncodingError)?;
     }
 
     Ok(output)
@@ -283,7 +283,7 @@ mod test_enrollment_server {
 
         let server = ZeroTouchServer::new(W_TV.try_into().unwrap(), CRED_V_TV, None);
         let res = server.handle_voucher_request(&mut default_crypto(), &vreq);
-        assert_eq!(res.unwrap_err(), EDHOCError::EADUnprocessable);
+        assert_eq!(res.unwrap_err(), LAKEError::EADUnprocessable);
     }
 
     #[test]
@@ -293,7 +293,7 @@ mod test_enrollment_server {
 
         let server = ZeroTouchServerUserAcl::new(W_TV.try_into().unwrap(), CRED_V_TV);
         let res = server.decode_voucher_request(&mut default_crypto(), &vreq);
-        assert_eq!(res.unwrap_err(), EDHOCError::EADUnprocessable);
+        assert_eq!(res.unwrap_err(), LAKEError::EADUnprocessable);
     }
 
     #[test]
@@ -317,7 +317,7 @@ mod test_enrollment_server {
 
             let server = ZeroTouchServer::new(W_TV.try_into().unwrap(), CRED_V_TV, None);
             let res = server.handle_voucher_request(&mut default_crypto(), &vreq);
-            assert_eq!(res.unwrap_err(), EDHOCError::ParsingError);
+            assert_eq!(res.unwrap_err(), LAKEError::ParsingError);
         }
     }
 
@@ -331,7 +331,7 @@ mod test_enrollment_server {
             Some(ACL_TV.try_into().unwrap()),
         );
         let res = server.handle_voucher_request(&mut default_crypto(), &vreq);
-        assert_eq!(res.unwrap_err(), EDHOCError::AccessDenied);
+        assert_eq!(res.unwrap_err(), LAKEError::AccessDenied);
     }
 
     #[test]
@@ -438,7 +438,7 @@ mod test_enrollment_server {
             &mut default_crypto(),
             &VOUCHER_REQUEST_TV.try_into().unwrap(),
         );
-        assert_eq!(res.unwrap_err(), EDHOCError::AccessDenied);
+        assert_eq!(res.unwrap_err(), LAKEError::AccessDenied);
     }
 }
 

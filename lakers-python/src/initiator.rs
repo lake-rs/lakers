@@ -155,11 +155,11 @@ impl PyEdhocInitiator {
                 InitiatorIdentity::StatStat {
                     i: i.as_slice()
                         .try_into()
-                        .map_err(|_| EDHOCError::ParsingError)?,
+                        .map_err(|_| LAKEError::ParsingError)?,
                 }
             }
             EDHOCMethod::PSK => InitiatorIdentity::Psk,
-            _ => return Err(EDHOCError::UnsupportedMethod.into()),
+            _ => return Err(LAKEError::UnsupportedMethod.into()),
         };
 
         let state = i_verify_message_2(

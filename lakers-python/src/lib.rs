@@ -122,7 +122,7 @@ pub enum AutoCredential {
 }
 
 impl AutoCredential {
-    pub fn to_credential(self) -> Result<Credential, EDHOCError> {
+    pub fn to_credential(self) -> Result<Credential, LAKEError> {
         use AutoCredential::*;
         Ok(match self {
             Existing(e) => e,
@@ -134,7 +134,7 @@ impl AutoCredential {
 pub(crate) fn parse_credential(
     method: EDHOCMethod,
     credential: AutoCredential,
-) -> Result<Credential, EDHOCError> {
+) -> Result<Credential, LAKEError> {
     use AutoCredential::{Existing, Parse};
 
     Ok(match credential {
@@ -144,7 +144,7 @@ pub(crate) fn parse_credential(
         Parse(v) => match method {
             EDHOCMethod::StatStat => Credential::parse_ccs(v.as_slice())?,
             EDHOCMethod::PSK => Credential::parse_ccs_symmetric(v.as_slice())?,
-            _ => return Err(EDHOCError::UnsupportedMethod),
+            _ => return Err(LAKEError::UnsupportedMethod),
         },
     })
 }

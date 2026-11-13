@@ -17,7 +17,7 @@ use embedded_cal::{
 };
 use lakers_shared::{
     BufferPsk, BytesCcmIvLen, BytesCcmKeyLen, BytesHashLen, BytesP256ElemLen, CcmTagLen,
-    Crypto as CryptoTrait, EDHOCError, EDHOCSuite, LakeBuffer, MAX_SUITES_LEN,
+    Crypto as CryptoTrait, EDHOCSuite, LAKEError, LakeBuffer, MAX_SUITES_LEN,
 };
 
 /// A [`lakers_shared::Crypto`] implementation that forwards to an embedded-cal [`Cal`] instance.
@@ -139,14 +139,14 @@ impl<C: Cal + rand_core::TryCryptoRng> CryptoTrait for Crypto<C> {
         iv: &BytesCcmIvLen,
         ad: &[u8],
         ciphertext: &[u8],
-    ) -> Result<LakeBuffer<N>, EDHOCError> {
+    ) -> Result<LakeBuffer<N>, LAKEError> {
         let alg = aes_ccm_algorithm::<C, Tag>();
         let plaintext_len = ciphertext
             .len()
             .checked_sub(Tag::LEN)
-            .ok_or(EDHOCError::ParsingError)?;
+            .ok_or(LAKEError::ParsingError)?;
         let mut buffer = LakeBuffer::<N>::new_from_slice(&ciphertext[..plaintext_len])
-            .map_err(|_| EDHOCError::ParsingError)?;
+            .map_err(|_| LAKEError::ParsingError)?;
         let tag = &ciphertext[plaintext_len..];
         let aead = self.cal.aead();
         let key = aead.load_from_keydata(alg, key);
@@ -156,7 +156,7 @@ impl<C: Cal + rand_core::TryCryptoRng> CryptoTrait for Crypto<C> {
             reason = "LakeBuffer has no non-deprecated mutable-slice accessor"
         )]
         aead.decrypt_in_place(&key, iv, &mut buffer.content[..plaintext_len], tag, ad)
-            .map_err(|_| EDHOCError::MacVerificationFailed)?;
+            .map_err(|_| LAKEError::MacVerificationFailed)?;
         Ok(buffer)
     }
 

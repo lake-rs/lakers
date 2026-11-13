@@ -103,7 +103,7 @@ def test_edhoc_error():
     responder = EdhocResponder(CRED_R, R)
     with pytest.raises(ValueError) as err:
         _ = responder.process_message_1([1, 2, 3])
-    assert str(err.value) == "EDHOCError::ParsingError"
+    assert str(err.value) == "LAKEError::ParsingError"
 
 def test_buffer_error():
     initiator = EdhocInitiator()
@@ -115,7 +115,7 @@ def test_buffer_error():
 def test_responder_rejects_invalid_r_length():
     with pytest.raises(ValueError) as err:
         _ = EdhocResponder(CRED_R, b"\x01")
-    assert str(err.value) == "Failed to ingest CRED_R (EDHOCError::ParsingError)"
+    assert str(err.value) == "Failed to ingest CRED_R (LAKEError::ParsingError)"
 
 def test_initiator_rejects_invalid_i_length():
     initiator = EdhocInitiator()
@@ -130,7 +130,7 @@ def test_initiator_rejects_invalid_i_length():
 
     with pytest.raises(ValueError) as err:
         initiator.verify_message_2(b"\x01", CRED_I, valid_cred_r)
-    assert str(err.value) == "EDHOCError::ParsingError"
+    assert str(err.value) == "LAKEError::ParsingError"
 
 def test_state_missing_step():
     initiator = EdhocInitiator()

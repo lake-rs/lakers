@@ -19,13 +19,13 @@ impl ZeroTouchAuthenticator {
             LakeMessageBuffer,
             LakeMessageBuffer,
         ),
-        EDHOCError,
+        LAKEError,
     > {
         trace!("Enter process_ead_1");
         let opaque_state: Option<LakeMessageBuffer> = None; // TODO: receive as parameter
 
         if ead_1.label() != EAD_AUTHZ_LABEL || ead_1.value_bytes().is_none() {
-            return Err(EDHOCError::EADUnprocessable);
+            return Err(LAKEError::EADUnprocessable);
         }
 
         let (loc_w, _enc_id) = parse_ead_1_value(ead_1.value_bytes().unwrap())?;
@@ -43,7 +43,7 @@ impl ZeroTouchAuthenticatorWaitVoucherResp {
     pub fn prepare_ead_2(
         &self,
         voucher_response: &LakeMessageBuffer,
-    ) -> Result<EADItem, EDHOCError> {
+    ) -> Result<EADItem, LAKEError> {
         trace!("Enter prepare_ead_2");
         let (_message_1, voucher, _opaque_state) = parse_voucher_response(&voucher_response)?;
 
@@ -54,48 +54,48 @@ impl ZeroTouchAuthenticatorWaitVoucherResp {
 pub fn encode_voucher_request(
     message_1: &BufferMessage1,
     opaque_state: &Option<LakeMessageBuffer>,
-) -> Result<LakeMessageBuffer, EDHOCError> {
+) -> Result<LakeMessageBuffer, LAKEError> {
     let mut output = LakeMessageBuffer::new();
 
     if opaque_state.is_some() {
         output
             .push(CBOR_MAJOR_ARRAY | 2)
-            .map_err(|_| EDHOCError::EncodingError)?;
+            .map_err(|_| LAKEError::EncodingError)?;
     } else {
         output
             .push(CBOR_MAJOR_ARRAY | 1)
-            .map_err(|_| EDHOCError::EncodingError)?;
+            .map_err(|_| LAKEError::EncodingError)?;
     }
 
     // A one-byte header cannot express a length over 255; reject rather than truncate.
     let message_1_len: u8 = message_1
         .len()
         .try_into()
-        .map_err(|_| EDHOCError::EncodingError)?;
+        .map_err(|_| LAKEError::EncodingError)?;
     output
         .push(CBOR_BYTE_STRING)
-        .map_err(|_| EDHOCError::EncodingError)?;
+        .map_err(|_| LAKEError::EncodingError)?;
     output
         .push(message_1_len)
-        .map_err(|_| EDHOCError::EncodingError)?;
+        .map_err(|_| LAKEError::EncodingError)?;
     output
         .extend_from_slice(message_1.as_slice())
-        .map_err(|_| EDHOCError::EncodingError)?;
+        .map_err(|_| LAKEError::EncodingError)?;
 
     if let Some(opaque_state) = opaque_state {
         let opaque_state_len: u8 = opaque_state
             .len()
             .try_into()
-            .map_err(|_| EDHOCError::EncodingError)?;
+            .map_err(|_| LAKEError::EncodingError)?;
         output
             .push(CBOR_BYTE_STRING)
-            .map_err(|_| EDHOCError::EncodingError)?;
+            .map_err(|_| LAKEError::EncodingError)?;
         output
             .push(opaque_state_len)
-            .map_err(|_| EDHOCError::EncodingError)?;
+            .map_err(|_| LAKEError::EncodingError)?;
         output
             .extend_from_slice(opaque_state.as_slice())
-            .map_err(|_| EDHOCError::EncodingError)?;
+            .map_err(|_| LAKEError::EncodingError)?;
     }
 
     Ok(output)
@@ -103,12 +103,12 @@ pub fn encode_voucher_request(
 
 fn parse_voucher_response(
     voucher_response: &LakeMessageBuffer,
-) -> Result<(LakeMessageBuffer, BytesVoucher, Option<LakeMessageBuffer>), EDHOCError> {
+) -> Result<(LakeMessageBuffer, BytesVoucher, Option<LakeMessageBuffer>), LAKEError> {
     let mut decoder = CBORDecoder::new(voucher_response.as_slice());
 
     let array_size = decoder.array()?;
     if !(2..=3).contains(&array_size) {
-        return Err(EDHOCError::EADUnprocessable);
+        return Err(LAKEError::EADUnprocessable);
     }
 
     let message_1: LakeMessageBuffer = decoder.bytes()?.try_into().unwrap();

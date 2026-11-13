@@ -141,21 +141,21 @@ impl CryptoTrait for Crypto {
         iv: &BytesCcmIvLen,
         ad: &[u8],
         ciphertext: &[u8],
-    ) -> Result<LakeBuffer<N>, EDHOCError> {
+    ) -> Result<LakeBuffer<N>, LAKEError> {
         let plaintext_len = ciphertext
             .len()
             .checked_sub(Tag::LEN)
-            .ok_or(EDHOCError::ParsingError)?;
+            .ok_or(LAKEError::ParsingError)?;
         let mut output = LakeBuffer::new();
         output
             .extend_reserve(plaintext_len)
-            .map_err(|_| EDHOCError::ParsingError)?;
+            .map_err(|_| LAKEError::ParsingError)?;
         let mut aesccm_key: CRYS_AESCCM_Key_t = Default::default();
 
         aesccm_key[0..AES_CCM_KEY_LEN].copy_from_slice(&key[..]);
 
         if plaintext_len > N {
-            return Err(EDHOCError::ParsingError);
+            return Err(LAKEError::ParsingError);
         }
 
         #[allow(deprecated, reason = "using extend_reserve")]
@@ -178,7 +178,7 @@ impl CryptoTrait for Crypto {
                 0 as u32, // CCM
             ) {
                 CRYS_OK => Ok(output),
-                _ => Err(EDHOCError::MacVerificationFailed),
+                _ => Err(LAKEError::MacVerificationFailed),
             }
         }
     }

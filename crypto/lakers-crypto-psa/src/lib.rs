@@ -148,7 +148,7 @@ impl CryptoTrait for Crypto {
         iv: &BytesCcmIvLen,
         ad: &[u8],
         ciphertext: &[u8],
-    ) -> Result<LakeBuffer<N>, EDHOCError> {
+    ) -> Result<LakeBuffer<N>, LAKEError> {
         psa_crypto::init().unwrap();
 
         let alg = Aead::AeadWithShortenedTag {
@@ -171,11 +171,11 @@ impl CryptoTrait for Crypto {
         let plaintext_len = ciphertext
             .len()
             .checked_sub(Tag::LEN)
-            .ok_or(EDHOCError::ParsingError)?;
+            .ok_or(LAKEError::ParsingError)?;
         let mut output_buffer = LakeBuffer::new();
         let out_slice = output_buffer
             .extend_reserve(plaintext_len)
-            .map_err(|_| EDHOCError::ParsingError)?;
+            .map_err(|_| LAKEError::ParsingError)?;
 
         #[allow(deprecated, reason = "using extend_reserve")]
         match aead::decrypt(
@@ -187,7 +187,7 @@ impl CryptoTrait for Crypto {
             &mut output_buffer.content[out_slice],
         ) {
             Ok(_) => Ok(output_buffer),
-            Err(_) => Err(EDHOCError::MacVerificationFailed),
+            Err(_) => Err(LAKEError::MacVerificationFailed),
         }
     }
 

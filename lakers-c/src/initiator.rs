@@ -180,7 +180,7 @@ pub unsafe extern "C" fn initiator_verify_message_2(
         ProcessingM2MethodSpecifics::StatStat { id_cred_r, .. } => {
             lakers::credential_check_or_fetch(cred_expected, id_cred_r.clone())
         }
-        ProcessingM2MethodSpecifics::Psk {} => cred_expected.ok_or(EDHOCError::MissingIdentity),
+        ProcessingM2MethodSpecifics::Psk {} => cred_expected.ok_or(LAKEError::MissingIdentity),
     };
 
     match valid_cred_r

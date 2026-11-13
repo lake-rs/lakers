@@ -82,7 +82,7 @@ pub fn r_process_message_1(
     state: &ResponderStart,
     crypto: &mut impl CryptoTrait,
     message_1: &BufferMessage1,
-) -> Result<(ProcessingM1, ConnId, EadItems), EDHOCError> {
+) -> Result<(ProcessingM1, ConnId, EadItems), LAKEError> {
     // Step 1: decode message_1
     // g_x will be saved to the state
     if let Ok((method, suites_i, g_x, c_i, ead_1)) = parse_message_1(message_1) {
@@ -108,14 +108,14 @@ pub fn r_process_message_1(
                         ead_1,
                     ))
                 } else {
-                    Err(EDHOCError::UnsupportedCipherSuite)
+                    Err(LAKEError::UnsupportedCipherSuite)
                 }
             }
             // If lakers-shared gets merged into lakers, this can be removed:
-            _ => Err(EDHOCError::UnsupportedMethod),
+            _ => Err(LAKEError::UnsupportedMethod),
         }
     } else {
-        Err(EDHOCError::ParsingError)
+        Err(LAKEError::ParsingError)
     }
 }
 
@@ -126,7 +126,7 @@ pub fn r_prepare_message_2(
     method_details: PrepareMessage2Details<'_>,
     c_r: ConnId,
     ead_2: &EadItems,
-) -> Result<(WaitM3, BufferMessage2), EDHOCError> {
+) -> Result<(WaitM3, BufferMessage2), LAKEError> {
     let th_2 = compute_th_2(crypto, &state.g_y, &state.h_message_1);
     let prk_2e = compute_prk_2e(crypto, &state.y, &state.g_x, &th_2);
 
@@ -147,7 +147,7 @@ pub fn r_prepare_message_2(
         (EDHOCMethod::PSK, PrepareMessage2Details::Psk) => {
             r_prepare_message_2_psk(crypto, cred_r, c_r, ead_2, &th_2, &prk_2e)?
         }
-        _ => return Err(EDHOCError::UnsupportedMethod),
+        _ => return Err(LAKEError::UnsupportedMethod),
     };
 
     let mut ct: BufferCiphertext2 = BufferCiphertext2::new();
@@ -174,12 +174,12 @@ pub fn r_parse_message_3(
     state: &WaitM3,
     crypto: &mut impl CryptoTrait,
     message_3: &BufferMessage3,
-) -> Result<(ProcessingM3, IdCred, EadItems), EDHOCError> {
+) -> Result<(ProcessingM3, IdCred, EadItems), LAKEError> {
     let parsed = match &state.method_specifics {
         WaitM3MethodSpecifics::StatStat { .. } => {
             r_parse_message_3_statstat(state, crypto, message_3)?
         }
-        WaitM3MethodSpecifics::Psk { .. } => return Err(EDHOCError::UnsupportedMethod),
+        WaitM3MethodSpecifics::Psk { .. } => return Err(LAKEError::UnsupportedMethod),
     };
 
     Ok((
@@ -201,9 +201,9 @@ pub fn r_parse_message_3_with_cred_resolver<F>(
     crypto: &mut impl CryptoTrait,
     message_3: &BufferMessage3,
     resolve_cred_i: F,
-) -> Result<(ProcessingM3, IdCred, EadItems), EDHOCError>
+) -> Result<(ProcessingM3, IdCred, EadItems), LAKEError>
 where
-    F: Fn(&IdCred) -> Result<Credential, EDHOCError>,
+    F: Fn(&IdCred) -> Result<Credential, LAKEError>,
 {
     let parsed = match &state.method_specifics {
         WaitM3MethodSpecifics::StatStat { .. } => {
@@ -236,7 +236,7 @@ pub fn r_verify_message_3(
     state: &ProcessingM3,
     crypto: &mut impl CryptoTrait,
     valid_cred_i: Credential,
-) -> Result<(ProcessedM3, BytesHashLen), EDHOCError> {
+) -> Result<(ProcessedM3, BytesHashLen), LAKEError> {
     let salt_4e3m = compute_salt_4e3m(crypto, &state.prk_3e2m, &state.th_3);
 
     let verified = match &state.method_specifics {
@@ -276,7 +276,7 @@ pub fn r_prepare_message_4(
     state: &ProcessedM3,
     crypto: &mut impl CryptoTrait,
     ead_4: &EadItems,
-) -> Result<(Completed, BufferMessage4), EDHOCError> {
+) -> Result<(Completed, BufferMessage4), LAKEError> {
     // compute ciphertext_4
     let plaintext_4 = encode_plaintext_4(&ead_4)?;
     let message_4 = encrypt_message_4(crypto, &state.prk_4e3m, &state.th_4, &plaintext_4)?;
@@ -290,7 +290,7 @@ pub fn r_prepare_message_4(
     ))
 }
 
-pub fn r_complete_without_message_4(state: &ProcessedM3) -> Result<Completed, EDHOCError> {
+pub fn r_complete_without_message_4(state: &ProcessedM3) -> Result<Completed, LAKEError> {
     Ok(Completed {
         prk_out: state.prk_out,
         prk_exporter: state.prk_exporter,
@@ -302,7 +302,7 @@ pub fn i_prepare_message_1(
     crypto: &mut impl CryptoTrait,
     c_i: ConnId,
     ead_1: &EadItems,
-) -> Result<(WaitM2, BufferMessage1), EDHOCError> {
+) -> Result<(WaitM2, BufferMessage1), LAKEError> {
     // Encode message_1 as a sequence of CBOR encoded data items as specified in Section 5.2.1
     let message_1 = encode_message_1(state.method, &state.suites_i, &state.g_x, c_i, &ead_1)?;
 
@@ -323,7 +323,7 @@ pub fn i_parse_message_2<'a>(
     state: &WaitM2,
     crypto: &mut impl CryptoTrait,
     message_2: &BufferMessage2,
-) -> Result<(ProcessingM2, ConnId, ParsedMessage2Details, EadItems), EDHOCError> {
+) -> Result<(ProcessingM2, ConnId, ParsedMessage2Details, EadItems), LAKEError> {
     let (g_y, ciphertext_2) = parse_message_2(message_2)?;
     let th_2 = compute_th_2(crypto, &g_y, &state.h_message_1);
     let prk_2e = compute_prk_2e(crypto, &state.x, &g_y, &th_2);
@@ -332,7 +332,7 @@ pub fn i_parse_message_2<'a>(
     let decoded = match state.method {
         EDHOCMethod::StatStat => i_parse_message_2_statstat(&plaintext_2),
         EDHOCMethod::PSK => i_parse_message_2_psk(&plaintext_2),
-        _ => Err(EDHOCError::UnsupportedMethod),
+        _ => Err(LAKEError::UnsupportedMethod),
     }?;
 
     Ok((
@@ -357,7 +357,7 @@ pub fn i_verify_message_2(
     crypto: &mut impl CryptoTrait,
     valid_cred_r: Credential,
     i: InitiatorIdentity, // I's static private DH key when required by method
-) -> Result<ProcessedM2, EDHOCError> {
+) -> Result<ProcessedM2, LAKEError> {
     // The overall verification flow is shared across methods, but `prk_3e2m`,
     // `th_3`, and `prk_4e3m` still depend on the EDHOC method, so the match keeps
     // the method-specific derivation in the child modules and only shares the final
@@ -370,7 +370,7 @@ pub fn i_verify_message_2(
             i_verify_message_2_psk(state, crypto, valid_cred_r)?
         }
         // FIXME: it is not an error, but more a lack of agreement between peers.
-        _ => return Err(EDHOCError::MissingIdentity), // or UnsupportedMethod
+        _ => return Err(LAKEError::MissingIdentity), // or UnsupportedMethod
     };
 
     Ok(ProcessedM2 {
@@ -387,7 +387,7 @@ pub fn i_prepare_message_3(
     cred_i: Credential,
     cred_transfer: CredentialTransfer,
     ead_3: &EadItems,
-) -> Result<(WaitM4, BufferMessage3, BytesHashLen), EDHOCError> {
+) -> Result<(WaitM4, BufferMessage3, BytesHashLen), LAKEError> {
     let prepared = match state.method_specifics {
         ProcessedM2MethodSpecifics::StatStat { .. } => {
             i_prepare_message_3_statstat(state, crypto, cred_i, cred_transfer, ead_3)?
@@ -419,7 +419,7 @@ pub fn i_process_message_4(
     state: &mut WaitM4,
     crypto: &mut impl CryptoTrait,
     message_4: &BufferMessage4,
-) -> Result<(Completed, EadItems), EDHOCError> {
+) -> Result<(Completed, EadItems), LAKEError> {
     let plaintext_4 = decrypt_message_4(crypto, &state.prk_4e3m, &state.th_4, &message_4)?;
     let decoded_p4_res = decode_plaintext_4(&plaintext_4);
 
@@ -436,7 +436,7 @@ pub fn i_process_message_4(
     }
 }
 
-pub fn i_complete_without_message_4(state: &WaitM4) -> Result<Completed, EDHOCError> {
+pub fn i_complete_without_message_4(state: &WaitM4) -> Result<Completed, LAKEError> {
     Ok(Completed {
         prk_out: state.prk_out,
         prk_exporter: state.prk_exporter,
@@ -449,7 +449,7 @@ fn encode_message_1(
     g_x: &BytesP256ElemLen,
     c_i: ConnId,
     ead_1: &EadItems,
-) -> Result<BufferMessage1, EDHOCError> {
+) -> Result<BufferMessage1, LAKEError> {
     let mut output = BufferMessage1::new();
 
     output.push(method.into()).unwrap(); // CBOR unsigned int less than 24 is encoded verbatim
@@ -619,17 +619,17 @@ fn edhoc_kdf_owned<const N: usize>(
 fn encode_plaintext_3(
     stat_fields: Option<(&[u8], &BytesMac3)>,
     ead_3: &EadItems,
-) -> Result<BufferPlaintext3, EDHOCError> {
+) -> Result<BufferPlaintext3, LAKEError> {
     let mut plaintext_3 = match stat_fields {
         Some((id_cred_i, mac_3)) => {
             let mut plaintext_3 =
-                BufferPlaintext3::new_from_slice(id_cred_i).or(Err(EDHOCError::EncodingError))?;
+                BufferPlaintext3::new_from_slice(id_cred_i).or(Err(LAKEError::EncodingError))?;
             plaintext_3
                 .push(CBOR_MAJOR_BYTE_STRING | MAC_LENGTH_3 as u8)
-                .or(Err(EDHOCError::EncodingError))?;
+                .or(Err(LAKEError::EncodingError))?;
             plaintext_3
                 .extend_from_slice(mac_3)
-                .or(Err(EDHOCError::EncodingError))?;
+                .or(Err(LAKEError::EncodingError))?;
             plaintext_3
         }
         None => BufferPlaintext3::new(),
@@ -639,7 +639,7 @@ fn encode_plaintext_3(
     Ok(plaintext_3)
 }
 
-fn encode_plaintext_4(ead_4: &EadItems) -> Result<BufferPlaintext4, EDHOCError> {
+fn encode_plaintext_4(ead_4: &EadItems) -> Result<BufferPlaintext4, LAKEError> {
     let mut plaintext_4: BufferPlaintext4 = BufferPlaintext4::new();
 
     ead_4.encode(&mut plaintext_4)?;
@@ -650,28 +650,28 @@ fn encode_plaintext_4(ead_4: &EadItems) -> Result<BufferPlaintext4, EDHOCError> 
 fn build_external_aad(
     th_3: &[u8],
     psk_fields: Option<(&[u8], &[u8], &[u8])>,
-) -> Result<LakeBuffer<MAX_BUFFER_LEN>, EDHOCError> {
+) -> Result<LakeBuffer<MAX_BUFFER_LEN>, LAKEError> {
     match psk_fields {
         None => {
             let mut buf = LakeBuffer::<MAX_BUFFER_LEN>::new();
             buf.extend_from_slice(th_3)
-                .map_err(|_| EDHOCError::EncodingError)?;
+                .map_err(|_| LAKEError::EncodingError)?;
             Ok(buf)
         }
         Some((id_cred, cred_i, cred_r)) => {
             let mut buf = LakeBuffer::<MAX_BUFFER_LEN>::new();
 
             buf.extend_from_slice(id_cred)
-                .map_err(|_| EDHOCError::EncodingError)?;
+                .map_err(|_| LAKEError::EncodingError)?;
 
             encode_bstr_header(&mut buf, th_3.len())?;
             buf.extend_from_slice(th_3)
-                .map_err(|_| EDHOCError::EncodingError)?;
+                .map_err(|_| LAKEError::EncodingError)?;
 
             buf.extend_from_slice(cred_i)
-                .map_err(|_| EDHOCError::EncodingError)?;
+                .map_err(|_| LAKEError::EncodingError)?;
             buf.extend_from_slice(cred_r)
-                .map_err(|_| EDHOCError::EncodingError)?;
+                .map_err(|_| LAKEError::EncodingError)?;
 
             Ok(buf)
         }
@@ -680,33 +680,33 @@ fn build_external_aad(
 
 // FIXME: The encoded Enc_structure is no longer a fixed-size array because the
 // external_aad depends on the EDHOC method, so we return an `LakeBuffer`.
-fn encode_enc_structure(external_aad: &[u8]) -> Result<LakeBuffer<MAX_BUFFER_LEN>, EDHOCError> {
+fn encode_enc_structure(external_aad: &[u8]) -> Result<LakeBuffer<MAX_BUFFER_LEN>, LAKEError> {
     let encrypt0 = b"Encrypt0";
     let mut enc_structure = LakeBuffer::<MAX_BUFFER_LEN>::new();
 
     // CBOR array of 3 elements
     enc_structure
         .push(CBOR_MAJOR_ARRAY | 3)
-        .map_err(|_| EDHOCError::EncodingError)?;
+        .map_err(|_| LAKEError::EncodingError)?;
 
     // "Encrypt0" text string
     enc_structure
         .push(CBOR_MAJOR_TEXT_STRING | encrypt0.len() as u8)
-        .map_err(|_| EDHOCError::EncodingError)?;
+        .map_err(|_| LAKEError::EncodingError)?;
     enc_structure
         .extend_from_slice(encrypt0)
-        .map_err(|_| EDHOCError::EncodingError)?;
+        .map_err(|_| LAKEError::EncodingError)?;
 
     // protected field: zero-length byte string
     enc_structure
         .push(CBOR_MAJOR_BYTE_STRING | 0)
-        .map_err(|_| EDHOCError::EncodingError)?;
+        .map_err(|_| LAKEError::EncodingError)?;
 
     // external_aad field
     encode_bstr_header(&mut enc_structure, external_aad.len())?;
     enc_structure
         .extend_from_slice(external_aad)
-        .map_err(|_| EDHOCError::EncodingError)?;
+        .map_err(|_| LAKEError::EncodingError)?;
 
     Ok(enc_structure)
 }
@@ -714,19 +714,19 @@ fn encode_enc_structure(external_aad: &[u8]) -> Result<LakeBuffer<MAX_BUFFER_LEN
 fn encode_bstr_header<const N: usize>(
     buf: &mut LakeBuffer<N>,
     len: usize,
-) -> Result<(), EDHOCError> {
+) -> Result<(), LAKEError> {
     if len <= 23 {
         buf.push(CBOR_MAJOR_BYTE_STRING | len as u8)
-            .map_err(|_| EDHOCError::EncodingError)?;
+            .map_err(|_| LAKEError::EncodingError)?;
     } else if len <= u8::MAX as usize {
-        buf.push(0x58).map_err(|_| EDHOCError::EncodingError)?;
-        buf.push(len as u8).map_err(|_| EDHOCError::EncodingError)?;
+        buf.push(0x58).map_err(|_| LAKEError::EncodingError)?;
+        buf.push(len as u8).map_err(|_| LAKEError::EncodingError)?;
     } else if len <= u16::MAX as usize {
-        buf.push(0x59).map_err(|_| EDHOCError::EncodingError)?;
+        buf.push(0x59).map_err(|_| LAKEError::EncodingError)?;
         buf.extend_from_slice(&(len as u16).to_be_bytes())
-            .map_err(|_| EDHOCError::EncodingError)?;
+            .map_err(|_| LAKEError::EncodingError)?;
     } else {
-        return Err(EDHOCError::EncodingError);
+        return Err(LAKEError::EncodingError);
     }
     Ok(())
 }
@@ -769,22 +769,22 @@ fn encrypt_message_3(
     th_3: &BytesHashLen,
     plaintext_3: &BufferPlaintext3,
     psk_fields: Option<(&[u8], &[u8], &[u8])>,
-) -> Result<BufferMessage3, EDHOCError> {
+) -> Result<BufferMessage3, LAKEError> {
     let mut output: BufferMessage3 = BufferMessage3::new();
     let bytestring_length = plaintext_3.len() + AES_CCM_TAG_LEN;
     // FIXME: Reuse CBOR encoder
     if bytestring_length < 24 {
         output
             .push(CBOR_MAJOR_BYTE_STRING | (bytestring_length) as u8)
-            .map_err(|_| EDHOCError::EncodingError)?;
+            .map_err(|_| LAKEError::EncodingError)?;
     } else {
         // FIXME: Assumes we don't exceed 256 bytes which is the current buffer size
         output
             .push(CBOR_MAJOR_BYTE_STRING | 24)
-            .map_err(|_| EDHOCError::EncodingError)?;
+            .map_err(|_| LAKEError::EncodingError)?;
         output
             .push(bytestring_length as _)
-            .map_err(|_| EDHOCError::EncodingError)?;
+            .map_err(|_| LAKEError::EncodingError)?;
     };
 
     // FIXME: Make the function fallible, especially with the prospect of algorithm agility
@@ -807,7 +807,7 @@ fn encrypt_message_3(
 
     output
         .extend_from_slice(ciphertext_3.as_slice())
-        .map_err(|_| EDHOCError::EncodingError)?;
+        .map_err(|_| LAKEError::EncodingError)?;
 
     Ok(output)
 }
@@ -818,13 +818,13 @@ fn decrypt_message_3(
     th_3: &BytesHashLen,
     message_3: &BufferMessage3,
     psk_fields: Option<(&[u8], &[u8], &[u8])>,
-) -> Result<BufferPlaintext3, EDHOCError> {
+) -> Result<BufferPlaintext3, LAKEError> {
     let ciphertext_3 = parse_bstr_message(message_3)?;
     // `ciphertext_3` borrows from `BufferMessage3`, which is bounded by `MAX_MESSAGE_SIZE_LEN`.
     // Once the AEAD tag is accounted for, the plaintext necessarily fits the `N =
     // MAX_MESSAGE_SIZE_LEN` decrypt output buffer, so only the lower bound needs checking here.
     if ciphertext_3.len() < CcmTagLen8::LEN {
-        return Err(EDHOCError::ParsingError);
+        return Err(LAKEError::ParsingError);
     }
 
     let (k_3, iv_3) = compute_k_3_iv_3(crypto, prk_3e2m, th_3);
@@ -844,22 +844,22 @@ fn encrypt_message_4(
     prk_4e3m: &BytesHashLen,
     th_4: &BytesHashLen,
     plaintext_4: &BufferPlaintext4,
-) -> Result<BufferMessage4, EDHOCError> {
+) -> Result<BufferMessage4, LAKEError> {
     let mut output: BufferMessage4 = BufferMessage4::new();
     let bytestring_length = plaintext_4.len() + AES_CCM_TAG_LEN;
     // FIXME: Reuse CBOR encoder
     if bytestring_length < 24 {
         output
             .push(CBOR_MAJOR_BYTE_STRING | (bytestring_length) as u8)
-            .map_err(|_| EDHOCError::EncodingError)?;
+            .map_err(|_| LAKEError::EncodingError)?;
     } else {
         // FIXME: Assumes we don't exceed 256 bytes which is the current buffer size
         output
             .push(CBOR_MAJOR_BYTE_STRING | 24)
-            .map_err(|_| EDHOCError::EncodingError)?;
+            .map_err(|_| LAKEError::EncodingError)?;
         output
             .push(bytestring_length as _)
-            .map_err(|_| EDHOCError::EncodingError)?;
+            .map_err(|_| LAKEError::EncodingError)?;
     };
     // FIXME: Make the function fallible, especially with the prospect of algorithm agility
 
@@ -877,7 +877,7 @@ fn encrypt_message_4(
 
     output
         .extend_from_slice(ciphertext_4.as_slice())
-        .map_err(|_| EDHOCError::EncodingError)?;
+        .map_err(|_| LAKEError::EncodingError)?;
 
     Ok(output)
 }
@@ -887,12 +887,12 @@ fn decrypt_message_4(
     prk_4e3m: &BytesHashLen,
     th_4: &BytesHashLen,
     message_4: &BufferMessage4,
-) -> Result<BufferPlaintext4, EDHOCError> {
+) -> Result<BufferPlaintext4, LAKEError> {
     let ciphertext_4 = parse_bstr_message(message_4)?;
     // See the note in `decrypt_message_3`: the ciphertext is bounded by `MAX_MESSAGE_SIZE_LEN`, so
     // the plaintext cannot exceed the decrypt output buffer.
     if ciphertext_4.len() < CcmTagLen8::LEN {
-        return Err(EDHOCError::ParsingError);
+        return Err(LAKEError::ParsingError);
     }
 
     let (k_4, iv_4) = compute_k_4_iv_4(crypto, prk_4e3m, th_4);
@@ -974,18 +974,18 @@ fn encode_plaintext_2(
     c_r: ConnId,
     stat_fields: Option<(&[u8], &BytesMac2)>,
     ead_2: &EadItems,
-) -> Result<BufferPlaintext2, EDHOCError> {
+) -> Result<BufferPlaintext2, LAKEError> {
     let mut plaintext_2: BufferPlaintext2 = BufferPlaintext2::new();
     let c_r = c_r.as_cbor();
 
     plaintext_2
         .extend_from_slice(c_r)
-        .or(Err(EDHOCError::EncodingError))?;
+        .or(Err(LAKEError::EncodingError))?;
 
     if let Some((id_cred_r, mac_2)) = stat_fields {
         plaintext_2
             .extend_from_slice(id_cred_r)
-            .or(Err(EDHOCError::EncodingError))?;
+            .or(Err(LAKEError::EncodingError))?;
 
         plaintext_2
             .push(CBOR_MAJOR_BYTE_STRING | MAC_LENGTH_2 as u8)
@@ -999,13 +999,13 @@ fn encode_plaintext_2(
     Ok(plaintext_2)
 }
 
-fn encode_ciphertext_3a(ciphertext: LakeMessageBuffer) -> Result<BufferCiphertext3, EDHOCError> {
+fn encode_ciphertext_3a(ciphertext: LakeMessageBuffer) -> Result<BufferCiphertext3, LAKEError> {
     let mut ciphertext_3a: BufferCiphertext3 = BufferCiphertext3::new();
     // plaintext_3a: P = ( ID_CRED_PSK / bstr / int )
     encode_bstr_header(&mut ciphertext_3a, ciphertext.len())?;
     ciphertext_3a
         .extend_from_slice(ciphertext.as_slice())
-        .map_err(|_| EDHOCError::EncodingError)?;
+        .map_err(|_| LAKEError::EncodingError)?;
 
     Ok(ciphertext_3a)
 }
@@ -1451,7 +1451,7 @@ mod tests {
         // skip the fist byte (method)
         let decoder = CBORDecoder::new(&MESSAGE_1_TV_SUITE_ONLY_ERR.as_slice()[1..]);
         let res = parse_suites_i(decoder);
-        assert_eq!(res.unwrap_err(), EDHOCError::ParsingError);
+        assert_eq!(res.unwrap_err(), LAKEError::ParsingError);
     }
 
     #[test]
@@ -1497,22 +1497,22 @@ mod tests {
     fn test_parse_message_1_invalid_traces() {
         assert_eq!(
             parse_message_1(&MESSAGE_1_INVALID_ARRAY_TV).unwrap_err(),
-            EDHOCError::ParsingError
+            LAKEError::ParsingError
         );
 
         assert_eq!(
             parse_message_1(&MESSAGE_1_INVALID_C_I_TV).unwrap_err(),
-            EDHOCError::ParsingError
+            LAKEError::ParsingError
         );
 
         assert_eq!(
             parse_message_1(&MESSAGE_1_INVALID_CIPHERSUITE_TV).unwrap_err(),
-            EDHOCError::ParsingError
+            LAKEError::ParsingError
         );
 
         assert_eq!(
             parse_message_1(&MESSAGE_1_INVALID_TEXT_EPHEMERAL_KEY_TV).unwrap_err(),
-            EDHOCError::ParsingError
+            LAKEError::ParsingError
         );
     }
 
@@ -1520,7 +1520,7 @@ mod tests {
     fn test_parse_message_2_invalid_traces() {
         assert_eq!(
             parse_message_2(&MESSAGE_2_INVALID_NUMBER_OF_CBOR_SEQUENCE_TV).unwrap_err(),
-            EDHOCError::ParsingError
+            LAKEError::ParsingError
         );
     }
 
@@ -1724,7 +1724,7 @@ mod tests {
                     &malformed,
                     None,
                 ),
-                Err(EDHOCError::ParsingError)
+                Err(LAKEError::ParsingError)
             );
         }
     }
@@ -1734,7 +1734,7 @@ mod tests {
         for malformed in malformed_bstr_messages() {
             assert_eq!(
                 decrypt_message_4(&mut default_crypto(), &PRK_4E3M_TV, &TH_4_TV, &malformed),
-                Err(EDHOCError::ParsingError)
+                Err(LAKEError::ParsingError)
             );
         }
     }
@@ -1770,11 +1770,11 @@ mod tests {
                 &tag_only,
                 None
             ),
-            Err(EDHOCError::MacVerificationFailed)
+            Err(LAKEError::MacVerificationFailed)
         );
         assert_eq!(
             decrypt_message_4(&mut default_crypto(), &PRK_4E3M_TV, &TH_4_TV, &tag_only),
-            Err(EDHOCError::MacVerificationFailed)
+            Err(LAKEError::MacVerificationFailed)
         );
     }
 
@@ -1833,10 +1833,10 @@ mod tests {
     #[test]
     fn test_parse_plaintext_2_invalid_traces() {
         let ret = decode_plaintext_2(&PLAINTEXT_2_SURPLUS_MAP_ID_CRED_TV);
-        assert_eq!(ret.unwrap_err(), EDHOCError::ParsingError);
+        assert_eq!(ret.unwrap_err(), LAKEError::ParsingError);
 
         let ret = decode_plaintext_2(&PLAINTEXT_2_SURPLUS_BSTR_ID_CRED_TV);
-        assert_eq!(ret.unwrap_err(), EDHOCError::ParsingError);
+        assert_eq!(ret.unwrap_err(), LAKEError::ParsingError);
     }
 
     #[test]
@@ -1976,7 +1976,7 @@ mod tests {
     #[test]
     fn test_compute_prk_4e3m_psk() {
         let psk = BufferPsk::new_from_slice(&PSK_TV)
-            .map_err(|_| EDHOCError::ParsingError)
+            .map_err(|_| LAKEError::ParsingError)
             .unwrap();
         let prk_4e3m = compute_prk_4e3m_psk(&mut default_crypto(), &SALT_4E3M_PSK_TV, &psk);
         assert_eq!(prk_4e3m, PRK_4E3M_PSK_TV);
@@ -2083,7 +2083,7 @@ mod tests {
         ead.try_push(ead_item).unwrap();
 
         let res = encode_message_1(method_tv, &SUITES_I_TV, &G_X_TV, c_i_tv, &ead);
-        assert_eq!(res.unwrap_err(), EDHOCError::EadTooLongError);
+        assert_eq!(res.unwrap_err(), LAKEError::EadTooLongError);
     }
 
     #[test]

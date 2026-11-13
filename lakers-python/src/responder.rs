@@ -118,7 +118,7 @@ impl PyEdhocResponder {
                     .r
                     .as_slice()
                     .try_into()
-                    .map_err(|_| EDHOCError::ParsingError)?;
+                    .map_err(|_| LAKEError::ParsingError)?;
                 r_prepare_message_2(
                     processing_m1,
                     &mut default_crypto(),
@@ -141,7 +141,7 @@ impl PyEdhocResponder {
                 c_r,
                 &ead_2,
             )?,
-            _ => return Err(EDHOCError::UnsupportedMethod.into()),
+            _ => return Err(LAKEError::UnsupportedMethod.into()),
         };
         self.wait_m3 = Some(state);
         Ok(PyBytes::new(py, message_2.as_slice()))
@@ -370,12 +370,12 @@ impl PyEdhocResponder {
     }
 }
 
-fn parse_responder_identity(r: &[u8]) -> Result<ResponderIdentity, EDHOCError> {
+fn parse_responder_identity(r: &[u8]) -> Result<ResponderIdentity, LAKEError> {
     if r.is_empty() {
         Ok(ResponderIdentity::Psk)
     } else {
         // A present `r` means the Python caller wants the stat-stat responder identity.
-        let identity: BytesP256ElemLen = r.try_into().map_err(|_| EDHOCError::ParsingError)?;
+        let identity: BytesP256ElemLen = r.try_into().map_err(|_| LAKEError::ParsingError)?;
         Ok(ResponderIdentity::StatStat { r: identity })
     }
 }

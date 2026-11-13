@@ -36,14 +36,14 @@ fn too_small(_e: LakeBufferError) -> Error {
     Error::bad_request()
 }
 
-/// Render an EDHOCError into the common Error type.
+/// Render an LAKEError into the common Error type.
 ///
-/// It is yet to be decided based on the EDHOC specification which EDHOCError values would be
+/// It is yet to be decided based on the EDHOC specification which LAKEError values would be
 /// reported with precise data, and which should rather produce a generic response.
 ///
 /// Places using this function may be simplified if From/Into is specified (possibly after
 /// enlarging the Error type)
-fn render_error(_e: EDHOCError) -> Error {
+fn render_error(_e: LAKEError) -> Error {
     Error::bad_request()
 }
 

@@ -21,7 +21,7 @@ async fn main() {
     }
 }
 
-async fn client_handshake() -> Result<(), EDHOCError> {
+async fn client_handshake() -> Result<(), LAKEError> {
     let url = "coap://127.0.0.1:5683/.well-known/edhoc";
     let timeout = Duration::new(5, 0);
     println!("Client request: {}", url);

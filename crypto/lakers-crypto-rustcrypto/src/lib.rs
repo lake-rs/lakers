@@ -3,7 +3,7 @@
 use lakers_shared::CcmTagLen;
 use lakers_shared::{
     BufferPsk, BytesCcmIvLen, BytesCcmKeyLen, BytesHashLen, BytesP256ElemLen,
-    Crypto as CryptoTrait, EDHOCError, EDHOCSuite, LakeBuffer, MAX_SUITES_LEN,
+    Crypto as CryptoTrait, EDHOCSuite, LAKEError, LakeBuffer, MAX_SUITES_LEN,
 };
 
 use ccm::AeadInPlace;
@@ -130,13 +130,13 @@ impl<Rng: rand_core::RngCore + rand_core::CryptoRng> CryptoTrait for Crypto<Rng>
         iv: &BytesCcmIvLen,
         ad: &[u8],
         ciphertext: &[u8],
-    ) -> Result<LakeBuffer<N>, EDHOCError> {
+    ) -> Result<LakeBuffer<N>, LAKEError> {
         let plaintext_len = ciphertext
             .len()
             .checked_sub(Tag::LEN)
-            .ok_or(EDHOCError::ParsingError)?;
+            .ok_or(LAKEError::ParsingError)?;
         let mut buffer = LakeBuffer::new_from_slice(&ciphertext[..plaintext_len])
-            .map_err(|_| EDHOCError::ParsingError)?;
+            .map_err(|_| LAKEError::ParsingError)?;
         let tag = &ciphertext[plaintext_len..];
         #[allow(
             deprecated,
@@ -150,7 +150,7 @@ impl<Rng: rand_core::RngCore + rand_core::CryptoRng> CryptoTrait for Crypto<Rng>
                     &mut buffer.content[..plaintext_len],
                     tag.into(),
                 )
-                .map_err(|_| EDHOCError::MacVerificationFailed)?,
+                .map_err(|_| LAKEError::MacVerificationFailed)?,
             16 => AesCcm16_128_128::new(key.into())
                 .decrypt_in_place_detached(
                     iv.into(),
@@ -158,7 +158,7 @@ impl<Rng: rand_core::RngCore + rand_core::CryptoRng> CryptoTrait for Crypto<Rng>
                     &mut buffer.content[..plaintext_len],
                     tag.into(),
                 )
-                .map_err(|_| EDHOCError::MacVerificationFailed)?,
+                .map_err(|_| LAKEError::MacVerificationFailed)?,
             _ => unreachable!(), // CcmTagLen bound guarantees this
         };
         Ok(buffer)

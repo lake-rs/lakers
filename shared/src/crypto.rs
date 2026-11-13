@@ -10,15 +10,15 @@ use super::*;
 pub fn prepare_suites_i(
     supported_suites: &LakeBuffer<MAX_SUITES_LEN>,
     selected_suite: u8,
-) -> Result<LakeBuffer<MAX_SUITES_LEN>, EDHOCError> {
+) -> Result<LakeBuffer<MAX_SUITES_LEN>, LAKEError> {
     // TODO: implement a re-positioning algorithm, considering preferred and selected suites (see Section 5.2.2 of RFC 9528)
     //       for now, we only support a single suite so we just return it
     // NOTE: should we assume that supported_suites == preferred_suites?
     if supported_suites.contains(&(selected_suite)) {
         LakeBuffer::<MAX_SUITES_LEN>::new_from_slice(&[selected_suite.into()])
-            .map_err(|_| EDHOCError::UnsupportedCipherSuite)
+            .map_err(|_| LAKEError::UnsupportedCipherSuite)
     } else {
-        Err(EDHOCError::UnsupportedCipherSuite)
+        Err(LAKEError::UnsupportedCipherSuite)
     }
 }
 
@@ -83,7 +83,7 @@ pub trait Crypto: core::fmt::Debug {
         iv: &BytesCcmIvLen,
         ad: &[u8],
         ciphertext: &[u8],
-    ) -> Result<LakeBuffer<N>, EDHOCError>;
+    ) -> Result<LakeBuffer<N>, LAKEError>;
     fn p256_ecdh(
         &mut self,
         private_key: &BytesP256ElemLen,
@@ -159,7 +159,7 @@ impl<T: Crypto> Crypto for &mut T {
         iv: &BytesCcmIvLen,
         ad: &[u8],
         ciphertext: &[u8],
-    ) -> Result<LakeBuffer<N>, EDHOCError> {
+    ) -> Result<LakeBuffer<N>, LAKEError> {
         T::aes_ccm_decrypt::<N, TagLen>(self, key, iv, ad, ciphertext)
     }
 
