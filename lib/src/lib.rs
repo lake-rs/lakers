@@ -20,6 +20,10 @@ pub use {lakers_shared::Crypto as CryptoTrait, lakers_shared::*};
 
 mod lake;
 pub use lake::*;
+#[cfg(not(hax))]
+mod deprecated;
+#[cfg(not(hax))]
+pub use deprecated::*;
 
 /// Starting point for performing LAKE in the role of the Initiator.
 #[derive(Debug)]

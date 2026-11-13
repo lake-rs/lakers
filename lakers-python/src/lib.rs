@@ -176,6 +176,8 @@ fn lakers_python(py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     // lake items
     m.add_class::<initiator::PyLakeInitiator>()?;
     m.add_class::<responder::PyLakeResponder>()?;
+    m.add("EdhocInitiator", m.getattr("LakeInitiator")?)?;
+    m.add("EdhocResponder", m.getattr("LakeResponder")?)?;
     m.add_class::<lakers::CredentialTransfer>()?;
     m.add_class::<lakers::EADItem>()?;
     m.add_class::<lakers::Credential>()?;

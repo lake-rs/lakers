@@ -31,6 +31,10 @@ pub use buffer::*;
 use pyo3::prelude::*;
 mod psk;
 pub use psk::*;
+#[cfg(not(hax))]
+mod deprecated;
+#[cfg(not(hax))]
+pub use deprecated::*;
 #[cfg(feature = "python-bindings")]
 mod python_bindings;
 

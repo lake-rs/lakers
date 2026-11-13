@@ -1,6 +1,7 @@
 use lakers::*;
 use lakers_crypto::{default_crypto, CryptoTrait};
 use log::trace;
+use pyo3::exceptions::PyDeprecationWarning;
 use pyo3::{prelude::*, types::PyBytes};
 
 use super::{ErrExt as _, StateMismatch};
@@ -252,6 +253,36 @@ impl PyLakeResponder {
             context.as_slice(),
         );
         Ok(PyBytes::new(py, &res[..SHA256_DIGEST_LEN]))
+    }
+
+    pub fn edhoc_exporter<'a>(
+        &mut self,
+        py: Python<'a>,
+        label: u8,
+        context: Vec<u8>,
+        length: usize,
+    ) -> PyResult<Bound<'a, PyBytes>> {
+        PyErr::warn(
+            py,
+            &py.get_type::<PyDeprecationWarning>(),
+            c"edhoc_exporter is deprecated, use lake_exporter",
+            1,
+        )?;
+        self.lake_exporter(py, label, context, length)
+    }
+
+    pub fn edhoc_key_update<'a>(
+        &mut self,
+        py: Python<'a>,
+        context: Vec<u8>,
+    ) -> PyResult<Bound<'a, PyBytes>> {
+        PyErr::warn(
+            py,
+            &py.get_type::<PyDeprecationWarning>(),
+            c"edhoc_key_update is deprecated, use lake_key_update",
+            1,
+        )?;
+        self.lake_key_update(py, context)
     }
 }
 
