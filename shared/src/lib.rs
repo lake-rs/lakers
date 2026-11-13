@@ -1397,7 +1397,12 @@ mod cbor_decoder {
             } else if (0x20..=0x37).contains(&n) {
                 Ok(-1 - (n - 0x20) as i8)
             } else if 0x18 == n {
-                Ok(self.read()? as i8)
+                let b = self.read()?;
+                if b <= 127 {
+                    Ok(b as i8)
+                } else {
+                    Err(CBORError::DecodingError)
+                }
             } else if 0x38 == n {
                 let b = self.read()?;
                 if b <= 127 {
@@ -1651,6 +1656,19 @@ mod test_cbor_decoder {
     fn test_cbor_decoder_i8_two_byte_negative_out_of_range() {
         assert!(CBORDecoder::new(&[0x38, 0x80]).i8().is_err());
         assert!(CBORDecoder::new(&[0x38, 0xFF]).i8().is_err());
+    }
+
+    #[test]
+    fn test_cbor_decoder_i8_two_byte_positive() {
+        assert_eq!(24, CBORDecoder::new(&[0x18, 0x18]).i8().unwrap());
+        assert_eq!(127, CBORDecoder::new(&[0x18, 0x7F]).i8().unwrap());
+    }
+
+    #[test]
+    fn test_cbor_decoder_i8_two_byte_positive_out_of_range() {
+        assert!(CBORDecoder::new(&[0x18, 0x80]).i8().is_err());
+        assert!(CBORDecoder::new(&[0x18, 0xC8]).i8().is_err());
+        assert!(CBORDecoder::new(&[0x18, 0xFF]).i8().is_err());
     }
 
     #[test]
