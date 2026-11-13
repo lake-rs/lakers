@@ -17,7 +17,7 @@ use embedded_cal::{
 };
 use lakers_shared::{
     BufferPsk, BytesCcmIvLen, BytesCcmKeyLen, BytesHashLen, BytesP256ElemLen, CcmTagLen,
-    Crypto as CryptoTrait, EDHOCSuite, LAKEError, LakeBuffer, MAX_SUITES_LEN,
+    Crypto as CryptoTrait, LAKEError, LAKESuite, LakeBuffer, MAX_SUITES_LEN,
 };
 
 /// A [`lakers_shared::Crypto`] implementation that forwards to an embedded-cal [`Cal`] instance.
@@ -51,7 +51,7 @@ impl<C: Cal + rand_core::TryCryptoRng> CryptoTrait for Crypto<C> {
         // As support for different suites is added, this will be changed to query the CAL for for the algorithms it supports (possibly at creation time), and compute the suites from that.
         //
         // Right now, suite support is as hard-coded as the suites are hard-coded in the lakers Crypto trait (e.g. by having a sha256 function).
-        LakeBuffer::<MAX_SUITES_LEN>::new_from_slice(&[EDHOCSuite::CipherSuite2 as u8])
+        LakeBuffer::<MAX_SUITES_LEN>::new_from_slice(&[LAKESuite::CipherSuite2 as u8])
             .expect("the slice is of a length that always fits")
     }
 

@@ -23,7 +23,7 @@ pub struct EdhocInitiator {
 pub unsafe extern "C" fn initiator_new(initiator: *mut EdhocInitiator, method: LAKEMethod) -> i8 {
     let mut crypto = default_crypto();
     let suites_i =
-        prepare_suites_i(&crypto.supported_suites(), EDHOCSuite::CipherSuite2.into()).unwrap();
+        prepare_suites_i(&crypto.supported_suites(), LAKESuite::CipherSuite2.into()).unwrap();
     let (x, g_x) = crypto.p256_generate_key_pair();
 
     let start = InitiatorStart {

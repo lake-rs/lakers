@@ -48,7 +48,7 @@ impl PyEdhocInitiator {
         trace!("Initializing EdhocInitiator");
         let mut crypto = default_crypto();
         let suites_i =
-            prepare_suites_i(&crypto.supported_suites(), EDHOCSuite::CipherSuite2.into()).unwrap();
+            prepare_suites_i(&crypto.supported_suites(), LAKESuite::CipherSuite2.into()).unwrap();
         let (x, g_x) = crypto.p256_generate_key_pair();
         let method = parse_method(method)?;
 

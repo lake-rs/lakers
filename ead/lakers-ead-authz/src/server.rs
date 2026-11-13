@@ -45,7 +45,7 @@ impl ZeroTouchServer {
         ead_1.processed_critical_items()?;
         let value = ead_item.value_bytes().ok_or(LAKEError::EADUnprocessable)?;
         let (_loc_w, enc_id) = parse_ead_1_value(value)?;
-        let id_u_encoded = decrypt_enc_id(crypto, &prk, &enc_id, EDHOC_SUPPORTED_SUITES[0])?;
+        let id_u_encoded = decrypt_enc_id(crypto, &prk, &enc_id, LAKE_SUPPORTED_SUITES[0])?;
         let id_u = decode_id_u(id_u_encoded)?;
 
         // A too-short ID_U has no KID; with an ACL it cannot be authorized.
@@ -88,7 +88,7 @@ impl ZeroTouchServerUserAcl {
         let ead_item = ead_1.iter().next().ok_or(LAKEError::EADUnprocessable)?;
         let value = ead_item.value_bytes().ok_or(LAKEError::EADUnprocessable)?;
         let (_loc_w, enc_id) = parse_ead_1_value(value)?;
-        let id_u_encoded = decrypt_enc_id(crypto, &prk, &enc_id, EDHOC_SUPPORTED_SUITES[0])?;
+        let id_u_encoded = decrypt_enc_id(crypto, &prk, &enc_id, LAKE_SUPPORTED_SUITES[0])?;
 
         decode_id_u(id_u_encoded)
     }

@@ -55,7 +55,7 @@ pub const MAX_MESSAGE_SIZE_LEN: usize = if cfg!(feature = "max_message_size_len_
 pub const ID_CRED_LEN: usize = 4;
 pub const SUITES_LEN: usize = 9;
 pub const SUPPORTED_SUITES_LEN: usize = 1;
-pub const EDHOC_METHOD: u8 = 3u8; // stat-stat is the only supported method
+pub const LAKE_METHOD: u8 = 3u8; // stat-stat is the only supported method
 pub const P256_ELEM_LEN: usize = 32;
 pub const SHA256_DIGEST_LEN: usize = 32;
 pub const AES_CCM_KEY_LEN: usize = 16;
@@ -164,8 +164,8 @@ const MAX_CONNID_ENCODED_LEN: usize = if cfg!(feature = "max_connid_encoded_len_
 
 pub type BytesSuites = [u8; SUITES_LEN];
 pub type BytesSupportedSuites = [u8; SUPPORTED_SUITES_LEN];
-pub const EDHOC_SUITES: BytesSuites = [0, 1, 2, 3, 4, 5, 6, 24, 25]; // all but private cipher suites
-pub const EDHOC_SUPPORTED_SUITES: BytesSupportedSuites = [0x2u8];
+pub const LAKE_SUITES: BytesSuites = [0, 1, 2, 3, 4, 5, 6, 24, 25]; // all but private cipher suites
+pub const LAKE_SUPPORTED_SUITES: BytesSupportedSuites = [0x2u8];
 
 pub type BytesCcmKeyLen = [u8; AES_CCM_KEY_LEN];
 pub type BytesCcmIvLen = [u8; AES_CCM_IV_LEN];
@@ -399,14 +399,14 @@ impl From<LAKEMethod> for u8 {
 }
 
 #[derive(PartialEq, Debug)]
-pub enum EDHOCSuite {
+pub enum LAKESuite {
     CipherSuite2 = 2,
     // add others, such as:
     // CiherSuite3 = 3,
 }
 
-impl From<EDHOCSuite> for u8 {
-    fn from(suite: EDHOCSuite) -> u8 {
+impl From<LAKESuite> for u8 {
+    fn from(suite: LAKESuite) -> u8 {
         suite as u8
     }
 }

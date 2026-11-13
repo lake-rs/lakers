@@ -92,7 +92,7 @@ pub fn r_process_message_1(
         match method {
             LAKEMethod::StatStat | LAKEMethod::PSK => {
                 // Step 2: verify that the selected cipher suite is supported
-                if suites_i[suites_i.len() - 1] == EDHOC_SUPPORTED_SUITES[0] {
+                if suites_i[suites_i.len() - 1] == LAKE_SUPPORTED_SUITES[0] {
                     // hash message_1 and save the hash to the state to avoid saving the whole message
                     let h_message_1 = crypto.sha256_digest(message_1.as_slice());
                     Ok((

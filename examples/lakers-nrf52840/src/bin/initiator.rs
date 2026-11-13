@@ -67,7 +67,7 @@ async fn main(_spawner: Spawner) {
     let mut initiator = EdhocInitiator::new(
         lakers_crypto::default_crypto(),
         LAKEMethod::StatStat,
-        EDHOCSuite::CipherSuite2,
+        LAKESuite::CipherSuite2,
     );
     initiator
         .set_identity(

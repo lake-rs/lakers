@@ -21,7 +21,7 @@ fn main() -> ! {
     let mut initiator = EdhocInitiator::new(
         hardware_crypto(),
         LAKEMethod::StatStat,
-        EDHOCSuite::CipherSuite2,
+        LAKESuite::CipherSuite2,
     );
     initiator
         .set_identity(

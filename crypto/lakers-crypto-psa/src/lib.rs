@@ -25,7 +25,7 @@ pub struct Crypto;
 
 impl CryptoTrait for Crypto {
     fn supported_suites(&self) -> LakeBuffer<MAX_SUITES_LEN> {
-        LakeBuffer::<MAX_SUITES_LEN>::new_from_slice(&[EDHOCSuite::CipherSuite2 as u8])
+        LakeBuffer::<MAX_SUITES_LEN>::new_from_slice(&[LAKESuite::CipherSuite2 as u8])
             .expect("This should never fail, as the slice is of the correct length")
     }
 

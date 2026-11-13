@@ -37,7 +37,7 @@ async fn client_handshake() -> Result<(), LAKEError> {
     let initiator = EdhocInitiator::new(
         lakers_crypto::default_crypto(),
         LAKEMethod::StatStat,
-        EDHOCSuite::CipherSuite2,
+        LAKESuite::CipherSuite2,
     );
 
     // Send Message 1 over CoAP and convert the response to byte

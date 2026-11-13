@@ -312,7 +312,7 @@ impl<Crypto: CryptoTrait> EdhocResponderDone<Crypto> {
 }
 
 impl<'a, Crypto: CryptoTrait> EdhocInitiator<Crypto> {
-    pub fn new(mut crypto: Crypto, method: LAKEMethod, selected_suite: EDHOCSuite) -> Self {
+    pub fn new(mut crypto: Crypto, method: LAKEMethod, selected_suite: LAKESuite) -> Self {
         trace!("Initializing EdhocInitiator");
         let suites_i = prepare_suites_i(&crypto.supported_suites(), selected_suite.into()).unwrap();
         let (x, g_x) = crypto.p256_generate_key_pair();
@@ -650,7 +650,7 @@ mod test {
         let _initiator = EdhocInitiator::new(
             default_crypto(),
             LAKEMethod::StatStat,
-            EDHOCSuite::CipherSuite2,
+            LAKESuite::CipherSuite2,
         );
     }
 
@@ -670,7 +670,7 @@ mod test {
         let initiator = EdhocInitiator::new(
             default_crypto(),
             LAKEMethod::StatStat,
-            EDHOCSuite::CipherSuite2,
+            LAKESuite::CipherSuite2,
         );
 
         let c_i = generate_connection_identifier_cbor(&mut default_crypto());
@@ -723,7 +723,7 @@ mod test {
         let initiator = EdhocInitiator::new(
             default_crypto(),
             LAKEMethod::StatStat,
-            EDHOCSuite::CipherSuite2,
+            LAKESuite::CipherSuite2,
         );
 
         let responder = EdhocResponder::new(
@@ -813,7 +813,7 @@ mod test {
         let cred_r = Credential::parse_ccs_symmetric(CRED_R_PSK.try_into().unwrap()).unwrap();
 
         let initiator =
-            EdhocInitiator::new(default_crypto(), LAKEMethod::PSK, EDHOCSuite::CipherSuite2);
+            EdhocInitiator::new(default_crypto(), LAKEMethod::PSK, LAKESuite::CipherSuite2);
 
         let responder =
             EdhocResponder::new(default_crypto(), ResponderIdentity::Psk, cred_r.clone());
@@ -922,7 +922,7 @@ mod test {
         let cred_r = Credential::parse_ccs_symmetric(CRED_R_PSK.try_into().unwrap()).unwrap();
 
         let initiator =
-            EdhocInitiator::new(default_crypto(), LAKEMethod::PSK, EDHOCSuite::CipherSuite2);
+            EdhocInitiator::new(default_crypto(), LAKEMethod::PSK, LAKESuite::CipherSuite2);
         let responder =
             EdhocResponder::new(default_crypto(), ResponderIdentity::Psk, cred_r.clone());
 
@@ -946,7 +946,7 @@ mod test {
         let initiator = EdhocInitiator::new(
             default_crypto(),
             LAKEMethod::StatStat,
-            EDHOCSuite::CipherSuite2,
+            LAKESuite::CipherSuite2,
         );
         let responder = EdhocResponder::new(
             default_crypto(),
@@ -1007,7 +1007,7 @@ mod test_authz {
         let mut initiator = EdhocInitiator::new(
             default_crypto(),
             LAKEMethod::StatStat,
-            EDHOCSuite::CipherSuite2,
+            LAKESuite::CipherSuite2,
         );
         let responder = EdhocResponder::new(
             default_crypto(),

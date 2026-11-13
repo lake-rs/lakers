@@ -67,7 +67,7 @@ fn main() -> ! {
         let _initiator = EdhocInitiator::new(
             lakers_crypto::default_crypto(),
             LAKEMethod::StatStat,
-            EDHOCSuite::CipherSuite2,
+            LAKESuite::CipherSuite2,
         );
     }
 
@@ -90,7 +90,7 @@ fn main() -> ! {
         let initiator = EdhocInitiator::new(
             lakers_crypto::default_crypto(),
             LAKEMethod::StatStat,
-            EDHOCSuite::CipherSuite2,
+            LAKESuite::CipherSuite2,
         );
 
         let _c_i =
@@ -109,7 +109,7 @@ fn main() -> ! {
         let initiator = EdhocInitiator::new(
             lakers_crypto::default_crypto(),
             LAKEMethod::StatStat,
-            EDHOCSuite::CipherSuite2,
+            LAKESuite::CipherSuite2,
         );
         let responder = EdhocResponder::new(
             lakers_crypto::default_crypto(),
@@ -173,7 +173,7 @@ fn main() -> ! {
         let initiator = EdhocInitiator::new(
             lakers_crypto::default_crypto(),
             LAKEMethod::PSK,
-            EDHOCSuite::CipherSuite2,
+            LAKESuite::CipherSuite2,
         );
         let responder = EdhocResponder::new(
             lakers_crypto::default_crypto(),

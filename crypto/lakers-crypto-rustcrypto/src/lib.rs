@@ -3,7 +3,7 @@
 use lakers_shared::CcmTagLen;
 use lakers_shared::{
     BufferPsk, BytesCcmIvLen, BytesCcmKeyLen, BytesHashLen, BytesP256ElemLen,
-    Crypto as CryptoTrait, EDHOCSuite, LAKEError, LakeBuffer, MAX_SUITES_LEN,
+    Crypto as CryptoTrait, LAKEError, LAKESuite, LakeBuffer, MAX_SUITES_LEN,
 };
 
 use ccm::AeadInPlace;
@@ -39,7 +39,7 @@ impl<Rng: rand_core::RngCore + rand_core::CryptoRng> core::fmt::Debug for Crypto
 
 impl<Rng: rand_core::RngCore + rand_core::CryptoRng> CryptoTrait for Crypto<Rng> {
     fn supported_suites(&self) -> LakeBuffer<MAX_SUITES_LEN> {
-        LakeBuffer::<MAX_SUITES_LEN>::new_from_slice(&[EDHOCSuite::CipherSuite2 as u8])
+        LakeBuffer::<MAX_SUITES_LEN>::new_from_slice(&[LAKESuite::CipherSuite2 as u8])
             .expect("This should never fail, as the slice is of the correct length")
     }
 

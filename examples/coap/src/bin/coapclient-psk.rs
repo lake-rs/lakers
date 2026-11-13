@@ -32,7 +32,7 @@ async fn client_handshake() -> Result<(), LAKEError> {
     let initiator = EdhocInitiator::new(
         lakers_crypto::default_crypto(),
         LAKEMethod::PSK,
-        EDHOCSuite::CipherSuite2,
+        LAKESuite::CipherSuite2,
     );
 
     println!("\n---------MESSAGE_1-----------\n");
