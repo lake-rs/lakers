@@ -40,11 +40,11 @@ pub(crate) fn compute_k_1_iv_1<Crypto: CryptoTrait>(
 ) -> (BytesCcmKeyLen, BytesCcmIvLen) {
     // K_1 = EDHOC-Expand(PRK, info = (0, h'', AES_CCM_KEY_LEN), length)
     let mut k_1: BytesCcmKeyLen = [0x00; AES_CCM_KEY_LEN];
-    edhoc_kdf_expand(crypto, prk, EAD_AUTHZ_INFO_K_1_LABEL, &[], &mut k_1[..]);
+    lake_kdf_expand(crypto, prk, EAD_AUTHZ_INFO_K_1_LABEL, &[], &mut k_1[..]);
 
     // IV_1 = EDHOC-Expand(PRK, info = (1, h'', AES_CCM_IV_LEN), length)
     let mut iv_1: BytesCcmIvLen = [0x00; AES_CCM_IV_LEN];
-    edhoc_kdf_expand(crypto, prk, EAD_AUTHZ_INFO_IV_1_LABEL, &[], &mut iv_1[..]);
+    lake_kdf_expand(crypto, prk, EAD_AUTHZ_INFO_IV_1_LABEL, &[], &mut iv_1[..]);
 
     (k_1, iv_1)
 }
@@ -109,12 +109,12 @@ fn compute_voucher_mac<Crypto: CryptoTrait>(
 ) -> BytesMac {
     let mut voucher_mac: BytesMac = [0x00; MAC_LENGTH];
 
-    edhoc_kdf_expand(crypto, prk, 2, voucher_input.as_slice(), &mut voucher_mac);
+    lake_kdf_expand(crypto, prk, 2, voucher_input.as_slice(), &mut voucher_mac);
 
     voucher_mac
 }
 
-fn edhoc_kdf_expand<Crypto: CryptoTrait>(
+fn lake_kdf_expand<Crypto: CryptoTrait>(
     crypto: &mut Crypto,
     prk: &BytesHashLen,
     label: u8,

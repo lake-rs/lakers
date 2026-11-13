@@ -99,7 +99,7 @@ def _test_handshake(cred_r_transfer, cred_i_transfer):
     r_prk_out_new = responder.lake_key_update(CONTEXT)
     assert i_prk_out_new == r_prk_out_new
 
-def test_edhoc_error():
+def test_lake_error():
     responder = LakeResponder(CRED_R, R)
     with pytest.raises(ValueError) as err:
         _ = responder.process_message_1([1, 2, 3])

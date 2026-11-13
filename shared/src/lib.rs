@@ -12,8 +12,8 @@
 #![cfg_attr(not(feature = "python-bindings"), no_std)]
 
 pub use cbor_decoder::*;
-pub use edhoc_parser::*;
 pub use helpers::*;
+pub use lake_parser::*;
 
 use core::num::NonZeroI16;
 use defmt_or_log::trace;
@@ -192,7 +192,7 @@ pub type BufferMessage2 = LakeMessageBuffer;
 ///   to be fed into the cryptography module's SHA256 computation. That computation is streamable
 ///   in the underlying APIs (i.e. there is no need to build a buffer, they could be fed
 ///   incrementally), but the cryptography abstraction doesn't expose that.
-/// * <del>As the return value of `edhoc_kdf_expand`. There, the data is taken up into some other buffer
+/// * <del>As the return value of `lake_kdf_expand`. There, the data is taken up into some other buffer
 ///   or type by the caller, so the caller could provide the place to expand into as a `&mut [u8]`,
 ///   but likewise, our crypto API doesn't work that way.</del>
 pub type BytesMaxBuffer = [u8; MAX_BUFFER_LEN];
@@ -982,7 +982,7 @@ mod helpers {
 }
 
 // TODO: move to own file (or even to the main crate, once EAD is extracted as an external dependency)
-mod edhoc_parser {
+mod lake_parser {
     use super::*;
 
     pub fn parse_eads(buffer: &[u8]) -> Result<EadItems, LAKEError> {
@@ -1739,7 +1739,7 @@ mod test_ead_items {
         assert_eq!(items.len(), MAX_EAD_ITEMS);
 
         // Check round-tripping
-        let decoded = edhoc_parser::parse_eads(output_buffer.as_slice()).unwrap();
+        let decoded = lake_parser::parse_eads(output_buffer.as_slice()).unwrap();
         assert_eq!(
             make_comparable(&decoded),
             make_comparable(&items),
@@ -1757,13 +1757,13 @@ mod test_ead_items {
 
     #[test]
     fn test_parse_eads_negative_label_bounds() {
-        let decoded = edhoc_parser::parse_eads(&hex!("39fffe")).unwrap();
+        let decoded = lake_parser::parse_eads(&hex!("39fffe")).unwrap();
         let item = decoded.iter().next().unwrap();
         assert_eq!(item.label(), 0xffff);
         assert!(item.is_critical());
 
         assert_eq!(
-            edhoc_parser::parse_eads(&hex!("39ffff")).unwrap_err(),
+            lake_parser::parse_eads(&hex!("39ffff")).unwrap_err(),
             LAKEError::ParsingError
         );
     }

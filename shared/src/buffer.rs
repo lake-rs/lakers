@@ -265,7 +265,7 @@ impl<const N: usize> TryFrom<&[u8]> for LakeBuffer<N> {
 mod test {
 
     #[test]
-    fn test_edhoc_buffer() {
+    fn test_lake_buffer() {
         let mut buffer = crate::LakeBuffer::<5>::new();
         assert_eq!(buffer.len, 0);
         assert_eq!(buffer.content, [0; 5]);
