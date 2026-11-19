@@ -19,14 +19,14 @@ const _G_R: &[u8] = &hex!("bbc34960526ea4d32e940cad2a234148ddc21791a12afbcbac936
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     env_logger::init();
-    info!("Starting EDHOC CoAP Client");
+    info!("Starting LAKE CoAP Client");
     match client_handshake().await {
         Ok(_) => println!("Handshake completed"),
         Err(e) => panic!("Handshake failed with error: {:?}", e),
     }
 }
 
-async fn client_handshake() -> Result<(), EDHOCError> {
+async fn client_handshake() -> Result<(), LAKEError> {
     let url = "coap://127.0.0.1:5683/.well-known/edhoc";
     let timeout = Duration::new(5, 0);
     println!("Client request: {}", url);
@@ -34,14 +34,14 @@ async fn client_handshake() -> Result<(), EDHOCError> {
     let cred_i: Credential = Credential::parse_ccs(CRED_I.try_into().unwrap()).unwrap();
     let cred_r: Credential = Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
 
-    let initiator = EdhocInitiator::new(
+    let initiator = LakeInitiator::new(
         lakers_crypto::default_crypto(),
-        EDHOCMethod::StatStat,
-        EDHOCSuite::CipherSuite2,
+        LAKEMethod::StatStat,
+        LAKESuite::CipherSuite2,
     );
 
     // Send Message 1 over CoAP and convert the response to byte
-    let mut msg_1_buf = Vec::from([0xf5u8]); // EDHOC message_1 when transported over CoAP is prepended with CBOR true
+    let mut msg_1_buf = Vec::from([0xf5u8]); // LAKE message_1 when transported over CoAP is prepended with CBOR true
     let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
     let (initiator, message_1) = initiator.prepare_message_1(Some(c_i), &EadItems::new())?;
     msg_1_buf.extend_from_slice(message_1.as_slice());
@@ -56,7 +56,7 @@ async fn client_handshake() -> Result<(), EDHOCError> {
     println!("response_vec = {:02x?}", response.message.payload);
     println!("message_2 len = {}", response.message.payload.len());
 
-    let message_2 = EdhocBuffer::new_from_slice(&response.message.payload[..]).unwrap();
+    let message_2 = LakeBuffer::new_from_slice(&response.message.payload[..]).unwrap();
     let (mut initiator, c_r, ead_2) = initiator.parse_message_2(&message_2)?;
     ead_2.processed_critical_items().unwrap();
     initiator.set_identity(
@@ -81,23 +81,23 @@ async fn client_handshake() -> Result<(), EDHOCError> {
     }
     println!("response_vec = {:02x?}", response.message.payload);
     println!("message_3 len = {}", response.message.payload.len());
-    let message_4 = EdhocBuffer::new_from_slice(&response.message.payload[..]).unwrap();
+    let message_4 = LakeBuffer::new_from_slice(&response.message.payload[..]).unwrap();
     let (mut initiator, ead_4) = initiator.process_message_4(&message_4).unwrap();
     ead_4.processed_critical_items().unwrap();
 
-    println!("EDHOC exchange successfully completed");
+    println!("LAKE exchange successfully completed");
     println!("PRK_out: {:02x?}", prk_out);
 
     let mut oscore_secret = [0; 16];
-    initiator.edhoc_exporter(0u8, &[], &mut oscore_secret); // label is 0
+    initiator.lake_exporter(0u8, &[], &mut oscore_secret); // label is 0
     let mut oscore_salt = [0; 8];
-    initiator.edhoc_exporter(1u8, &[], &mut oscore_salt); // label is 1
+    initiator.lake_exporter(1u8, &[], &mut oscore_salt); // label is 1
 
     println!("OSCORE secret: {:02x?}", oscore_secret);
     println!("OSCORE salt: {:02x?}", oscore_salt);
 
     // context of key update is a test vector from draft-ietf-lake-traces
-    let prk_out_new = initiator.edhoc_key_update(&[
+    let prk_out_new = initiator.lake_key_update(&[
         0xa0, 0x11, 0x58, 0xfd, 0xb8, 0x20, 0x89, 0x0c, 0xd6, 0xbe, 0x16, 0x96, 0x02, 0xb8, 0xbc,
         0xea,
     ]);
@@ -105,8 +105,8 @@ async fn client_handshake() -> Result<(), EDHOCError> {
     println!("PRK_out after key update: {:02x?}?", prk_out_new);
 
     // compute OSCORE secret and salt after key update
-    initiator.edhoc_exporter(0u8, &[], &mut oscore_secret); // label is 0
-    initiator.edhoc_exporter(1u8, &[], &mut oscore_salt); // label is 1
+    initiator.lake_exporter(0u8, &[], &mut oscore_secret); // label is 0
+    initiator.lake_exporter(1u8, &[], &mut oscore_salt); // label is 1
 
     println!("OSCORE secret after key update: {:02x?}", oscore_secret);
     println!("OSCORE salt after key update: {:02x?}", oscore_salt);

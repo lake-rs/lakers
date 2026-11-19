@@ -16,8 +16,8 @@ impl PyAuthzDevice {
     #[new]
     fn new(id_u: Vec<u8>, g_w: Vec<u8>, loc_w: &str) -> Self {
         trace!("Initializing AuthzDevice");
-        let id_u = EdhocMessageBuffer::new_from_slice(id_u.as_slice()).unwrap();
-        let loc_w = EdhocMessageBuffer::new_from_slice(loc_w.as_bytes()).unwrap();
+        let id_u = LakeMessageBuffer::new_from_slice(id_u.as_slice()).unwrap();
+        let loc_w = LakeMessageBuffer::new_from_slice(loc_w.as_bytes()).unwrap();
         let mut g_w_arr = BytesP256ElemLen::default();
         g_w_arr.copy_from_slice(&g_w[..]);
         Self {

@@ -1,8 +1,8 @@
 use super::*;
 
-pub type BufferCred = EdhocBuffer<192>; // arbitrary size
-pub type BufferKid = EdhocBuffer<16>; // variable size, up to 16 bytes
-pub type BufferIdCred = EdhocBuffer<192>; // variable size, can contain either the contents of a BufferCred or a BufferKid
+pub type BufferCred = LakeBuffer<192>; // arbitrary size
+pub type BufferKid = LakeBuffer<16>; // variable size, up to 16 bytes
+pub type BufferIdCred = LakeBuffer<192>; // variable size, can contain either the contents of a BufferCred or a BufferKid
 pub type BytesKeyEC2 = [u8; 32];
 
 #[derive(Clone, Debug)]
@@ -29,12 +29,12 @@ pub enum IdCredType {
 }
 
 impl TryFrom<u8> for IdCredType {
-    type Error = EDHOCError;
-    fn try_from(value: u8) -> Result<Self, EDHOCError> {
+    type Error = LAKEError;
+    fn try_from(value: u8) -> Result<Self, LAKEError> {
         match value {
             4 => Ok(IdCredType::KID),
             14 => Ok(IdCredType::KCCS),
-            _ => Err(EDHOCError::ParsingError),
+            _ => Err(LAKEError::ParsingError),
         }
     }
 }
@@ -67,46 +67,46 @@ impl IdCred {
         }
     }
 
-    pub fn from_full_value(value: &[u8]) -> Result<Self, EDHOCError> {
+    pub fn from_full_value(value: &[u8]) -> Result<Self, LAKEError> {
         Ok(Self {
             bytes: BufferIdCred::new_from_slice(value)
-                .map_err(|_| EDHOCError::CredentialTooLongError)?,
+                .map_err(|_| LAKEError::CredentialTooLongError)?,
         })
     }
 
     /// Instantiate an IdCred from an encoded value.
-    pub fn from_encoded_value(value: &[u8]) -> Result<Self, EDHOCError> {
+    pub fn from_encoded_value(value: &[u8]) -> Result<Self, LAKEError> {
         // This would be idiomatic as a match statement.
         // Workaround-For: https://github.com/hacspec/hax/issues/804
 
         let bytes = if value.len() == 1 && Self::bstr_representable_as_int(value[0]) {
             // kid that has been encoded as CBOR integer
             BufferIdCred::new_from_slice(&[0xa1, KID_LABEL, 0x41, value[0]])
-                .map_err(|_| EDHOCError::CredentialTooLongError)? // TODO: how to avoid map_err overuse?
+                .map_err(|_| LAKEError::CredentialTooLongError)? // TODO: how to avoid map_err overuse?
         } else if value.len() >= 1 && value[0] >= 0x40 && value[0] <= 0x57 {
             // kid that has been encoded as CBOR byte string; supporting up to 23 long because
             // those are easy
             let tail = &value[1..];
             if tail.len() == 1 && Self::bstr_representable_as_int(tail[0]) {
                 // We require precise encoding
-                return Err(EDHOCError::ParsingError);
+                return Err(LAKEError::ParsingError);
             }
             if usize::from(value[0] - 0x40) != tail.len() {
                 // Missing or trailing bytes. This is impossible when called from within Lakers
                 // where the value is a `.any_as_encoded()`.
-                return Err(EDHOCError::ParsingError);
+                return Err(LAKEError::ParsingError);
             }
             let mut bytes = BufferIdCred::new_from_slice(&[0xa1, KID_LABEL])
-                .map_err(|_| EDHOCError::CredentialTooLongError)?;
+                .map_err(|_| LAKEError::CredentialTooLongError)?;
             bytes
                 .extend_from_slice(value)
-                .map_err(|_| EDHOCError::CredentialTooLongError)?;
+                .map_err(|_| LAKEError::CredentialTooLongError)?;
             bytes
         } else if value.len() > 2 && value[..2] == [0xa1, KCCS_LABEL] {
             // CCS by value
-            BufferIdCred::new_from_slice(value).map_err(|_| EDHOCError::CredentialTooLongError)?
+            BufferIdCred::new_from_slice(value).map_err(|_| LAKEError::CredentialTooLongError)?
         } else {
-            return Err(EDHOCError::ParsingError);
+            return Err(LAKEError::ParsingError);
         };
 
         Ok(Self { bytes })
@@ -140,13 +140,13 @@ impl IdCred {
         }
     }
 
-    pub fn reference_only(&self) -> Result<bool, EDHOCError> {
+    pub fn reference_only(&self) -> Result<bool, LAKEError> {
         Ok(self.item_type()? == IdCredType::KID)
     }
 
-    fn item_type(&self) -> Result<IdCredType, EDHOCError> {
+    fn item_type(&self) -> Result<IdCredType, LAKEError> {
         if self.bytes.len() < 2 {
-            return Err(EDHOCError::ParsingError);
+            return Err(LAKEError::ParsingError);
         }
         self.bytes[1].try_into()
     }
@@ -167,15 +167,15 @@ impl IdCred {
     /// any resolver runs. Neither check subsumes the other: that one protects handshakes that use
     /// an application-supplied resolver, this one protects direct callers of
     /// `credential_lookup_or_fetch` and `credential_check_or_fetch`.
-    pub fn get_ccs(&self) -> Result<Credential, EDHOCError> {
+    pub fn get_ccs(&self) -> Result<Credential, LAKEError> {
         if self.item_type() == Ok(IdCredType::KCCS) {
             let cred = Credential::parse_ccs(&self.bytes.as_slice()[2..])?;
             match cred.cred_type {
                 CredentialType::CCS => Ok(cred),
-                _ => Err(EDHOCError::WrongCredentialType),
+                _ => Err(LAKEError::WrongCredentialType),
             }
         } else {
-            Err(EDHOCError::MissingIdentity)
+            Err(LAKEError::MissingIdentity)
         }
     }
 
@@ -184,7 +184,7 @@ impl IdCred {
     }
 }
 
-/// A credential for use in EDHOC.
+/// A credential for use in LAKE.
 ///
 /// For now supports CCS credentials only.
 /// Experimental support for CCS_PSK credentials is also available.
@@ -244,7 +244,7 @@ impl Credential {
     ///
     /// If the given value matches the shape lakers expects of a CCS, i.e. credentials from RFC9529,
     /// its public key and key ID are extracted into a full credential.
-    pub fn parse_ccs(value: &[u8]) -> Result<Self, EDHOCError> {
+    pub fn parse_ccs(value: &[u8]) -> Result<Self, LAKEError> {
         let mut decoder = CBORDecoder::new(value);
         let mut x_kid = None;
         for _ in 0..decoder.map()? {
@@ -257,29 +257,29 @@ impl Credential {
                 8 => {
                     if decoder.map()? != 1 {
                         // cnf is always single-item'd
-                        return Err(EDHOCError::ParsingError);
+                        return Err(LAKEError::ParsingError);
                     }
 
                     if decoder.u8()? != 1 {
                         // Unexpected cnf
-                        return Err(EDHOCError::ParsingError);
+                        return Err(LAKEError::ParsingError);
                     }
 
                     x_kid = Some(Self::parse_cosekey(&mut decoder)?);
                 }
                 _ => {
-                    return Err(EDHOCError::ParsingError);
+                    return Err(LAKEError::ParsingError);
                 }
             }
         }
 
         let Some((x, kid)) = x_kid else {
             // Missing critical component
-            return Err(EDHOCError::ParsingError);
+            return Err(LAKEError::ParsingError);
         };
 
         if !decoder.finished() {
-            return Err(EDHOCError::ParsingError);
+            return Err(LAKEError::ParsingError);
         }
 
         let cred_type = match x {
@@ -288,7 +288,7 @@ impl Credential {
         };
 
         Ok(Self {
-            bytes: BufferCred::new_from_slice(value).map_err(|_| EDHOCError::ParsingError)?,
+            bytes: BufferCred::new_from_slice(value).map_err(|_| LAKEError::ParsingError)?,
             key: x,
             kid,
             cred_type,
@@ -296,13 +296,13 @@ impl Credential {
     }
 
     /// Parse a CCS style credential, but the key is a symmetric key.
-    pub fn parse_ccs_symmetric(value: &[u8]) -> Result<Self, EDHOCError> {
+    pub fn parse_ccs_symmetric(value: &[u8]) -> Result<Self, LAKEError> {
         // This function  checks whether the parsed credential actually contains a symmetric key
         let cred = Self::parse_ccs(value)?;
         match cred.cred_type {
             CredentialType::CCS_PSK => Ok(cred),
             // Anything that is not CCS_PSK is not a symmetric credential
-            _ => Err(EDHOCError::UnexpectedCredential),
+            _ => Err(LAKEError::UnexpectedCredential),
         }
     }
 
@@ -315,7 +315,7 @@ impl Credential {
     /// -1 in order to decode adequately
     fn parse_cosekey<'data>(
         decoder: &mut CBORDecoder<'data>,
-    ) -> Result<(CredentialKey, Option<BufferKid>), EDHOCError> {
+    ) -> Result<(CredentialKey, Option<BufferKid>), LAKEError> {
         let items = decoder.map()?;
         let mut x = None;
         let mut kid = None;
@@ -327,7 +327,7 @@ impl Credential {
                 1 => {
                     let temp = decoder.u8()?;
                     if temp != 2 && temp != 4 {
-                        return Err(EDHOCError::ParsingError);
+                        return Err(LAKEError::ParsingError);
                     } else {
                         kty = Some(temp)
                     }
@@ -338,7 +338,7 @@ impl Credential {
                     kid = Some(
                         BufferKid::new_from_slice(decoder.bytes()?)
                             // Could be too long
-                            .map_err(|_| EDHOCError::ParsingError)?,
+                            .map_err(|_| LAKEError::ParsingError)?,
                     );
                 }
                 // Label -1 depends on kty: `crv` for EC2 keys, `k` (the key material
@@ -346,16 +346,16 @@ impl Credential {
                 -1 => match kty {
                     Some(2) => {
                         if decoder.u8()? != 1 {
-                            return Err(EDHOCError::ParsingError);
+                            return Err(LAKEError::ParsingError);
                         }
                     }
                     Some(4) => {
                         k = Some(
                             BufferPsk::new_from_slice(decoder.bytes()?)
-                                .map_err(|_| EDHOCError::ParsingError)?,
+                                .map_err(|_| LAKEError::ParsingError)?,
                         );
                     }
-                    _ => return Err(EDHOCError::ParsingError),
+                    _ => return Err(LAKEError::ParsingError),
                 },
                 // x
                 -2 => {
@@ -364,7 +364,7 @@ impl Credential {
                             .bytes()?
                             // Wrong length
                             .try_into()
-                            .map_err(|_| EDHOCError::ParsingError)?,
+                            .map_err(|_| LAKEError::ParsingError)?,
                     ));
                 }
                 // y
@@ -372,14 +372,14 @@ impl Credential {
                     let _ = decoder.bytes()?;
                 }
                 _ => {
-                    return Err(EDHOCError::ParsingError);
+                    return Err(LAKEError::ParsingError);
                 }
             }
         }
         match (kty, x, k) {
             (Some(2), Some(x), None) => Ok((x, kid)),
             (Some(4), None, Some(k)) => Ok((CredentialKey::Symmetric(k), kid)),
-            _ => Err(EDHOCError::ParsingError),
+            _ => Err(LAKEError::ParsingError),
         }
     }
 
@@ -400,15 +400,15 @@ impl Credential {
     /// // This is true for all dressed naked COSE keys
     /// assert!(ccs.bytes.as_slice().starts_with(&hex!("a108a101")));
     /// ```
-    pub fn parse_and_dress_naked_cosekey(cosekey: &[u8]) -> Result<Self, EDHOCError> {
+    pub fn parse_and_dress_naked_cosekey(cosekey: &[u8]) -> Result<Self, LAKEError> {
         let mut decoder = CBORDecoder::new(cosekey);
         let (key, kid) = Self::parse_cosekey(&mut decoder)?;
         let CredentialKey::EC2Compact(key) = key else {
-            return Err(EDHOCError::UnexpectedCredential);
+            return Err(LAKEError::UnexpectedCredential);
         };
 
         if !decoder.finished() {
-            return Err(EDHOCError::ParsingError);
+            return Err(LAKEError::ParsingError);
         }
         let mut bytes = BufferCred::new();
         bytes
@@ -416,7 +416,7 @@ impl Credential {
             .expect("Minimal size fits in the buffer");
         bytes
             .extend_from_slice(cosekey)
-            .map_err(|_| EDHOCError::CredentialTooLongError)?;
+            .map_err(|_| LAKEError::CredentialTooLongError)?;
         Ok(Self {
             bytes,
             key: CredentialKey::EC2Compact(key),
@@ -429,23 +429,23 @@ impl Credential {
     ///
     /// For example, if the credential is a CCS:
     ///   { /kccs/ 14: bytes }
-    pub fn by_value(&self) -> Result<IdCred, EDHOCError> {
+    pub fn by_value(&self) -> Result<IdCred, LAKEError> {
         match self.cred_type {
             CredentialType::CCS => {
                 let mut id_cred = IdCred::new();
                 id_cred
                     .bytes
                     .extend_from_slice(&[CBOR_MAJOR_MAP + 1, KCCS_LABEL])
-                    .map_err(|_| EDHOCError::CredentialTooLongError)?;
+                    .map_err(|_| LAKEError::CredentialTooLongError)?;
                 id_cred
                     .bytes
                     .extend_from_slice(self.bytes.as_slice())
-                    .map_err(|_| EDHOCError::CredentialTooLongError)?;
+                    .map_err(|_| LAKEError::CredentialTooLongError)?;
                 Ok(id_cred)
             }
             // if we could encode a message along the error below,
             // it would be this: "Symmetric keys cannot be sent by value"
-            CredentialType::CCS_PSK => Err(EDHOCError::UnexpectedCredential),
+            CredentialType::CCS_PSK => Err(LAKEError::UnexpectedCredential),
         }
     }
 
@@ -455,9 +455,9 @@ impl Credential {
     ///   { /kid/ 4: kid }
     ///
     /// TODO: accept a parameter to specify the type of reference, e.g. kid, x5t, etc.
-    pub fn by_kid(&self) -> Result<IdCred, EDHOCError> {
+    pub fn by_kid(&self) -> Result<IdCred, LAKEError> {
         let Some(kid) = self.kid.as_ref() else {
-            return Err(EDHOCError::MissingIdentity);
+            return Err(LAKEError::MissingIdentity);
         };
         let mut id_cred = IdCred::new();
         id_cred
@@ -467,7 +467,7 @@ impl Credential {
                 KID_LABEL,
                 CBOR_MAJOR_BYTE_STRING | kid.len() as u8,
             ])
-            .map_err(|_| EDHOCError::CredentialTooLongError)?;
+            .map_err(|_| LAKEError::CredentialTooLongError)?;
         id_cred.bytes.extend_from_slice(kid.as_slice()).unwrap();
         Ok(id_cred)
     }
@@ -578,7 +578,7 @@ mod test_experimental {
     #[test]
     fn test_new_cred_ccs_symmetric_16() {
         let k = BufferPsk::new_from_slice(&K_16)
-            .map_err(|_| EDHOCError::ParsingError)
+            .map_err(|_| LAKEError::ParsingError)
             .unwrap();
         let cred = Credential::new_ccs_symmetric(CRED_PSK_16.try_into().unwrap(), k.clone());
         assert_eq!(cred.bytes.as_slice(), CRED_PSK_16);
@@ -591,7 +591,7 @@ mod test_experimental {
     #[test]
     fn test_new_cred_ccs_symmetric_32() {
         let k = BufferPsk::new_from_slice(&K_32)
-            .map_err(|_| EDHOCError::ParsingError)
+            .map_err(|_| LAKEError::ParsingError)
             .unwrap();
         let cred = Credential::new_ccs_symmetric(CRED_PSK_32.try_into().unwrap(), k.clone());
         assert_eq!(cred.bytes.as_slice(), CRED_PSK_32);
@@ -604,7 +604,7 @@ mod test_experimental {
     #[test]
     fn test_parse_ccs_symmetric_16() {
         let k = BufferPsk::new_from_slice(&K_16)
-            .map_err(|_| EDHOCError::ParsingError)
+            .map_err(|_| LAKEError::ParsingError)
             .unwrap();
         let cred = Credential::parse_ccs_symmetric(CRED_PSK_16).unwrap();
         assert_eq!(cred.bytes.as_slice(), CRED_PSK_16);
@@ -619,7 +619,7 @@ mod test_experimental {
     #[test]
     fn test_parse_ccs_symmetric_32() {
         let k = BufferPsk::new_from_slice(&K_32)
-            .map_err(|_| EDHOCError::ParsingError)
+            .map_err(|_| LAKEError::ParsingError)
             .unwrap();
         let cred = Credential::parse_ccs_symmetric(CRED_PSK_32).unwrap();
         assert_eq!(cred.bytes.as_slice(), CRED_PSK_32);

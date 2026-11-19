@@ -1935,7 +1935,7 @@ dependencies = [
 
 [[package]]
 name = "lakers"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "defmt 0.3.101",
  "defmt-or-log",
@@ -1949,7 +1949,7 @@ dependencies = [
 
 [[package]]
 name = "lakers-c"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "critical-section",
  "embedded-alloc",
@@ -1962,7 +1962,7 @@ dependencies = [
 
 [[package]]
 name = "lakers-crypto"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "cfg-if",
  "embedded-cal-nrf54l15",
@@ -1980,7 +1980,7 @@ dependencies = [
 
 [[package]]
 name = "lakers-crypto-cryptocell310"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "bindgen",
  "digest 0.10.7",
@@ -1989,7 +1989,7 @@ dependencies = [
 
 [[package]]
 name = "lakers-crypto-embedded-cal"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "digest 0.10.7",
  "embedded-cal",
@@ -2002,7 +2002,7 @@ dependencies = [
 
 [[package]]
 name = "lakers-crypto-psa"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "digest 0.10.7",
  "lakers-shared",
@@ -2011,7 +2011,7 @@ dependencies = [
 
 [[package]]
 name = "lakers-crypto-rustcrypto"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "aead 0.5.2",
  "aes 0.8.4",
@@ -2025,7 +2025,7 @@ dependencies = [
 
 [[package]]
 name = "lakers-ead-authz"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "defmt 0.3.101",
  "defmt-or-log",
@@ -2054,7 +2054,7 @@ dependencies = [
 
 [[package]]
 name = "lakers-nrf52840"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
@@ -2089,7 +2089,7 @@ dependencies = [
 
 [[package]]
 name = "lakers-python"
-version = "0.6.2"
+version = "0.7.0"
 dependencies = [
  "lakers",
  "lakers-crypto",
@@ -2103,7 +2103,7 @@ dependencies = [
 
 [[package]]
 name = "lakers-shared"
-version = "0.8.0"
+version = "0.9.0"
 dependencies = [
  "defmt 0.3.101",
  "defmt-or-log",

@@ -3,7 +3,7 @@ use super::{
     compute_salt_4e3m, compute_th_3, compute_th_4, decode_plaintext_2, decode_plaintext_3,
     decrypt_message_3, encode_plaintext_2, encode_plaintext_3, encrypt_message_3, BufferMessage3,
     BufferPlaintext2, BytesHashLen, BytesMac3, BytesP256ElemLen, ConnId, Credential, CredentialKey,
-    CredentialTransfer, DecodedMessage2, EDHOCError, EadItems, IdCred, ParsedMessage2Details,
+    CredentialTransfer, DecodedMessage2, EadItems, IdCred, LAKEError, ParsedMessage2Details,
     ParsedMessage3, PreparedMessage2, PreparedMessage3, ProcessedM2, ProcessedM2MethodSpecifics,
     ProcessingM1, ProcessingM2, ProcessingM2MethodSpecifics, ProcessingM3,
     ProcessingM3MethodSpecifics, Th4Input, VerifiedMessage2, VerifiedMessage3, WaitM3,
@@ -20,7 +20,7 @@ pub(crate) fn r_prepare_message_2_statstat(
     ead_2: &EadItems,
     th_2: &BytesHashLen,
     prk_2e: &BytesHashLen,
-) -> Result<PreparedMessage2, EDHOCError> {
+) -> Result<PreparedMessage2, LAKEError> {
     // compute prk_3e2m
     let salt_3e2m = compute_salt_3e2m(crypto, &prk_2e, &th_2);
     let prk_3e2m = compute_prk_3e2m(crypto, &salt_3e2m, r, &state.g_x);
@@ -60,7 +60,7 @@ pub(crate) fn r_parse_message_3_statstat(
     state: &WaitM3,
     crypto: &mut impl CryptoTrait,
     message_3: &BufferMessage3,
-) -> Result<ParsedMessage3, EDHOCError> {
+) -> Result<ParsedMessage3, LAKEError> {
     let plaintext_3 = decrypt_message_3(crypto, &state.prk_3e2m, &state.th_3, message_3, None);
 
     if let Ok(plaintext_3) = plaintext_3 {
@@ -92,13 +92,13 @@ pub(crate) fn r_verify_message_3_statstat(
     mac_3: BytesMac3,
     id_cred_i: &IdCred,
     salt_4e3m: &BytesHashLen,
-) -> Result<VerifiedMessage3, EDHOCError> {
+) -> Result<VerifiedMessage3, LAKEError> {
     let prk_4e3m = match valid_cred_i.key {
         CredentialKey::EC2Compact(public_key) => {
             compute_prk_4e3m(crypto, &salt_4e3m, &state.y, &public_key)
         }
         // FIXME: the error is not accurate. It is a lack of agreement between peers.
-        _ => return Err(EDHOCError::UnsupportedMethod),
+        _ => return Err(LAKEError::UnsupportedMethod),
     };
 
     // compute mac_3
@@ -124,13 +124,13 @@ pub(crate) fn r_verify_message_3_statstat(
 
         Ok(VerifiedMessage3 { prk_4e3m, th_4 })
     } else {
-        Err(EDHOCError::MacVerificationFailed)
+        Err(LAKEError::MacVerificationFailed)
     }
 }
 
 pub(crate) fn i_parse_message_2_statstat(
     plaintext_2: &BufferPlaintext2,
-) -> Result<DecodedMessage2, EDHOCError> {
+) -> Result<DecodedMessage2, LAKEError> {
     let (c_r, id_cred_r, mac_2, ead_2) = decode_plaintext_2(plaintext_2)?;
 
     Ok(DecodedMessage2 {
@@ -149,7 +149,7 @@ pub(crate) fn i_verify_message_2_statstat(
     crypto: &mut impl CryptoTrait,
     valid_cred_r: Credential,
     i: &BytesP256ElemLen, // I's static private DH key
-) -> Result<VerifiedMessage2, EDHOCError> {
+) -> Result<VerifiedMessage2, LAKEError> {
     // verify mac_2
     let salt_3e2m = compute_salt_3e2m(crypto, &state.prk_2e, &state.th_2);
 
@@ -158,13 +158,13 @@ pub(crate) fn i_verify_message_2_statstat(
             compute_prk_3e2m(crypto, &salt_3e2m, &state.x, &public_key)
         }
         // FIXME: the error is not accurate. It is a lack of agreement between peers.
-        _ => return Err(EDHOCError::UnsupportedMethod),
+        _ => return Err(LAKEError::UnsupportedMethod),
     };
 
     let (id_cred_r, mac_2) = match &state.method_specifics {
         ProcessingM2MethodSpecifics::StatStat { id_cred_r, mac_2 } => (id_cred_r, *mac_2),
         // FIXME: the error is not accurate. It is a lack of agreement between peers.
-        _ => return Err(EDHOCError::UnsupportedMethod),
+        _ => return Err(LAKEError::UnsupportedMethod),
     };
 
     let expected_mac_2 = compute_mac_2(
@@ -196,7 +196,7 @@ pub(crate) fn i_verify_message_2_statstat(
             th_3,
         })
     } else {
-        Err(EDHOCError::MacVerificationFailed)
+        Err(LAKEError::MacVerificationFailed)
     }
 }
 
@@ -206,7 +206,7 @@ pub(crate) fn i_prepare_message_3_statstat(
     cred_i: Credential,
     cred_transfer: CredentialTransfer,
     ead_3: &EadItems,
-) -> Result<PreparedMessage3, EDHOCError> {
+) -> Result<PreparedMessage3, LAKEError> {
     let id_cred_i = match cred_transfer {
         CredentialTransfer::ByValue => cred_i.by_value()?,
         CredentialTransfer::ByReference => cred_i.by_kid()?,

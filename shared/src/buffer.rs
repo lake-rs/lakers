@@ -1,7 +1,7 @@
 use core::ops::Index;
 
-// NOTE: This constant is only here for now because it is only ever used in instances of EdhocBuffer.
-// TODO: move to lib.rs, once EdhocMessageBuffer is replaced by EdhocBuffer.
+// NOTE: This constant is only here for now because it is only ever used in instances of LakeBuffer.
+// TODO: move to lib.rs, once LakeMessageBuffer is replaced by LakeBuffer.
 pub const MAX_SUITES_LEN: usize = 9;
 
 /// Copies a short slice into the start of a long slice in a way both Rust's const fn and
@@ -44,13 +44,13 @@ const fn copy_into_longer(long: &mut [u8], short: &[u8]) {
 
 #[derive(PartialEq, Debug)]
 #[repr(C)]
-pub enum EdhocBufferError {
+pub enum LakeBufferError {
     BufferAlreadyFull,
     SliceTooLong,
     SliceTooShort,
 }
 
-/// A fixed-size (but parameterized) buffer for EDHOC messages.
+/// A fixed-size (but parameterized) buffer for LAKE messages.
 ///
 /// Trying to have an API as similar as possible to `heapless::Vec`,
 /// so that in the future it can be hot-swappable by the application.
@@ -58,7 +58,7 @@ pub enum EdhocBufferError {
 #[derive(PartialEq, Debug, Clone)]
 #[repr(C)]
 // `#[hax_lib::attributes]` is not usable here due to https://github.com/cryspen/hax/issues/899
-pub struct EdhocBuffer<const N: usize> {
+pub struct LakeBuffer<const N: usize> {
     #[deprecated]
     pub content: [u8; N],
     #[deprecated(note = "use .len()")]
@@ -68,9 +68,9 @@ pub struct EdhocBuffer<const N: usize> {
 }
 
 #[allow(deprecated)]
-impl<const N: usize> Default for EdhocBuffer<N> {
+impl<const N: usize> Default for LakeBuffer<N> {
     fn default() -> Self {
-        EdhocBuffer {
+        LakeBuffer {
             content: [0; N],
             len: 0,
         }
@@ -79,9 +79,9 @@ impl<const N: usize> Default for EdhocBuffer<N> {
 
 #[allow(deprecated)]
 #[hax_lib::attributes]
-impl<const N: usize> EdhocBuffer<N> {
+impl<const N: usize> LakeBuffer<N> {
     pub const fn new() -> Self {
-        EdhocBuffer {
+        LakeBuffer {
             content: [0u8; N],
             len: 0,
         }
@@ -96,12 +96,12 @@ impl<const N: usize> EdhocBuffer<N> {
     }
 
     #[hax_lib::ensures(|result| result.is_ok() == (slice.len() <= N))]
-    pub const fn new_from_slice(slice: &[u8]) -> Result<Self, EdhocBufferError> {
+    pub const fn new_from_slice(slice: &[u8]) -> Result<Self, LakeBufferError> {
         let mut buffer = Self::new();
         if buffer.fill_with_slice(slice).is_ok() {
             Ok(buffer)
         } else {
-            Err(EdhocBufferError::SliceTooLong)
+            Err(LakeBufferError::SliceTooLong)
         }
     }
 
@@ -114,14 +114,14 @@ impl<const N: usize> EdhocBuffer<N> {
     ///
     /// ```
     /// # use lakers_shared::*;
-    /// const MY_CONST: EdhocMessageBuffer = EdhocMessageBuffer::new_from_array(&[0, 1, 2]);
+    /// const MY_CONST: LakeMessageBuffer = LakeMessageBuffer::new_from_array(&[0, 1, 2]);
     /// ```
     ///
     /// While this fails to build:
     ///
     /// ```compile_fail
     /// # use lakers_shared::*;
-    /// const MY_CONST: EdhocMessageBuffer = EdhocMessageBuffer::new_from_array(&[0; 10_000]);
+    /// const MY_CONST: LakeMessageBuffer = LakeMessageBuffer::new_from_array(&[0; 10_000]);
     /// ```
     #[hax_lib::requires(AN <= N)]
     pub const fn new_from_array<const AN: usize>(input: &[u8; AN]) -> Self {
@@ -142,13 +142,13 @@ impl<const N: usize> EdhocBuffer<N> {
     }
 
     #[inline]
-    pub fn push(&mut self, item: u8) -> Result<(), EdhocBufferError> {
+    pub fn push(&mut self, item: u8) -> Result<(), LakeBufferError> {
         if self.len < self.content.len() {
             self.content[self.len] = item;
             self.len += 1;
             Ok(())
         } else {
-            Err(EdhocBufferError::BufferAlreadyFull)
+            Err(LakeBufferError::BufferAlreadyFull)
         }
     }
 
@@ -174,22 +174,22 @@ impl<const N: usize> EdhocBuffer<N> {
     }
 
     #[hax_lib::ensures(|result| result.is_ok() == (slice.len() <= N))]
-    pub const fn fill_with_slice(&mut self, slice: &[u8]) -> Result<(), EdhocBufferError> {
+    pub const fn fill_with_slice(&mut self, slice: &[u8]) -> Result<(), LakeBufferError> {
         if slice.len() <= self.content.len() {
             copy_into_longer(&mut self.content, slice);
             self.len = slice.len();
             Ok(())
         } else {
-            Err(EdhocBufferError::SliceTooLong)
+            Err(LakeBufferError::SliceTooLong)
         }
     }
 
     #[inline]
-    pub fn extend_from_slice(&mut self, slice: &[u8]) -> Result<(), EdhocBufferError> {
+    pub fn extend_from_slice(&mut self, slice: &[u8]) -> Result<(), LakeBufferError> {
         // The strict criterion avoids the need to use checked / saturating addition, which is not
         // present in hax for usize.
         if self.len >= usize::MAX / 2 || slice.len() >= usize::MAX / 2 {
-            return Err(EdhocBufferError::SliceTooLong);
+            return Err(LakeBufferError::SliceTooLong);
         }
         let end = self.len() + slice.len();
         if end <= self.content.len() {
@@ -197,7 +197,7 @@ impl<const N: usize> EdhocBuffer<N> {
             self.len += slice.len();
             Ok(())
         } else {
-            Err(EdhocBufferError::SliceTooLong)
+            Err(LakeBufferError::SliceTooLong)
         }
     }
 
@@ -214,11 +214,11 @@ impl<const N: usize> EdhocBuffer<N> {
     pub fn extend_reserve(
         &mut self,
         length: usize,
-    ) -> Result<core::ops::Range<usize>, EdhocBufferError> {
+    ) -> Result<core::ops::Range<usize>, LakeBufferError> {
         // The strict criterion avoids the need to use checked / saturating addition, which is not
         // present in hax for usize.
         if self.len >= usize::MAX / 2 || length >= usize::MAX / 2 {
-            return Err(EdhocBufferError::SliceTooLong);
+            return Err(LakeBufferError::SliceTooLong);
         }
         let start = self.len;
         let end = start + length;
@@ -226,14 +226,14 @@ impl<const N: usize> EdhocBuffer<N> {
             self.len = end;
             Ok(start..end)
         } else {
-            Err(EdhocBufferError::BufferAlreadyFull)
+            Err(LakeBufferError::BufferAlreadyFull)
         }
     }
 }
 
 #[hax_lib::attributes]
 #[allow(deprecated)]
-impl<const N: usize> Index<usize> for EdhocBuffer<N> {
+impl<const N: usize> Index<usize> for LakeBuffer<N> {
     type Output = u8;
     #[track_caller]
     #[hax_lib::requires(item < self.len && self.len <= N)]
@@ -243,7 +243,7 @@ impl<const N: usize> Index<usize> for EdhocBuffer<N> {
 }
 
 #[allow(deprecated)]
-impl<const N: usize> TryFrom<&[u8]> for EdhocBuffer<N> {
+impl<const N: usize> TryFrom<&[u8]> for LakeBuffer<N> {
     type Error = ();
 
     fn try_from(input: &[u8]) -> Result<Self, Self::Error> {
@@ -251,7 +251,7 @@ impl<const N: usize> TryFrom<&[u8]> for EdhocBuffer<N> {
         if input.len() <= buffer.len() {
             buffer[..input.len()].copy_from_slice(input);
 
-            Ok(EdhocBuffer {
+            Ok(LakeBuffer {
                 content: buffer,
                 len: input.len(),
             })
@@ -265,8 +265,8 @@ impl<const N: usize> TryFrom<&[u8]> for EdhocBuffer<N> {
 mod test {
 
     #[test]
-    fn test_edhoc_buffer() {
-        let mut buffer = crate::EdhocBuffer::<5>::new();
+    fn test_lake_buffer() {
+        let mut buffer = crate::LakeBuffer::<5>::new();
         assert_eq!(buffer.len, 0);
         assert_eq!(buffer.content, [0; 5]);
 
@@ -277,7 +277,7 @@ mod test {
 
     #[test]
     fn test_new_from_slice() {
-        let buffer = crate::EdhocBuffer::<5>::new_from_slice(&[1, 2, 3]).unwrap();
+        let buffer = crate::LakeBuffer::<5>::new_from_slice(&[1, 2, 3]).unwrap();
         assert_eq!(buffer.len, 3);
         assert_eq!(buffer.content, [1, 2, 3, 0, 0]);
     }

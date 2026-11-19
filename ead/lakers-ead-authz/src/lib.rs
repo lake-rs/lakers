@@ -33,7 +33,7 @@ mod test_authz {
         test_vectors::*,
     };
     use lakers_crypto::default_crypto;
-    use lakers_shared::EDHOCError;
+    use lakers_shared::LAKEError;
 
     #[test]
     fn test_complete_flow() {
@@ -99,6 +99,6 @@ mod test_authz {
 
         let voucher_response =
             server.handle_voucher_request(&mut default_crypto(), &voucher_request);
-        assert_eq!(voucher_response.unwrap_err(), EDHOCError::AccessDenied);
+        assert_eq!(voucher_response.unwrap_err(), LAKEError::AccessDenied);
     }
 }

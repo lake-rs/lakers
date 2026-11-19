@@ -1,6 +1,6 @@
 # Introduction
 
-This folder contains a bare metal (no_std) example of EDHOC Initiator and EDHOC Responder for nRF52840-DK.
+This folder contains a bare metal (no_std) example of LAKE Initiator and LAKE Responder for nRF52840-DK.
 The Initiator and Responder communicate over a raw BLE radio.
 
 The example is configured to be ran on nRF52840-DK board.

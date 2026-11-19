@@ -20,10 +20,10 @@ pub unsafe extern "C" fn authz_device_new(
     loc_w: *const u8,
     loc_w_len: usize,
 ) -> i8 {
-    let Ok(id_u) = EdhocMessageBuffer::new_from_slice(slice::from_raw_parts(id_u, id_u_len)) else {
+    let Ok(id_u) = LakeMessageBuffer::new_from_slice(slice::from_raw_parts(id_u, id_u_len)) else {
         return -1;
     };
-    let Ok(loc_w) = EdhocMessageBuffer::new_from_slice(slice::from_raw_parts(loc_w, loc_w_len))
+    let Ok(loc_w) = LakeMessageBuffer::new_from_slice(slice::from_raw_parts(loc_w, loc_w_len))
     else {
         return -1;
     };

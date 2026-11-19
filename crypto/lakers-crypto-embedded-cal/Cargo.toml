@@ -3,7 +3,7 @@ name = "lakers-crypto-embedded-cal"
 version.workspace = true
 edition = "2021"
 license.workspace = true
-description = "EDHOC crypto library backend based on the embedded-cal crypto abstraction layer"
+description = "LAKE crypto library backend based on the embedded-cal crypto abstraction layer"
 repository.workspace = true
 readme.workspace = true
 

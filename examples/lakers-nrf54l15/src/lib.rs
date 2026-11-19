@@ -1,6 +1,6 @@
 #![no_std]
 
-//! Shared support code for the nRF54L15 EDHOC example
+//! Shared support code for the nRF54L15 LAKE example
 //! As of today is no `embassy-nrf` BLE driver for the nRF54L15
 //! So re are rolling our own to test the handshake with another board (nRF54L15 and nRF52840)
 
@@ -27,7 +27,7 @@ pub const CRED_R: &[u8] = &hex!("A2026008A101A5010202410A2001215820BBC34960526EA
 /// wrapped in the software `Extender` that adds the high-level SHA-256 / HMAC / HKDF layer.
 ///
 /// The nRF54L15 has a single CRACEN, so only one hardware `Crypto` may be alive at a time. Each of
-/// the two binaries drives only one EDHOC party, so this is called once per handshake.
+/// the two binaries drives only one LAKE party, so this is called once per handshake.
 pub fn hardware_crypto() -> lakers_crypto::Crypto {
     let cal = embedded_cal_software_demo::Extender::<lakers_crypto::Nrf54l15ExtConfig>::new(
         embedded_cal_nrf54l15::Nrf54l15Cal::new(nrf_pac::CRACEN_S, nrf_pac::CRACENCORE_S),

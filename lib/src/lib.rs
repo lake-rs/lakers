@@ -1,29 +1,33 @@
-//! Implementation of [EDHOC] (Ephemeral Diffie-Hellman Over COSE, RFC9528), a lightweight authenticated key
+//! Implementation of [LAKE] (Lightweight Authenticated Key Exchange, RFC9528), a lightweight authenticated key
 //! exchange for the Internet of Things.
 //!
-//! The crate provides a high-level interface through the [EdhocInitiator] and the [EdhocResponder]
+//! The crate provides a high-level interface through the [LakeInitiator] and the [LakeResponder]
 //! structs. Both these wrap the lower level [State] struct that is mainly used through internal
-//! functions in the `edhoc` module. This separation is relevant because the lower level tools are
+//! functions in the `lake` module. This separation is relevant because the lower level tools are
 //! subject of ongoing formal verification, whereas the high-level interfaces aim for good
 //! usability.
 //!
-//! Both [EdhocInitiator] and [EdhocResponder] are used in a type stated way. Following the EDHOC
+//! Both [LakeInitiator] and [LakeResponder] are used in a type stated way. Following the LAKE
 //! protocol, they generate (or process) messages, progressively provide more information about
-//! their peer, and on eventually devolve into an [EdhocInitiatorDone] and [EdhocResponderDone],
-//! respectively, through which the EDHOC key material can be obtained.
+//! their peer, and on eventually devolve into an [LakeInitiatorDone] and [LakeResponderDone],
+//! respectively, through which the LAKE key material can be obtained.
 //!
-//! [EDHOC]: https://datatracker.ietf.org/doc/html/rfc9528
+//! [LAKE]: https://datatracker.ietf.org/doc/html/rfc9528
 #![cfg_attr(not(test), no_std)]
 
 use defmt_or_log::trace;
 pub use {lakers_shared::Crypto as CryptoTrait, lakers_shared::*};
 
-mod edhoc;
-pub use edhoc::*;
+mod lake;
+pub use lake::*;
+#[cfg(not(hax))]
+mod deprecated;
+#[cfg(not(hax))]
+pub use deprecated::*;
 
-/// Starting point for performing EDHOC in the role of the Initiator.
+/// Starting point for performing LAKE in the role of the Initiator.
 #[derive(Debug)]
-pub struct EdhocInitiator<Crypto: CryptoTrait> {
+pub struct LakeInitiator<Crypto: CryptoTrait> {
     state: InitiatorStart,        // opaque state
     i: Option<InitiatorIdentity>, // static authentication identity of I when required by method
     cred_i: Option<Credential>,
@@ -31,7 +35,7 @@ pub struct EdhocInitiator<Crypto: CryptoTrait> {
 }
 
 #[derive(Debug)]
-pub struct EdhocInitiatorWaitM2<Crypto: CryptoTrait> {
+pub struct LakeInitiatorWaitM2<Crypto: CryptoTrait> {
     state: WaitM2, // opaque state
     i: Option<InitiatorIdentity>,
     cred_i: Option<Credential>,
@@ -39,7 +43,7 @@ pub struct EdhocInitiatorWaitM2<Crypto: CryptoTrait> {
 }
 
 #[derive(Debug)]
-pub struct EdhocInitiatorProcessingM2<Crypto: CryptoTrait> {
+pub struct LakeInitiatorProcessingM2<Crypto: CryptoTrait> {
     state: ProcessingM2, // opaque state
     i: Option<InitiatorIdentity>,
     cred_i: Option<Credential>,
@@ -47,27 +51,27 @@ pub struct EdhocInitiatorProcessingM2<Crypto: CryptoTrait> {
 }
 
 #[derive(Debug)]
-pub struct EdhocInitiatorProcessedM2<Crypto: CryptoTrait> {
+pub struct LakeInitiatorProcessedM2<Crypto: CryptoTrait> {
     state: ProcessedM2, // opaque state
     cred_i: Option<Credential>,
     crypto: Crypto,
 }
 
 #[derive(Debug)]
-pub struct EdhocInitiatorWaitM4<Crypto: CryptoTrait> {
+pub struct LakeInitiatorWaitM4<Crypto: CryptoTrait> {
     state: WaitM4, // opaque state
     crypto: Crypto,
 }
 
 #[derive(Debug)]
-pub struct EdhocInitiatorDone<Crypto: CryptoTrait> {
+pub struct LakeInitiatorDone<Crypto: CryptoTrait> {
     state: Completed,
     crypto: Crypto,
 }
 
-/// Starting point for performing EDHOC in the role of the Responder.
+/// Starting point for performing LAKE in the role of the Responder.
 #[derive(Debug)]
-pub struct EdhocResponder<Crypto: CryptoTrait> {
+pub struct LakeResponder<Crypto: CryptoTrait> {
     state: ResponderStart, // opaque state
     r: ResponderIdentity,  // private authentication key of R when required by method
     cred_r: Credential,    // R's full credential
@@ -75,7 +79,7 @@ pub struct EdhocResponder<Crypto: CryptoTrait> {
 }
 
 #[derive(Debug)]
-pub struct EdhocResponderProcessedM1<Crypto: CryptoTrait> {
+pub struct LakeResponderProcessedM1<Crypto: CryptoTrait> {
     state: ProcessingM1,  // opaque state
     r: ResponderIdentity, // private authentication key of R when required by method
     cred_r: Credential,   // R's full credential
@@ -83,25 +87,25 @@ pub struct EdhocResponderProcessedM1<Crypto: CryptoTrait> {
 }
 
 #[derive(Debug)]
-pub struct EdhocResponderWaitM3<Crypto: CryptoTrait> {
+pub struct LakeResponderWaitM3<Crypto: CryptoTrait> {
     state: WaitM3, // opaque state
     crypto: Crypto,
 }
 
 #[derive(Debug)]
-pub struct EdhocResponderProcessingM3<Crypto: CryptoTrait> {
+pub struct LakeResponderProcessingM3<Crypto: CryptoTrait> {
     state: ProcessingM3, // opaque state
     crypto: Crypto,
 }
 
 #[derive(Debug)]
-pub struct EdhocResponderProcessedM3<Crypto: CryptoTrait> {
+pub struct LakeResponderProcessedM3<Crypto: CryptoTrait> {
     state: ProcessedM3, // opaque state
     crypto: Crypto,
 }
 
 #[derive(Debug)]
-pub struct EdhocResponderDone<Crypto: CryptoTrait> {
+pub struct LakeResponderDone<Crypto: CryptoTrait> {
     state: Completed,
     crypto: Crypto,
 }
@@ -118,12 +122,12 @@ pub enum InitiatorIdentity {
     Psk,
 }
 
-impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
+impl<Crypto: CryptoTrait> LakeResponder<Crypto> {
     pub fn new(mut crypto: Crypto, identity: ResponderIdentity, cred_r: Credential) -> Self {
-        trace!("Initializing EdhocResponder");
+        trace!("Initializing LakeResponder");
         let (y, g_y) = crypto.p256_generate_key_pair();
 
-        EdhocResponder {
+        LakeResponder {
             state: ResponderStart { y, g_y },
             r: identity,
             cred_r,
@@ -134,12 +138,12 @@ impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
     pub fn process_message_1(
         mut self,
         message_1: &BufferMessage1,
-    ) -> Result<(EdhocResponderProcessedM1<Crypto>, ConnId, EadItems), EDHOCError> {
+    ) -> Result<(LakeResponderProcessedM1<Crypto>, ConnId, EadItems), LAKEError> {
         trace!("Enter process_message_1");
         let (state, c_i, ead_1) = r_process_message_1(&self.state, &mut self.crypto, message_1)?;
 
         Ok((
-            EdhocResponderProcessedM1 {
+            LakeResponderProcessedM1 {
                 state,
                 r: self.r,
                 cred_r: self.cred_r,
@@ -151,13 +155,13 @@ impl<Crypto: CryptoTrait> EdhocResponder<Crypto> {
     }
 }
 
-impl<Crypto: CryptoTrait> EdhocResponderProcessedM1<Crypto> {
+impl<Crypto: CryptoTrait> LakeResponderProcessedM1<Crypto> {
     pub fn prepare_message_2(
         mut self,
         cred_transfer: CredentialTransfer,
         c_r: Option<ConnId>,
         ead_2: &EadItems,
-    ) -> Result<(EdhocResponderWaitM3<Crypto>, BufferMessage2), EDHOCError> {
+    ) -> Result<(LakeResponderWaitM3<Crypto>, BufferMessage2), LAKEError> {
         trace!("Enter prepare_message_2");
         let c_r = match c_r {
             Some(c_r) => c_r,
@@ -165,12 +169,12 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM1<Crypto> {
         };
 
         let method_details = match (self.state.method, &self.r) {
-            (EDHOCMethod::StatStat, ResponderIdentity::StatStat { r }) => {
+            (LAKEMethod::StatStat, ResponderIdentity::StatStat { r }) => {
                 PrepareMessage2Details::StatStat { r, cred_transfer }
             }
-            (EDHOCMethod::PSK, ResponderIdentity::Psk) => PrepareMessage2Details::Psk {},
+            (LAKEMethod::PSK, ResponderIdentity::Psk) => PrepareMessage2Details::Psk {},
             // FIXME: Distinguish `MissingIdentity` from `MethodIdentityMismatch` here;
-            _ => return Err(EDHOCError::MissingIdentity), // or UnsupportedMethod
+            _ => return Err(LAKEError::MissingIdentity), // or UnsupportedMethod
         };
 
         match r_prepare_message_2(
@@ -182,7 +186,7 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM1<Crypto> {
             ead_2,
         ) {
             Ok((state, message_2)) => Ok((
-                EdhocResponderWaitM3 {
+                LakeResponderWaitM3 {
                     state,
                     crypto: self.crypto,
                 },
@@ -193,7 +197,7 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM1<Crypto> {
     }
 }
 
-impl<'a, Crypto: CryptoTrait> EdhocResponderWaitM3<Crypto> {
+impl<'a, Crypto: CryptoTrait> LakeResponderWaitM3<Crypto> {
     /// Parse message 3, recovering `ID_CRED_I` without any credential lookup.
     ///
     /// Not supported for the PSK method, where it fails with `UnsupportedMethod`: resolving
@@ -202,11 +206,11 @@ impl<'a, Crypto: CryptoTrait> EdhocResponderWaitM3<Crypto> {
     pub fn parse_message_3(
         mut self,
         message_3: &'a BufferMessage3,
-    ) -> Result<(EdhocResponderProcessingM3<Crypto>, IdCred, EadItems), EDHOCError> {
+    ) -> Result<(LakeResponderProcessingM3<Crypto>, IdCred, EadItems), LAKEError> {
         trace!("Enter parse_message_3");
         match r_parse_message_3(&mut self.state, &mut self.crypto, message_3) {
             Ok((state, id_cred_i, ead_3)) => Ok((
-                EdhocResponderProcessingM3 {
+                LakeResponderProcessingM3 {
                     state,
                     crypto: self.crypto,
                 },
@@ -228,9 +232,9 @@ impl<'a, Crypto: CryptoTrait> EdhocResponderWaitM3<Crypto> {
         mut self,
         message_3: &'a BufferMessage3,
         resolve_cred_i: F, // we pass a function to look up for the credential: credential_lookup_or_fetch
-    ) -> Result<(EdhocResponderProcessingM3<Crypto>, IdCred, EadItems), EDHOCError>
+    ) -> Result<(LakeResponderProcessingM3<Crypto>, IdCred, EadItems), LAKEError>
     where
-        F: Fn(&IdCred) -> Result<Credential, EDHOCError>,
+        F: Fn(&IdCred) -> Result<Credential, LAKEError>,
     {
         trace!("Enter parse_message_3_with_credential_lookup");
         match r_parse_message_3_with_cred_resolver(
@@ -240,7 +244,7 @@ impl<'a, Crypto: CryptoTrait> EdhocResponderWaitM3<Crypto> {
             resolve_cred_i,
         ) {
             Ok((state, id_cred_i, ead_3)) => Ok((
-                EdhocResponderProcessingM3 {
+                LakeResponderProcessingM3 {
                     state,
                     crypto: self.crypto,
                 },
@@ -252,15 +256,15 @@ impl<'a, Crypto: CryptoTrait> EdhocResponderWaitM3<Crypto> {
     }
 }
 
-impl<'a, Crypto: CryptoTrait> EdhocResponderProcessingM3<Crypto> {
+impl<'a, Crypto: CryptoTrait> LakeResponderProcessingM3<Crypto> {
     pub fn verify_message_3(
         mut self,
         cred_i: Credential,
-    ) -> Result<(EdhocResponderProcessedM3<Crypto>, [u8; SHA256_DIGEST_LEN]), EDHOCError> {
+    ) -> Result<(LakeResponderProcessedM3<Crypto>, [u8; SHA256_DIGEST_LEN]), LAKEError> {
         trace!("Enter verify_message_3");
         match r_verify_message_3(&mut self.state, &mut self.crypto, cred_i) {
             Ok((state, prk_out)) => Ok((
-                EdhocResponderProcessedM3 {
+                LakeResponderProcessedM3 {
                     state,
                     crypto: self.crypto,
                 },
@@ -271,15 +275,15 @@ impl<'a, Crypto: CryptoTrait> EdhocResponderProcessingM3<Crypto> {
     }
 }
 
-impl<Crypto: CryptoTrait> EdhocResponderProcessedM3<Crypto> {
+impl<Crypto: CryptoTrait> LakeResponderProcessedM3<Crypto> {
     pub fn prepare_message_4(
         mut self,
         ead_4: &EadItems,
-    ) -> Result<(EdhocResponderDone<Crypto>, BufferMessage4), EDHOCError> {
+    ) -> Result<(LakeResponderDone<Crypto>, BufferMessage4), LAKEError> {
         trace!("Enter prepare_message_4");
         match r_prepare_message_4(&self.state, &mut self.crypto, ead_4) {
             Ok((state, message_4)) => Ok((
-                EdhocResponderDone {
+                LakeResponderDone {
                     state,
                     crypto: self.crypto,
                 },
@@ -289,10 +293,10 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM3<Crypto> {
         }
     }
 
-    pub fn completed_without_message_4(self) -> Result<EdhocResponderDone<Crypto>, EDHOCError> {
+    pub fn completed_without_message_4(self) -> Result<LakeResponderDone<Crypto>, LAKEError> {
         trace!("Enter completed");
         match r_complete_without_message_4(&self.state) {
-            Ok(state) => Ok(EdhocResponderDone {
+            Ok(state) => Ok(LakeResponderDone {
                 state,
                 crypto: self.crypto,
             }),
@@ -301,23 +305,23 @@ impl<Crypto: CryptoTrait> EdhocResponderProcessedM3<Crypto> {
     }
 }
 
-impl<Crypto: CryptoTrait> EdhocResponderDone<Crypto> {
-    pub fn edhoc_exporter(&mut self, label: u8, context: &[u8], result: &mut [u8]) {
-        edhoc_exporter(&self.state, &mut self.crypto, label, context, result);
+impl<Crypto: CryptoTrait> LakeResponderDone<Crypto> {
+    pub fn lake_exporter(&mut self, label: u8, context: &[u8], result: &mut [u8]) {
+        lake_exporter(&self.state, &mut self.crypto, label, context, result);
     }
 
-    pub fn edhoc_key_update(&mut self, context: &[u8]) -> [u8; SHA256_DIGEST_LEN] {
-        edhoc_key_update(&mut self.state, &mut self.crypto, context)
+    pub fn lake_key_update(&mut self, context: &[u8]) -> [u8; SHA256_DIGEST_LEN] {
+        lake_key_update(&mut self.state, &mut self.crypto, context)
     }
 }
 
-impl<'a, Crypto: CryptoTrait> EdhocInitiator<Crypto> {
-    pub fn new(mut crypto: Crypto, method: EDHOCMethod, selected_suite: EDHOCSuite) -> Self {
-        trace!("Initializing EdhocInitiator");
+impl<'a, Crypto: CryptoTrait> LakeInitiator<Crypto> {
+    pub fn new(mut crypto: Crypto, method: LAKEMethod, selected_suite: LAKESuite) -> Self {
+        trace!("Initializing LakeInitiator");
         let suites_i = prepare_suites_i(&crypto.supported_suites(), selected_suite.into()).unwrap();
         let (x, g_x) = crypto.p256_generate_key_pair();
 
-        EdhocInitiator {
+        LakeInitiator {
             state: InitiatorStart {
                 x,
                 g_x,
@@ -334,9 +338,9 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiator<Crypto> {
         &mut self,
         identity: InitiatorIdentity,
         cred_i: Credential,
-    ) -> Result<(), EDHOCError> {
+    ) -> Result<(), LAKEError> {
         if self.i.is_some() || self.cred_i.is_some() {
-            return Err(EDHOCError::IdentityAlreadySet);
+            return Err(LAKEError::IdentityAlreadySet);
         }
         self.i = Some(identity);
         self.cred_i = Some(cred_i);
@@ -347,7 +351,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiator<Crypto> {
         mut self,
         c_i: Option<ConnId>,
         ead_1: &EadItems,
-    ) -> Result<(EdhocInitiatorWaitM2<Crypto>, BufferMessage1), EDHOCError> {
+    ) -> Result<(LakeInitiatorWaitM2<Crypto>, BufferMessage1), LAKEError> {
         trace!("Enter prepare_message_1");
         let c_i = match c_i {
             Some(c_i) => c_i,
@@ -356,7 +360,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiator<Crypto> {
 
         match i_prepare_message_1(&self.state, &mut self.crypto, c_i, ead_1) {
             Ok((state, message_1)) => Ok((
-                EdhocInitiatorWaitM2 {
+                LakeInitiatorWaitM2 {
                     state,
                     i: self.i,
                     cred_i: self.cred_i,
@@ -377,15 +381,15 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiator<Crypto> {
     }
 }
 
-impl<'a, Crypto: CryptoTrait> EdhocInitiatorWaitM2<Crypto> {
+impl<'a, Crypto: CryptoTrait> LakeInitiatorWaitM2<Crypto> {
     pub fn parse_message_2(
         mut self,
         message_2: &'a BufferMessage2,
-    ) -> Result<(EdhocInitiatorProcessingM2<Crypto>, ConnId, EadItems), EDHOCError> {
+    ) -> Result<(LakeInitiatorProcessingM2<Crypto>, ConnId, EadItems), LAKEError> {
         trace!("Enter parse_message_2");
         match i_parse_message_2(&self.state, &mut self.crypto, message_2) {
             Ok((state, c_r, _details, ead_2)) => Ok((
-                EdhocInitiatorProcessingM2 {
+                LakeInitiatorProcessingM2 {
                     state,
                     i: self.i,
                     cred_i: self.cred_i,
@@ -399,14 +403,14 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorWaitM2<Crypto> {
     }
 }
 
-impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessingM2<Crypto> {
+impl<'a, Crypto: CryptoTrait> LakeInitiatorProcessingM2<Crypto> {
     pub fn set_identity(
         &mut self,
         identity: InitiatorIdentity,
         cred_i: Credential,
-    ) -> Result<(), EDHOCError> {
+    ) -> Result<(), LAKEError> {
         if self.i.is_some() || self.cred_i.is_some() {
-            return Err(EDHOCError::IdentityAlreadySet);
+            return Err(LAKEError::IdentityAlreadySet);
         }
         self.i = Some(identity);
         self.cred_i = Some(cred_i);
@@ -416,19 +420,19 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessingM2<Crypto> {
     pub fn verify_message_2(
         mut self,
         cred_expected: Option<Credential>,
-    ) -> Result<EdhocInitiatorProcessedM2<Crypto>, EDHOCError> {
+    ) -> Result<LakeInitiatorProcessedM2<Crypto>, LAKEError> {
         trace!("Enter verify_message_2");
-        let i = self.i.ok_or(EDHOCError::MissingIdentity)?;
+        let i = self.i.ok_or(LAKEError::MissingIdentity)?;
         let valid_cred_r = match &self.state.method_specifics {
             ProcessingM2MethodSpecifics::StatStat { id_cred_r, .. } => {
                 credential_check_or_fetch(cred_expected, id_cred_r.clone())?
             }
             ProcessingM2MethodSpecifics::Psk {} => {
-                cred_expected.ok_or(EDHOCError::MissingIdentity)?
+                cred_expected.ok_or(LAKEError::MissingIdentity)?
             }
         };
         match i_verify_message_2(&self.state, &mut self.crypto, valid_cred_r, i) {
-            Ok(state) => Ok(EdhocInitiatorProcessedM2 {
+            Ok(state) => Ok(LakeInitiatorProcessedM2 {
                 state,
                 cred_i: self.cred_i,
                 crypto: self.crypto,
@@ -438,22 +442,22 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessingM2<Crypto> {
     }
 }
 
-impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessedM2<Crypto> {
+impl<'a, Crypto: CryptoTrait> LakeInitiatorProcessedM2<Crypto> {
     pub fn prepare_message_3(
         mut self,
         cred_transfer: CredentialTransfer,
         ead_3: &EadItems,
     ) -> Result<
         (
-            EdhocInitiatorWaitM4<Crypto>,
+            LakeInitiatorWaitM4<Crypto>,
             BufferMessage3,
             [u8; SHA256_DIGEST_LEN],
         ),
-        EDHOCError,
+        LAKEError,
     > {
         trace!("Enter prepare_message_3");
         let Some(cred_i) = self.cred_i else {
-            return Err(EDHOCError::MissingIdentity);
+            return Err(LAKEError::MissingIdentity);
         };
         match i_prepare_message_3(
             &mut self.state,
@@ -463,7 +467,7 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessedM2<Crypto> {
             ead_3,
         ) {
             Ok((state, message_3, prk_out)) => Ok((
-                EdhocInitiatorWaitM4 {
+                LakeInitiatorWaitM4 {
                     state,
                     crypto: self.crypto,
                 },
@@ -475,15 +479,15 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorProcessedM2<Crypto> {
     }
 }
 
-impl<'a, Crypto: CryptoTrait> EdhocInitiatorWaitM4<Crypto> {
+impl<'a, Crypto: CryptoTrait> LakeInitiatorWaitM4<Crypto> {
     pub fn process_message_4(
         mut self,
         message_4: &'a BufferMessage4,
-    ) -> Result<(EdhocInitiatorDone<Crypto>, EadItems), EDHOCError> {
+    ) -> Result<(LakeInitiatorDone<Crypto>, EadItems), LAKEError> {
         trace!("Enter parse_message_4");
         match i_process_message_4(&mut self.state, &mut self.crypto, message_4) {
             Ok((state, ead_4)) => Ok((
-                EdhocInitiatorDone {
+                LakeInitiatorDone {
                     state: state,
                     crypto: self.crypto,
                 },
@@ -493,10 +497,10 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorWaitM4<Crypto> {
         }
     }
 
-    pub fn completed_without_message_4(self) -> Result<EdhocResponderDone<Crypto>, EDHOCError> {
+    pub fn completed_without_message_4(self) -> Result<LakeResponderDone<Crypto>, LAKEError> {
         trace!("Enter completed");
         match i_complete_without_message_4(&self.state) {
-            Ok(state) => Ok(EdhocResponderDone {
+            Ok(state) => Ok(LakeResponderDone {
                 state,
                 crypto: self.crypto,
             }),
@@ -505,13 +509,13 @@ impl<'a, Crypto: CryptoTrait> EdhocInitiatorWaitM4<Crypto> {
     }
 }
 
-impl<Crypto: CryptoTrait> EdhocInitiatorDone<Crypto> {
-    pub fn edhoc_exporter(&mut self, label: u8, context: &[u8], result: &mut [u8]) {
-        edhoc_exporter(&self.state, &mut self.crypto, label, context, result);
+impl<Crypto: CryptoTrait> LakeInitiatorDone<Crypto> {
+    pub fn lake_exporter(&mut self, label: u8, context: &[u8], result: &mut [u8]) {
+        lake_exporter(&self.state, &mut self.crypto, label, context, result);
     }
 
-    pub fn edhoc_key_update(&mut self, context: &[u8]) -> [u8; SHA256_DIGEST_LEN] {
-        edhoc_key_update(&mut self.state, &mut self.crypto, context)
+    pub fn lake_key_update(&mut self, context: &[u8]) -> [u8; SHA256_DIGEST_LEN] {
+        lake_key_update(&mut self.state, &mut self.crypto, context)
     }
 }
 
@@ -541,7 +545,7 @@ pub fn generate_connection_identifier<Crypto: CryptoTrait>(crypto: &mut Crypto) 
 pub fn credential_check_or_fetch(
     cred_expected: Option<Credential>,
     id_cred_received: IdCred,
-) -> Result<Credential, EDHOCError> {
+) -> Result<Credential, LAKEError> {
     trace!("Enter credential_check_or_fetch");
     // Processing of auth credentials according to draft-tiloca-lake-implem-cons
     // Comments tagged with a number refer to steps in Section 4.3.1. of draft-tiloca-lake-implem-cons
@@ -564,7 +568,7 @@ pub fn credential_check_or_fetch(
         if credentials_match {
             Ok(cred_expected)
         } else {
-            Err(EDHOCError::UnexpectedCredential)
+            Err(LAKEError::UnexpectedCredential)
         }
     } else {
         // 1. Does ID_CRED_X point to a stored authentication credential? NO
@@ -574,7 +578,7 @@ pub fn credential_check_or_fetch(
         // 4. Is the trust model Pre-knowledge + TOFU? YES (hardcoded to YES for now)
         // 6. Validate CRED_X. Generally a CCS has to be validated only syntactically and semantically, unlike a certificate or a CWT.
         //    Is the validation successful?
-        // 5. Is the authentication credential authorized for use in the context of this EDHOC session?
+        // 5. Is the authentication credential authorized for use in the context of this LAKE session?
         // IMPL,TODO: we just skip this step for now
         // 7. Store CRED_X as valid and trusted.
         //   Pair it with consistent credential identifiers, for each supported type of credential identifier.
@@ -582,7 +586,7 @@ pub fn credential_check_or_fetch(
         id_cred_received.get_ccs()
     }
 
-    // 8. Is this authentication credential good to use in the context of this EDHOC session?
+    // 8. Is this authentication credential good to use in the context of this LAKE session?
     // IMPL,TODO: we just skip this step for now
 }
 
@@ -594,7 +598,7 @@ pub fn credential_check_or_fetch(
 pub fn credential_lookup_or_fetch(
     credentials: &[Credential],
     id_cred_received: IdCred,
-) -> Result<Credential, EDHOCError> {
+) -> Result<Credential, LAKEError> {
     for cred in credentials {
         let candidate = if id_cred_received.reference_only()? {
             cred.by_kid()
@@ -647,16 +651,16 @@ mod test {
 
     #[test]
     fn test_new_initiator() {
-        let _initiator = EdhocInitiator::new(
+        let _initiator = LakeInitiator::new(
             default_crypto(),
-            EDHOCMethod::StatStat,
-            EDHOCSuite::CipherSuite2,
+            LAKEMethod::StatStat,
+            LAKESuite::CipherSuite2,
         );
     }
 
     #[test]
     fn test_new_responder() {
-        let _responder = EdhocResponder::new(
+        let _responder = LakeResponder::new(
             default_crypto(),
             ResponderIdentity::StatStat {
                 r: R.try_into().expect("Wrong length of responder private key"),
@@ -667,10 +671,10 @@ mod test {
 
     #[test]
     fn test_prepare_message_1() {
-        let initiator = EdhocInitiator::new(
+        let initiator = LakeInitiator::new(
             default_crypto(),
-            EDHOCMethod::StatStat,
-            EDHOCSuite::CipherSuite2,
+            LAKEMethod::StatStat,
+            LAKESuite::CipherSuite2,
         );
 
         let c_i = generate_connection_identifier_cbor(&mut default_crypto());
@@ -680,7 +684,7 @@ mod test {
 
     #[test]
     fn test_process_message_1() {
-        let responder = EdhocResponder::new(
+        let responder = LakeResponder::new(
             default_crypto(),
             ResponderIdentity::StatStat {
                 r: R.try_into().expect("Wrong length of responder private key"),
@@ -691,11 +695,11 @@ mod test {
         // process message_1 first time, when unsupported suite is selected
         let error = responder.process_message_1(&MESSAGE_1_TV_FIRST_TIME);
         assert!(error.is_err());
-        assert_eq!(error.unwrap_err(), EDHOCError::UnsupportedCipherSuite);
+        assert_eq!(error.unwrap_err(), LAKEError::UnsupportedCipherSuite);
 
         // We need to create a new responder -- no message is supposed to be processed twice by a
         // responder or initiator
-        let responder = EdhocResponder::new(
+        let responder = LakeResponder::new(
             default_crypto(),
             ResponderIdentity::StatStat {
                 r: R.try_into().expect("Wrong length of responder private key"),
@@ -720,13 +724,13 @@ mod test {
         let cred_i = Credential::parse_ccs(CRED_I.try_into().unwrap()).unwrap();
         let cred_r = Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
 
-        let initiator = EdhocInitiator::new(
+        let initiator = LakeInitiator::new(
             default_crypto(),
-            EDHOCMethod::StatStat,
-            EDHOCSuite::CipherSuite2,
+            LAKEMethod::StatStat,
+            LAKESuite::CipherSuite2,
         );
 
-        let responder = EdhocResponder::new(
+        let responder = LakeResponder::new(
             default_crypto(),
             ResponderIdentity::StatStat {
                 r: R.try_into().expect("Wrong length of responder private key"),
@@ -783,14 +787,14 @@ mod test {
 
         // derive OSCORE secret and salt at both sides and compare
         let mut i_oscore_secret = [0; 16];
-        initiator.edhoc_exporter(0u8, &[], &mut i_oscore_secret); // label is 0
+        initiator.lake_exporter(0u8, &[], &mut i_oscore_secret); // label is 0
         let mut i_oscore_salt = [0; 8];
-        initiator.edhoc_exporter(1u8, &[], &mut i_oscore_salt); // label is 1
+        initiator.lake_exporter(1u8, &[], &mut i_oscore_salt); // label is 1
 
         let mut r_oscore_secret = [0; 16];
-        responder.edhoc_exporter(0u8, &[], &mut r_oscore_secret); // label is 0
+        responder.lake_exporter(0u8, &[], &mut r_oscore_secret); // label is 0
         let mut r_oscore_salt = [0; 8];
-        responder.edhoc_exporter(1u8, &[], &mut r_oscore_salt); // label is 1
+        responder.lake_exporter(1u8, &[], &mut r_oscore_salt); // label is 1
 
         assert_eq!(i_oscore_secret, r_oscore_secret);
         assert_eq!(i_oscore_salt, r_oscore_salt);
@@ -800,8 +804,8 @@ mod test {
             0xa0, 0x11, 0x58, 0xfd, 0xb8, 0x20, 0x89, 0x0c, 0xd6, 0xbe, 0x16, 0x96, 0x02, 0xb8,
             0xbc, 0xea,
         ];
-        let i_prk_out_new = initiator.edhoc_key_update(context);
-        let r_prk_out_new = responder.edhoc_key_update(context);
+        let i_prk_out_new = initiator.lake_key_update(context);
+        let r_prk_out_new = responder.lake_key_update(context);
 
         assert_eq!(i_prk_out_new, r_prk_out_new);
     }
@@ -813,10 +817,10 @@ mod test {
         let cred_r = Credential::parse_ccs_symmetric(CRED_R_PSK.try_into().unwrap()).unwrap();
 
         let initiator =
-            EdhocInitiator::new(default_crypto(), EDHOCMethod::PSK, EDHOCSuite::CipherSuite2);
+            LakeInitiator::new(default_crypto(), LAKEMethod::PSK, LAKESuite::CipherSuite2);
 
         let responder =
-            EdhocResponder::new(default_crypto(), ResponderIdentity::Psk, cred_r.clone());
+            LakeResponder::new(default_crypto(), ResponderIdentity::Psk, cred_r.clone());
 
         let (initiator, message_1) = initiator.prepare_message_1(None, &EadItems::new()).unwrap();
 
@@ -849,14 +853,14 @@ mod test {
         assert_eq!(i_prk_out, r_prk_out);
 
         let mut i_oscore_secret = [0; 16];
-        initiator.edhoc_exporter(0u8, &[], &mut i_oscore_secret);
+        initiator.lake_exporter(0u8, &[], &mut i_oscore_secret);
         let mut i_oscore_salt = [0; 8];
-        initiator.edhoc_exporter(1u8, &[], &mut i_oscore_salt);
+        initiator.lake_exporter(1u8, &[], &mut i_oscore_salt);
 
         let mut r_oscore_secret = [0; 16];
-        responder.edhoc_exporter(0u8, &[], &mut r_oscore_secret);
+        responder.lake_exporter(0u8, &[], &mut r_oscore_secret);
         let mut r_oscore_salt = [0; 8];
-        responder.edhoc_exporter(1u8, &[], &mut r_oscore_salt);
+        responder.lake_exporter(1u8, &[], &mut r_oscore_salt);
 
         assert_eq!(i_oscore_secret, r_oscore_secret);
         assert_eq!(i_oscore_salt, r_oscore_salt);
@@ -870,7 +874,7 @@ mod test {
         id_cred_attacker
             .bytes
             .extend_from_slice(&[CBOR_MAJOR_MAP + 1, KCCS_LABEL])
-            .map_err(|_| EDHOCError::CredentialTooLongError)
+            .map_err(|_| LAKEError::CredentialTooLongError)
             .unwrap();
         id_cred_attacker
             .bytes
@@ -878,7 +882,7 @@ mod test {
             .unwrap();
 
         let cred_fetch = credential_lookup_or_fetch(&[cred_i], id_cred_attacker);
-        assert!(matches!(cred_fetch, Err(EDHOCError::WrongCredentialType)))
+        assert!(matches!(cred_fetch, Err(LAKEError::WrongCredentialType)))
     }
 
     #[test]
@@ -889,7 +893,7 @@ mod test {
         id_cred_attacker
             .bytes
             .extend_from_slice(&[CBOR_MAJOR_MAP + 1, KCCS_LABEL])
-            .map_err(|_| EDHOCError::CredentialTooLongError)
+            .map_err(|_| LAKEError::CredentialTooLongError)
             .unwrap();
         id_cred_attacker
             .bytes
@@ -897,7 +901,7 @@ mod test {
             .unwrap();
 
         let cred_fetch = credential_check_or_fetch(Some(cred_i), id_cred_attacker);
-        assert!(matches!(cred_fetch, Err(EDHOCError::UnexpectedCredential)))
+        assert!(matches!(cred_fetch, Err(LAKEError::UnexpectedCredential)))
     }
 
     #[test]
@@ -906,7 +910,7 @@ mod test {
         id_cred_attacker
             .bytes
             .extend_from_slice(&[CBOR_MAJOR_MAP + 1, KCCS_LABEL])
-            .map_err(|_| EDHOCError::CredentialTooLongError)
+            .map_err(|_| LAKEError::CredentialTooLongError)
             .unwrap();
         id_cred_attacker
             .bytes
@@ -914,7 +918,7 @@ mod test {
             .unwrap();
 
         let cred_fetch = credential_check_or_fetch(None, id_cred_attacker);
-        assert!(matches!(cred_fetch, Err(EDHOCError::WrongCredentialType)))
+        assert!(matches!(cred_fetch, Err(LAKEError::WrongCredentialType)))
     }
 
     #[test]
@@ -922,9 +926,9 @@ mod test {
         let cred_r = Credential::parse_ccs_symmetric(CRED_R_PSK.try_into().unwrap()).unwrap();
 
         let initiator =
-            EdhocInitiator::new(default_crypto(), EDHOCMethod::PSK, EDHOCSuite::CipherSuite2);
+            LakeInitiator::new(default_crypto(), LAKEMethod::PSK, LAKESuite::CipherSuite2);
         let responder =
-            EdhocResponder::new(default_crypto(), ResponderIdentity::Psk, cred_r.clone());
+            LakeResponder::new(default_crypto(), ResponderIdentity::Psk, cred_r.clone());
 
         let (_initiator, message_1) = initiator.prepare_message_1(None, &EadItems::new()).unwrap();
         let (responder, _c_i, _ead_1) = responder.process_message_1(&message_1).unwrap();
@@ -936,19 +940,19 @@ mod test {
         let err = responder
             .parse_message_3_with_credential_lookup(&empty_message_3, |_| unreachable!())
             .unwrap_err();
-        assert_eq!(err, EDHOCError::ParsingError);
+        assert_eq!(err, LAKEError::ParsingError);
     }
 
     #[test]
     fn test_parse_message_3_statstat_truncated_returns_error() {
         let cred_r = Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
 
-        let initiator = EdhocInitiator::new(
+        let initiator = LakeInitiator::new(
             default_crypto(),
-            EDHOCMethod::StatStat,
-            EDHOCSuite::CipherSuite2,
+            LAKEMethod::StatStat,
+            LAKESuite::CipherSuite2,
         );
-        let responder = EdhocResponder::new(
+        let responder = LakeResponder::new(
             default_crypto(),
             ResponderIdentity::StatStat {
                 r: R.try_into().expect("Wrong length of responder private key"),
@@ -965,7 +969,7 @@ mod test {
         // message_3 declares a 1-byte payload but carries none (#454)
         let truncated_message_3 = BufferMessage3::new_from_slice(&[0x41]).unwrap();
         let err = responder.parse_message_3(&truncated_message_3).unwrap_err();
-        assert_eq!(err, EDHOCError::ParsingError);
+        assert_eq!(err, LAKEError::ParsingError);
     }
 }
 
@@ -995,21 +999,21 @@ mod test_authz {
         let cred_i = Credential::parse_ccs(CRED_I.try_into().unwrap()).unwrap();
         let cred_r = Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
 
-        let mock_fetch_cred_i = |id_cred_i: IdCred| -> Result<Credential, EDHOCError> {
+        let mock_fetch_cred_i = |id_cred_i: IdCred| -> Result<Credential, LAKEError> {
             if id_cred_i.as_full_value() == cred_i.by_kid()?.as_full_value() {
                 Ok(cred_i.clone())
             } else {
-                Err(EDHOCError::UnexpectedCredential)
+                Err(LAKEError::UnexpectedCredential)
             }
         };
 
-        // ==== initialize edhoc ====
-        let mut initiator = EdhocInitiator::new(
+        // ==== initialize lake ====
+        let mut initiator = LakeInitiator::new(
             default_crypto(),
-            EDHOCMethod::StatStat,
-            EDHOCSuite::CipherSuite2,
+            LAKEMethod::StatStat,
+            LAKESuite::CipherSuite2,
         );
-        let responder = EdhocResponder::new(
+        let responder = LakeResponder::new(
             default_crypto(),
             ResponderIdentity::StatStat {
                 r: R.try_into().expect("Wrong length of responder private key"),
@@ -1026,14 +1030,14 @@ mod test_authz {
         let authenticator = ZeroTouchAuthenticator::default();
 
         let single_byte_kid = cred_i.kid.as_ref().unwrap()[0]; // FIXME: add longer kid support in ACL
-        let acl = EdhocMessageBuffer::new_from_array(&[single_byte_kid]);
+        let acl = LakeMessageBuffer::new_from_array(&[single_byte_kid]);
         let server = ZeroTouchServer::new(
             W_TV.try_into().unwrap(),
             CRED_R.try_into().unwrap(),
             Some(acl),
         );
 
-        // ==== begin edhoc with ead-authz ====
+        // ==== begin lake with ead-authz ====
 
         let (mut device, ead_item) = device.prepare_ead_1(
             &mut default_crypto(),

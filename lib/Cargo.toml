@@ -4,10 +4,13 @@ version.workspace = true
 edition = "2021"
 authors = ["Mališa Vučinić <malisa.vucinic@inria.fr>"]
 license.workspace = true
-description = "An implementation of EDHOC (RFC 9528)"
+description = "An implementation of LAKE (RFC 9528)"
 repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(hax)'] }
 
 [dependencies]
 lakers-shared.workspace = true

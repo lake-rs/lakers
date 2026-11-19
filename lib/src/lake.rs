@@ -54,26 +54,26 @@ struct VerifiedMessage3 {
     th_4: BytesHashLen,
 }
 
-pub fn edhoc_exporter(
+pub fn lake_exporter(
     state: &Completed,
     crypto: &mut impl CryptoTrait,
     label: u8,
     context: &[u8],
     result: &mut [u8],
 ) {
-    edhoc_kdf(crypto, &state.prk_exporter, label, context, result);
+    lake_kdf(crypto, &state.prk_exporter, label, context, result);
 }
 
-pub fn edhoc_key_update(
+pub fn lake_key_update(
     state: &mut Completed,
     crypto: &mut impl CryptoTrait,
     context: &[u8],
 ) -> BytesHashLen {
     // new PRK_out
-    state.prk_out = edhoc_kdf_owned(crypto, &state.prk_out, 11u8, context);
+    state.prk_out = lake_kdf_owned(crypto, &state.prk_out, 11u8, context);
 
     // new PRK_exporter
-    state.prk_exporter = edhoc_kdf_owned(crypto, &state.prk_out, 10u8, &[]);
+    state.prk_exporter = lake_kdf_owned(crypto, &state.prk_out, 10u8, &[]);
 
     state.prk_out
 }
@@ -82,17 +82,17 @@ pub fn r_process_message_1(
     state: &ResponderStart,
     crypto: &mut impl CryptoTrait,
     message_1: &BufferMessage1,
-) -> Result<(ProcessingM1, ConnId, EadItems), EDHOCError> {
+) -> Result<(ProcessingM1, ConnId, EadItems), LAKEError> {
     // Step 1: decode message_1
     // g_x will be saved to the state
     if let Ok((method, suites_i, g_x, c_i, ead_1)) = parse_message_1(message_1) {
         // verify that the method is supported
-        let method = EDHOCMethod::try_from(method)?;
+        let method = LAKEMethod::try_from(method)?;
 
         match method {
-            EDHOCMethod::StatStat | EDHOCMethod::PSK => {
+            LAKEMethod::StatStat | LAKEMethod::PSK => {
                 // Step 2: verify that the selected cipher suite is supported
-                if suites_i[suites_i.len() - 1] == EDHOC_SUPPORTED_SUITES[0] {
+                if suites_i[suites_i.len() - 1] == LAKE_SUPPORTED_SUITES[0] {
                     // hash message_1 and save the hash to the state to avoid saving the whole message
                     let h_message_1 = crypto.sha256_digest(message_1.as_slice());
                     Ok((
@@ -108,14 +108,14 @@ pub fn r_process_message_1(
                         ead_1,
                     ))
                 } else {
-                    Err(EDHOCError::UnsupportedCipherSuite)
+                    Err(LAKEError::UnsupportedCipherSuite)
                 }
             }
             // If lakers-shared gets merged into lakers, this can be removed:
-            _ => Err(EDHOCError::UnsupportedMethod),
+            _ => Err(LAKEError::UnsupportedMethod),
         }
     } else {
-        Err(EDHOCError::ParsingError)
+        Err(LAKEError::ParsingError)
     }
 }
 
@@ -126,12 +126,12 @@ pub fn r_prepare_message_2(
     method_details: PrepareMessage2Details<'_>,
     c_r: ConnId,
     ead_2: &EadItems,
-) -> Result<(WaitM3, BufferMessage2), EDHOCError> {
+) -> Result<(WaitM3, BufferMessage2), LAKEError> {
     let th_2 = compute_th_2(crypto, &state.g_y, &state.h_message_1);
     let prk_2e = compute_prk_2e(crypto, &state.y, &state.g_x, &th_2);
 
     let prepared = match (state.method, method_details) {
-        (EDHOCMethod::StatStat, PrepareMessage2Details::StatStat { r, cred_transfer }) => {
+        (LAKEMethod::StatStat, PrepareMessage2Details::StatStat { r, cred_transfer }) => {
             r_prepare_message_2_statstat(
                 state,
                 crypto,
@@ -144,10 +144,10 @@ pub fn r_prepare_message_2(
                 &prk_2e,
             )?
         }
-        (EDHOCMethod::PSK, PrepareMessage2Details::Psk) => {
+        (LAKEMethod::PSK, PrepareMessage2Details::Psk) => {
             r_prepare_message_2_psk(crypto, cred_r, c_r, ead_2, &th_2, &prk_2e)?
         }
-        _ => return Err(EDHOCError::UnsupportedMethod),
+        _ => return Err(LAKEError::UnsupportedMethod),
     };
 
     let mut ct: BufferCiphertext2 = BufferCiphertext2::new();
@@ -174,12 +174,12 @@ pub fn r_parse_message_3(
     state: &WaitM3,
     crypto: &mut impl CryptoTrait,
     message_3: &BufferMessage3,
-) -> Result<(ProcessingM3, IdCred, EadItems), EDHOCError> {
+) -> Result<(ProcessingM3, IdCred, EadItems), LAKEError> {
     let parsed = match &state.method_specifics {
         WaitM3MethodSpecifics::StatStat { .. } => {
             r_parse_message_3_statstat(state, crypto, message_3)?
         }
-        WaitM3MethodSpecifics::Psk { .. } => return Err(EDHOCError::UnsupportedMethod),
+        WaitM3MethodSpecifics::Psk { .. } => return Err(LAKEError::UnsupportedMethod),
     };
 
     Ok((
@@ -201,9 +201,9 @@ pub fn r_parse_message_3_with_cred_resolver<F>(
     crypto: &mut impl CryptoTrait,
     message_3: &BufferMessage3,
     resolve_cred_i: F,
-) -> Result<(ProcessingM3, IdCred, EadItems), EDHOCError>
+) -> Result<(ProcessingM3, IdCred, EadItems), LAKEError>
 where
-    F: Fn(&IdCred) -> Result<Credential, EDHOCError>,
+    F: Fn(&IdCred) -> Result<Credential, LAKEError>,
 {
     let parsed = match &state.method_specifics {
         WaitM3MethodSpecifics::StatStat { .. } => {
@@ -236,7 +236,7 @@ pub fn r_verify_message_3(
     state: &ProcessingM3,
     crypto: &mut impl CryptoTrait,
     valid_cred_i: Credential,
-) -> Result<(ProcessedM3, BytesHashLen), EDHOCError> {
+) -> Result<(ProcessedM3, BytesHashLen), LAKEError> {
     let salt_4e3m = compute_salt_4e3m(crypto, &state.prk_3e2m, &state.th_3);
 
     let verified = match &state.method_specifics {
@@ -250,7 +250,7 @@ pub fn r_verify_message_3(
     };
 
     let mut prk_out: BytesHashLen = Default::default();
-    edhoc_kdf(
+    lake_kdf(
         crypto,
         &verified.prk_4e3m,
         7u8,
@@ -259,7 +259,7 @@ pub fn r_verify_message_3(
     );
 
     let mut prk_exporter = BytesHashLen::default();
-    edhoc_kdf(crypto, &prk_out, 10u8, &[], &mut prk_exporter);
+    lake_kdf(crypto, &prk_out, 10u8, &[], &mut prk_exporter);
 
     Ok((
         ProcessedM3 {
@@ -276,7 +276,7 @@ pub fn r_prepare_message_4(
     state: &ProcessedM3,
     crypto: &mut impl CryptoTrait,
     ead_4: &EadItems,
-) -> Result<(Completed, BufferMessage4), EDHOCError> {
+) -> Result<(Completed, BufferMessage4), LAKEError> {
     // compute ciphertext_4
     let plaintext_4 = encode_plaintext_4(&ead_4)?;
     let message_4 = encrypt_message_4(crypto, &state.prk_4e3m, &state.th_4, &plaintext_4)?;
@@ -290,7 +290,7 @@ pub fn r_prepare_message_4(
     ))
 }
 
-pub fn r_complete_without_message_4(state: &ProcessedM3) -> Result<Completed, EDHOCError> {
+pub fn r_complete_without_message_4(state: &ProcessedM3) -> Result<Completed, LAKEError> {
     Ok(Completed {
         prk_out: state.prk_out,
         prk_exporter: state.prk_exporter,
@@ -302,7 +302,7 @@ pub fn i_prepare_message_1(
     crypto: &mut impl CryptoTrait,
     c_i: ConnId,
     ead_1: &EadItems,
-) -> Result<(WaitM2, BufferMessage1), EDHOCError> {
+) -> Result<(WaitM2, BufferMessage1), LAKEError> {
     // Encode message_1 as a sequence of CBOR encoded data items as specified in Section 5.2.1
     let message_1 = encode_message_1(state.method, &state.suites_i, &state.g_x, c_i, &ead_1)?;
 
@@ -323,16 +323,16 @@ pub fn i_parse_message_2<'a>(
     state: &WaitM2,
     crypto: &mut impl CryptoTrait,
     message_2: &BufferMessage2,
-) -> Result<(ProcessingM2, ConnId, ParsedMessage2Details, EadItems), EDHOCError> {
+) -> Result<(ProcessingM2, ConnId, ParsedMessage2Details, EadItems), LAKEError> {
     let (g_y, ciphertext_2) = parse_message_2(message_2)?;
     let th_2 = compute_th_2(crypto, &g_y, &state.h_message_1);
     let prk_2e = compute_prk_2e(crypto, &state.x, &g_y, &th_2);
     let plaintext_2 = encrypt_decrypt_ciphertext_2(crypto, &prk_2e, &th_2, &ciphertext_2);
 
     let decoded = match state.method {
-        EDHOCMethod::StatStat => i_parse_message_2_statstat(&plaintext_2),
-        EDHOCMethod::PSK => i_parse_message_2_psk(&plaintext_2),
-        _ => Err(EDHOCError::UnsupportedMethod),
+        LAKEMethod::StatStat => i_parse_message_2_statstat(&plaintext_2),
+        LAKEMethod::PSK => i_parse_message_2_psk(&plaintext_2),
+        _ => Err(LAKEError::UnsupportedMethod),
     }?;
 
     Ok((
@@ -357,9 +357,9 @@ pub fn i_verify_message_2(
     crypto: &mut impl CryptoTrait,
     valid_cred_r: Credential,
     i: InitiatorIdentity, // I's static private DH key when required by method
-) -> Result<ProcessedM2, EDHOCError> {
+) -> Result<ProcessedM2, LAKEError> {
     // The overall verification flow is shared across methods, but `prk_3e2m`,
-    // `th_3`, and `prk_4e3m` still depend on the EDHOC method, so the match keeps
+    // `th_3`, and `prk_4e3m` still depend on the LAKE method, so the match keeps
     // the method-specific derivation in the child modules and only shares the final
     // `ProcessedM2` assembly here.
     let verified = match (&state.method_specifics, &i) {
@@ -370,7 +370,7 @@ pub fn i_verify_message_2(
             i_verify_message_2_psk(state, crypto, valid_cred_r)?
         }
         // FIXME: it is not an error, but more a lack of agreement between peers.
-        _ => return Err(EDHOCError::MissingIdentity), // or UnsupportedMethod
+        _ => return Err(LAKEError::MissingIdentity), // or UnsupportedMethod
     };
 
     Ok(ProcessedM2 {
@@ -387,7 +387,7 @@ pub fn i_prepare_message_3(
     cred_i: Credential,
     cred_transfer: CredentialTransfer,
     ead_3: &EadItems,
-) -> Result<(WaitM4, BufferMessage3, BytesHashLen), EDHOCError> {
+) -> Result<(WaitM4, BufferMessage3, BytesHashLen), LAKEError> {
     let prepared = match state.method_specifics {
         ProcessedM2MethodSpecifics::StatStat { .. } => {
             i_prepare_message_3_statstat(state, crypto, cred_i, cred_transfer, ead_3)?
@@ -398,10 +398,10 @@ pub fn i_prepare_message_3(
     };
 
     let mut prk_out: BytesHashLen = Default::default();
-    edhoc_kdf(crypto, &state.prk_4e3m, 7u8, &prepared.th_4, &mut prk_out);
+    lake_kdf(crypto, &state.prk_4e3m, 7u8, &prepared.th_4, &mut prk_out);
 
     let mut prk_exporter: BytesHashLen = Default::default();
-    edhoc_kdf(crypto, &prk_out, 10u8, &[], &mut prk_exporter);
+    lake_kdf(crypto, &prk_out, 10u8, &[], &mut prk_exporter);
 
     Ok((
         WaitM4 {
@@ -419,7 +419,7 @@ pub fn i_process_message_4(
     state: &mut WaitM4,
     crypto: &mut impl CryptoTrait,
     message_4: &BufferMessage4,
-) -> Result<(Completed, EadItems), EDHOCError> {
+) -> Result<(Completed, EadItems), LAKEError> {
     let plaintext_4 = decrypt_message_4(crypto, &state.prk_4e3m, &state.th_4, &message_4)?;
     let decoded_p4_res = decode_plaintext_4(&plaintext_4);
 
@@ -436,7 +436,7 @@ pub fn i_process_message_4(
     }
 }
 
-pub fn i_complete_without_message_4(state: &WaitM4) -> Result<Completed, EDHOCError> {
+pub fn i_complete_without_message_4(state: &WaitM4) -> Result<Completed, LAKEError> {
     Ok(Completed {
         prk_out: state.prk_out,
         prk_exporter: state.prk_exporter,
@@ -444,12 +444,12 @@ pub fn i_complete_without_message_4(state: &WaitM4) -> Result<Completed, EDHOCEr
 }
 
 fn encode_message_1(
-    method: EDHOCMethod,
-    suites: &EdhocBuffer<MAX_SUITES_LEN>,
+    method: LAKEMethod,
+    suites: &LakeBuffer<MAX_SUITES_LEN>,
     g_x: &BytesP256ElemLen,
     c_i: ConnId,
     ead_1: &EadItems,
-) -> Result<BufferMessage1, EDHOCError> {
+) -> Result<BufferMessage1, LAKEError> {
     let mut output = BufferMessage1::new();
 
     output.push(method.into()).unwrap(); // CBOR unsigned int less than 24 is encoded verbatim
@@ -540,7 +540,7 @@ fn compute_th_3(
     hash.finalize().into()
 }
 
-// TH_4 depends on the EDHOC method: STAT uses plaintext_3 directly, while
+// TH_4 depends on the LAKE method: STAT uses plaintext_3 directly, while
 // PSK uses the tuple ID_CRED_PSK || EAD_3 || CRED_I || CRED_R. We model
 // these as enum variants to keep the method-specific inputs explicit.
 enum Th4Input<'a> {
@@ -570,7 +570,7 @@ fn compute_th_4(
             cred_r,
             ead_3,
         } => {
-            let mut ead_buf = EdhocBuffer::<MAX_EAD_LEN>::new();
+            let mut ead_buf = LakeBuffer::<MAX_EAD_LEN>::new();
             ead_3.encode(&mut ead_buf).unwrap();
             // TH_3 || ID_CRED_PSK || EAD_3 || CRED_I || CRED_R
             hash.update(id_cred);
@@ -587,8 +587,8 @@ fn compute_th_4(
     hash.finalize().into()
 }
 
-// TODO: consider moving this to a new 'edhoc crypto primitives' module
-fn edhoc_kdf(
+// TODO: consider moving this to a new 'lake crypto primitives' module
+fn lake_kdf(
     crypto: &mut impl CryptoTrait,
     prk: &BytesHashLen,
     label: u8,
@@ -600,36 +600,36 @@ fn edhoc_kdf(
     crypto.hkdf_expand(prk, info.as_slice(), result);
 }
 
-/// Variant of [`edhoc_kdf`] that returns a filled fixed-size buffer.
+/// Variant of [`lake_kdf`] that returns a filled fixed-size buffer.
 ///
-/// This is a dedicated function because there's a whole lot of users of [`edhoc_kdf`] that just
+/// This is a dedicated function because there's a whole lot of users of [`lake_kdf`] that just
 /// create a buffer, fill it and return it -- so this function does that.
 #[inline]
-fn edhoc_kdf_owned<const N: usize>(
+fn lake_kdf_owned<const N: usize>(
     crypto: &mut impl CryptoTrait,
     prk: &BytesHashLen,
     label: u8,
     context: &[u8],
 ) -> [u8; N] {
     let mut result = [0; N];
-    edhoc_kdf(crypto, prk, label, context, &mut result);
+    lake_kdf(crypto, prk, label, context, &mut result);
     result
 }
 
 fn encode_plaintext_3(
     stat_fields: Option<(&[u8], &BytesMac3)>,
     ead_3: &EadItems,
-) -> Result<BufferPlaintext3, EDHOCError> {
+) -> Result<BufferPlaintext3, LAKEError> {
     let mut plaintext_3 = match stat_fields {
         Some((id_cred_i, mac_3)) => {
             let mut plaintext_3 =
-                BufferPlaintext3::new_from_slice(id_cred_i).or(Err(EDHOCError::EncodingError))?;
+                BufferPlaintext3::new_from_slice(id_cred_i).or(Err(LAKEError::EncodingError))?;
             plaintext_3
                 .push(CBOR_MAJOR_BYTE_STRING | MAC_LENGTH_3 as u8)
-                .or(Err(EDHOCError::EncodingError))?;
+                .or(Err(LAKEError::EncodingError))?;
             plaintext_3
                 .extend_from_slice(mac_3)
-                .or(Err(EDHOCError::EncodingError))?;
+                .or(Err(LAKEError::EncodingError))?;
             plaintext_3
         }
         None => BufferPlaintext3::new(),
@@ -639,7 +639,7 @@ fn encode_plaintext_3(
     Ok(plaintext_3)
 }
 
-fn encode_plaintext_4(ead_4: &EadItems) -> Result<BufferPlaintext4, EDHOCError> {
+fn encode_plaintext_4(ead_4: &EadItems) -> Result<BufferPlaintext4, LAKEError> {
     let mut plaintext_4: BufferPlaintext4 = BufferPlaintext4::new();
 
     ead_4.encode(&mut plaintext_4)?;
@@ -650,28 +650,28 @@ fn encode_plaintext_4(ead_4: &EadItems) -> Result<BufferPlaintext4, EDHOCError> 
 fn build_external_aad(
     th_3: &[u8],
     psk_fields: Option<(&[u8], &[u8], &[u8])>,
-) -> Result<EdhocBuffer<MAX_BUFFER_LEN>, EDHOCError> {
+) -> Result<LakeBuffer<MAX_BUFFER_LEN>, LAKEError> {
     match psk_fields {
         None => {
-            let mut buf = EdhocBuffer::<MAX_BUFFER_LEN>::new();
+            let mut buf = LakeBuffer::<MAX_BUFFER_LEN>::new();
             buf.extend_from_slice(th_3)
-                .map_err(|_| EDHOCError::EncodingError)?;
+                .map_err(|_| LAKEError::EncodingError)?;
             Ok(buf)
         }
         Some((id_cred, cred_i, cred_r)) => {
-            let mut buf = EdhocBuffer::<MAX_BUFFER_LEN>::new();
+            let mut buf = LakeBuffer::<MAX_BUFFER_LEN>::new();
 
             buf.extend_from_slice(id_cred)
-                .map_err(|_| EDHOCError::EncodingError)?;
+                .map_err(|_| LAKEError::EncodingError)?;
 
             encode_bstr_header(&mut buf, th_3.len())?;
             buf.extend_from_slice(th_3)
-                .map_err(|_| EDHOCError::EncodingError)?;
+                .map_err(|_| LAKEError::EncodingError)?;
 
             buf.extend_from_slice(cred_i)
-                .map_err(|_| EDHOCError::EncodingError)?;
+                .map_err(|_| LAKEError::EncodingError)?;
             buf.extend_from_slice(cred_r)
-                .map_err(|_| EDHOCError::EncodingError)?;
+                .map_err(|_| LAKEError::EncodingError)?;
 
             Ok(buf)
         }
@@ -679,54 +679,54 @@ fn build_external_aad(
 }
 
 // FIXME: The encoded Enc_structure is no longer a fixed-size array because the
-// external_aad depends on the EDHOC method, so we return an `EdhocBuffer`.
-fn encode_enc_structure(external_aad: &[u8]) -> Result<EdhocBuffer<MAX_BUFFER_LEN>, EDHOCError> {
+// external_aad depends on the LAKE method, so we return a `LakeBuffer`.
+fn encode_enc_structure(external_aad: &[u8]) -> Result<LakeBuffer<MAX_BUFFER_LEN>, LAKEError> {
     let encrypt0 = b"Encrypt0";
-    let mut enc_structure = EdhocBuffer::<MAX_BUFFER_LEN>::new();
+    let mut enc_structure = LakeBuffer::<MAX_BUFFER_LEN>::new();
 
     // CBOR array of 3 elements
     enc_structure
         .push(CBOR_MAJOR_ARRAY | 3)
-        .map_err(|_| EDHOCError::EncodingError)?;
+        .map_err(|_| LAKEError::EncodingError)?;
 
     // "Encrypt0" text string
     enc_structure
         .push(CBOR_MAJOR_TEXT_STRING | encrypt0.len() as u8)
-        .map_err(|_| EDHOCError::EncodingError)?;
+        .map_err(|_| LAKEError::EncodingError)?;
     enc_structure
         .extend_from_slice(encrypt0)
-        .map_err(|_| EDHOCError::EncodingError)?;
+        .map_err(|_| LAKEError::EncodingError)?;
 
     // protected field: zero-length byte string
     enc_structure
         .push(CBOR_MAJOR_BYTE_STRING | 0)
-        .map_err(|_| EDHOCError::EncodingError)?;
+        .map_err(|_| LAKEError::EncodingError)?;
 
     // external_aad field
     encode_bstr_header(&mut enc_structure, external_aad.len())?;
     enc_structure
         .extend_from_slice(external_aad)
-        .map_err(|_| EDHOCError::EncodingError)?;
+        .map_err(|_| LAKEError::EncodingError)?;
 
     Ok(enc_structure)
 }
 
 fn encode_bstr_header<const N: usize>(
-    buf: &mut EdhocBuffer<N>,
+    buf: &mut LakeBuffer<N>,
     len: usize,
-) -> Result<(), EDHOCError> {
+) -> Result<(), LAKEError> {
     if len <= 23 {
         buf.push(CBOR_MAJOR_BYTE_STRING | len as u8)
-            .map_err(|_| EDHOCError::EncodingError)?;
+            .map_err(|_| LAKEError::EncodingError)?;
     } else if len <= u8::MAX as usize {
-        buf.push(0x58).map_err(|_| EDHOCError::EncodingError)?;
-        buf.push(len as u8).map_err(|_| EDHOCError::EncodingError)?;
+        buf.push(0x58).map_err(|_| LAKEError::EncodingError)?;
+        buf.push(len as u8).map_err(|_| LAKEError::EncodingError)?;
     } else if len <= u16::MAX as usize {
-        buf.push(0x59).map_err(|_| EDHOCError::EncodingError)?;
+        buf.push(0x59).map_err(|_| LAKEError::EncodingError)?;
         buf.extend_from_slice(&(len as u16).to_be_bytes())
-            .map_err(|_| EDHOCError::EncodingError)?;
+            .map_err(|_| LAKEError::EncodingError)?;
     } else {
-        return Err(EDHOCError::EncodingError);
+        return Err(LAKEError::EncodingError);
     }
     Ok(())
 }
@@ -736,11 +736,11 @@ fn compute_k_3_iv_3(
     prk_3e2m: &BytesHashLen,
     th_3: &BytesHashLen,
 ) -> (BytesCcmKeyLen, BytesCcmIvLen) {
-    // K_3 = EDHOC-KDF( PRK_3e2m, 3, TH_3,      key_length )
-    let k_3: BytesCcmKeyLen = edhoc_kdf_owned(crypto, prk_3e2m, 3u8, th_3);
+    // K_3 = LAKE-KDF( PRK_3e2m, 3, TH_3,      key_length )
+    let k_3: BytesCcmKeyLen = lake_kdf_owned(crypto, prk_3e2m, 3u8, th_3);
 
-    // IV_3 = EDHOC-KDF( PRK_3e2m, 4, TH_3,      iv_length )
-    let iv_3: BytesCcmIvLen = edhoc_kdf_owned(crypto, prk_3e2m, 4u8, th_3);
+    // IV_3 = LAKE-KDF( PRK_3e2m, 4, TH_3,      iv_length )
+    let iv_3: BytesCcmIvLen = lake_kdf_owned(crypto, prk_3e2m, 4u8, th_3);
 
     (k_3, iv_3)
 }
@@ -750,14 +750,14 @@ fn compute_k_4_iv_4(
     prk_4e3m: &BytesHashLen,
     th_4: &BytesHashLen,
 ) -> (BytesCcmKeyLen, BytesCcmIvLen) {
-    // K_4 = EDHOC-KDF( PRK_4e3m, ?? , TH_4,      key_length )
-    let k_4: BytesCcmKeyLen = edhoc_kdf_owned(
+    // K_4 = LAKE-KDF( PRK_4e3m, ?? , TH_4,      key_length )
+    let k_4: BytesCcmKeyLen = lake_kdf_owned(
         crypto, prk_4e3m, 8u8, // FIXME
         th_4,
     );
 
-    // IV_3 = EDHOC-KDF( PRK_4e3m, ?? , TH_4,      iv_length )
-    let iv_4: BytesCcmIvLen = edhoc_kdf_owned(crypto, prk_4e3m, 9u8, th_4);
+    // IV_3 = LAKE-KDF( PRK_4e3m, ?? , TH_4,      iv_length )
+    let iv_4: BytesCcmIvLen = lake_kdf_owned(crypto, prk_4e3m, 9u8, th_4);
 
     (k_4, iv_4)
 }
@@ -769,22 +769,22 @@ fn encrypt_message_3(
     th_3: &BytesHashLen,
     plaintext_3: &BufferPlaintext3,
     psk_fields: Option<(&[u8], &[u8], &[u8])>,
-) -> Result<BufferMessage3, EDHOCError> {
+) -> Result<BufferMessage3, LAKEError> {
     let mut output: BufferMessage3 = BufferMessage3::new();
     let bytestring_length = plaintext_3.len() + AES_CCM_TAG_LEN;
     // FIXME: Reuse CBOR encoder
     if bytestring_length < 24 {
         output
             .push(CBOR_MAJOR_BYTE_STRING | (bytestring_length) as u8)
-            .map_err(|_| EDHOCError::EncodingError)?;
+            .map_err(|_| LAKEError::EncodingError)?;
     } else {
         // FIXME: Assumes we don't exceed 256 bytes which is the current buffer size
         output
             .push(CBOR_MAJOR_BYTE_STRING | 24)
-            .map_err(|_| EDHOCError::EncodingError)?;
+            .map_err(|_| LAKEError::EncodingError)?;
         output
             .push(bytestring_length as _)
-            .map_err(|_| EDHOCError::EncodingError)?;
+            .map_err(|_| LAKEError::EncodingError)?;
     };
 
     // FIXME: Make the function fallible, especially with the prospect of algorithm agility
@@ -807,7 +807,7 @@ fn encrypt_message_3(
 
     output
         .extend_from_slice(ciphertext_3.as_slice())
-        .map_err(|_| EDHOCError::EncodingError)?;
+        .map_err(|_| LAKEError::EncodingError)?;
 
     Ok(output)
 }
@@ -818,13 +818,13 @@ fn decrypt_message_3(
     th_3: &BytesHashLen,
     message_3: &BufferMessage3,
     psk_fields: Option<(&[u8], &[u8], &[u8])>,
-) -> Result<BufferPlaintext3, EDHOCError> {
+) -> Result<BufferPlaintext3, LAKEError> {
     let ciphertext_3 = parse_bstr_message(message_3)?;
     // `ciphertext_3` borrows from `BufferMessage3`, which is bounded by `MAX_MESSAGE_SIZE_LEN`.
     // Once the AEAD tag is accounted for, the plaintext necessarily fits the `N =
     // MAX_MESSAGE_SIZE_LEN` decrypt output buffer, so only the lower bound needs checking here.
     if ciphertext_3.len() < CcmTagLen8::LEN {
-        return Err(EDHOCError::ParsingError);
+        return Err(LAKEError::ParsingError);
     }
 
     let (k_3, iv_3) = compute_k_3_iv_3(crypto, prk_3e2m, th_3);
@@ -844,22 +844,22 @@ fn encrypt_message_4(
     prk_4e3m: &BytesHashLen,
     th_4: &BytesHashLen,
     plaintext_4: &BufferPlaintext4,
-) -> Result<BufferMessage4, EDHOCError> {
+) -> Result<BufferMessage4, LAKEError> {
     let mut output: BufferMessage4 = BufferMessage4::new();
     let bytestring_length = plaintext_4.len() + AES_CCM_TAG_LEN;
     // FIXME: Reuse CBOR encoder
     if bytestring_length < 24 {
         output
             .push(CBOR_MAJOR_BYTE_STRING | (bytestring_length) as u8)
-            .map_err(|_| EDHOCError::EncodingError)?;
+            .map_err(|_| LAKEError::EncodingError)?;
     } else {
         // FIXME: Assumes we don't exceed 256 bytes which is the current buffer size
         output
             .push(CBOR_MAJOR_BYTE_STRING | 24)
-            .map_err(|_| EDHOCError::EncodingError)?;
+            .map_err(|_| LAKEError::EncodingError)?;
         output
             .push(bytestring_length as _)
-            .map_err(|_| EDHOCError::EncodingError)?;
+            .map_err(|_| LAKEError::EncodingError)?;
     };
     // FIXME: Make the function fallible, especially with the prospect of algorithm agility
 
@@ -877,7 +877,7 @@ fn encrypt_message_4(
 
     output
         .extend_from_slice(ciphertext_4.as_slice())
-        .map_err(|_| EDHOCError::EncodingError)?;
+        .map_err(|_| LAKEError::EncodingError)?;
 
     Ok(output)
 }
@@ -887,12 +887,12 @@ fn decrypt_message_4(
     prk_4e3m: &BytesHashLen,
     th_4: &BytesHashLen,
     message_4: &BufferMessage4,
-) -> Result<BufferPlaintext4, EDHOCError> {
+) -> Result<BufferPlaintext4, LAKEError> {
     let ciphertext_4 = parse_bstr_message(message_4)?;
     // See the note in `decrypt_message_3`: the ciphertext is bounded by `MAX_MESSAGE_SIZE_LEN`, so
     // the plaintext cannot exceed the decrypt output buffer.
     if ciphertext_4.len() < CcmTagLen8::LEN {
-        return Err(EDHOCError::ParsingError);
+        return Err(LAKEError::ParsingError);
     }
 
     let (k_4, iv_4) = compute_k_4_iv_4(crypto, prk_4e3m, th_4);
@@ -942,11 +942,11 @@ fn compute_mac_3(
     cred_i: &[u8],
     ead_3: &EadItems,
 ) -> BytesMac3 {
-    // MAC_3 = EDHOC-KDF( PRK_4e3m, 6, context_3, mac_length_3 )
+    // MAC_3 = LAKE-KDF( PRK_4e3m, 6, context_3, mac_length_3 )
     let context = encode_kdf_context(None, id_cred_i, th_3, cred_i, ead_3);
 
     // compute mac_3
-    edhoc_kdf_owned(
+    lake_kdf_owned(
         crypto,
         prk_4e3m,
         6u8, // registered label for "MAC_3"
@@ -966,26 +966,26 @@ fn compute_mac_2(
     // compute MAC_2
     let context = encode_kdf_context(Some(c_r), id_cred_r, th_2, cred_r, ead_2);
 
-    // MAC_2 = EDHOC-KDF( PRK_3e2m, 2, context_2, mac_length_2 )
-    edhoc_kdf_owned(crypto, prk_3e2m, 2_u8, context.as_slice())
+    // MAC_2 = LAKE-KDF( PRK_3e2m, 2, context_2, mac_length_2 )
+    lake_kdf_owned(crypto, prk_3e2m, 2_u8, context.as_slice())
 }
 
 fn encode_plaintext_2(
     c_r: ConnId,
     stat_fields: Option<(&[u8], &BytesMac2)>,
     ead_2: &EadItems,
-) -> Result<BufferPlaintext2, EDHOCError> {
+) -> Result<BufferPlaintext2, LAKEError> {
     let mut plaintext_2: BufferPlaintext2 = BufferPlaintext2::new();
     let c_r = c_r.as_cbor();
 
     plaintext_2
         .extend_from_slice(c_r)
-        .or(Err(EDHOCError::EncodingError))?;
+        .or(Err(LAKEError::EncodingError))?;
 
     if let Some((id_cred_r, mac_2)) = stat_fields {
         plaintext_2
             .extend_from_slice(id_cred_r)
-            .or(Err(EDHOCError::EncodingError))?;
+            .or(Err(LAKEError::EncodingError))?;
 
         plaintext_2
             .push(CBOR_MAJOR_BYTE_STRING | MAC_LENGTH_2 as u8)
@@ -999,13 +999,13 @@ fn encode_plaintext_2(
     Ok(plaintext_2)
 }
 
-fn encode_ciphertext_3a(ciphertext: EdhocMessageBuffer) -> Result<BufferCiphertext3, EDHOCError> {
+fn encode_ciphertext_3a(ciphertext: LakeMessageBuffer) -> Result<BufferCiphertext3, LAKEError> {
     let mut ciphertext_3a: BufferCiphertext3 = BufferCiphertext3::new();
     // plaintext_3a: P = ( ID_CRED_PSK / bstr / int )
     encode_bstr_header(&mut ciphertext_3a, ciphertext.len())?;
     ciphertext_3a
         .extend_from_slice(ciphertext.as_slice())
-        .map_err(|_| EDHOCError::EncodingError)?;
+        .map_err(|_| LAKEError::EncodingError)?;
 
     Ok(ciphertext_3a)
 }
@@ -1019,12 +1019,12 @@ fn encrypt_decrypt_ciphertext_2(
     th_2: &BytesHashLen,
     ciphertext_2: &BufferCiphertext2,
 ) -> BufferCiphertext2 {
-    // KEYSTREAM_2 = EDHOC-KDF( PRK_2e,   0, TH_2,      plaintext_length )
+    // KEYSTREAM_2 = LAKE-KDF( PRK_2e,   0, TH_2,      plaintext_length )
     let mut keystream_2 = BufferCiphertext2::new();
     let range = keystream_2.extend_reserve(ciphertext_2.len()).unwrap();
     // FIXME can we do this w/o having a full message on the stack?
     #[allow(deprecated, reason = "using extend_reserve")]
-    edhoc_kdf(crypto, prk_2e, 0u8, th_2, &mut keystream_2.content[range]);
+    lake_kdf(crypto, prk_2e, 0u8, th_2, &mut keystream_2.content[range]);
 
     let mut result = BufferCiphertext2::default();
     for i in 0..ciphertext_2.len() {
@@ -1039,11 +1039,11 @@ fn encrypt_decrypt_ciphertext_3a(
     th_3: &BytesHashLen,
     ciphertext_3a: &BufferCiphertext2,
 ) -> BufferCiphertext2 {
-    // KEYSTREAM_3 = EDHOC-KDF( PRK_2e,   0, TH_2,      plaintext_length )
+    // KEYSTREAM_3 = LAKE-KDF( PRK_2e,   0, TH_2,      plaintext_length )
     let mut keystream_3 = BufferCiphertext3::new();
     let range = keystream_3.extend_reserve(ciphertext_3a.len()).unwrap();
     #[allow(deprecated, reason = "using extend_reserve")]
-    edhoc_kdf(
+    lake_kdf(
         crypto,
         prk_3e2m,
         12u8,
@@ -1064,7 +1064,7 @@ fn compute_salt_4e3m(
     prk_3e2m: &BytesHashLen,
     th_3: &BytesHashLen,
 ) -> BytesHashLen {
-    edhoc_kdf_owned(crypto, prk_3e2m, 5u8, th_3)
+    lake_kdf_owned(crypto, prk_3e2m, 5u8, th_3)
 }
 
 fn compute_prk_4e3m(
@@ -1092,7 +1092,7 @@ fn compute_salt_3e2m(
     prk_2e: &BytesHashLen,
     th_2: &BytesHashLen,
 ) -> BytesHashLen {
-    edhoc_kdf_owned(crypto, prk_2e, 1u8, th_2)
+    lake_kdf_owned(crypto, prk_2e, 1u8, th_2)
 }
 
 fn compute_prk_3e2m(
@@ -1127,9 +1127,9 @@ mod tests {
     use lakers_crypto::default_crypto;
     // test vectors (TV)
 
-    // EDHOC-PSK
-    const METHOD_PSK_TV: EDHOCMethod = EDHOCMethod::PSK; //0x04;
-    const SUITES_I_PSK_TV: EdhocBuffer<MAX_SUITES_LEN> = EdhocBuffer::new_from_array(&hex!("02"));
+    // LAKE-PSK
+    const METHOD_PSK_TV: LAKEMethod = LAKEMethod::PSK; //0x04;
+    const SUITES_I_PSK_TV: LakeBuffer<MAX_SUITES_LEN> = LakeBuffer::new_from_array(&hex!("02"));
     // === Initiator ephemeral private key X ===
     const X_PSK_TV: BytesP256ElemLen =
         hex!("09972dfef1eaab926ec96e8005fed29f70ffbf4e361c3a061a7acdb5170c10e5");
@@ -1140,7 +1140,7 @@ mod tests {
     #[allow(deprecated)]
     const C_I_PSK_TV: ConnId = ConnId::from_int_raw(0x0A);
     // === Message 1 ===
-    const MESSAGE_1_PSK_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!(
+    const MESSAGE_1_PSK_TV: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!(
         "040258207ec68102940602aab548539bf42a35992d957249eb7f1888406d178a04c912db0a"
     ));
     // === Responder ephemeral private key Y ===
@@ -1156,14 +1156,14 @@ mod tests {
     const H_MESSAGE_1_PSK_TV: BytesHashLen =
         hex!("19cc2d2a957edd80109042fde6cc20c24b6a34bc21c6d49fea895d4c7592340e");
     // === H(message_1) CBOR (for completeness) ===
-    const _H_MESSAGE_1_CBOR_PSK_TV: EdhocBuffer<34> = EdhocBuffer::new_from_array(&hex!(
+    const _H_MESSAGE_1_CBOR_PSK_TV: LakeBuffer<34> = LakeBuffer::new_from_array(&hex!(
         "582019cc2d2a957edd80109042fde6cc20c24b6a34bc21c6d49fea895d4c7592340e"
     ));
     // === TH_2 raw ===
     const TH_2_PSK_TV: BytesHashLen =
         hex!("5b4834ae630a8a0ed0b0c6f36642604d016478c4bc8187bb764dd40f2bee3dde");
     // === TH_2 CBOR ===
-    const _TH_2_CBOR_PSK_TV: EdhocBuffer<34> = EdhocBuffer::new_from_array(&hex!(
+    const _TH_2_CBOR_PSK_TV: LakeBuffer<34> = LakeBuffer::new_from_array(&hex!(
         "58205b4834ae630a8a0ed0b0c6f36642604d016478c4bc8187bb764dd40f2bee3dde"
     ));
     // === G_XY (ECDH shared secret) ===
@@ -1178,11 +1178,11 @@ mod tests {
     // === KEYSTREAM_2A ===
     const _KEYSTREAM_2_PSK_TV: [u8; MESSAGE_2_PSK_TV.len() - P256_ELEM_LEN - 2] = hex!("ec");
     // === PLAINTEXT_2A ===
-    const PLAINTEXT_2_PSK_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!("05"));
+    const PLAINTEXT_2_PSK_TV: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!("05"));
     // === CIPHERTEXT_2B ===
-    const CIPHERTEXT_2_PSK_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!("e9"));
+    const CIPHERTEXT_2_PSK_TV: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!("e9"));
     // === message_2 ===
-    const MESSAGE_2_PSK_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!(
+    const MESSAGE_2_PSK_TV: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!(
         "5821ed156a6243e0afec9efbaabce8429d5ad5e4e1c432f76a6ede8f79247bb97d83e9"
     ));
     // === SALT_4e3m ===
@@ -1208,21 +1208,21 @@ mod tests {
     const _K_3_PSK_TV: BytesCcmKeyLen = hex!("966a579cea26ca3ceb442ac727eab232");
     // === IV_3 (13 bytes) ===
     const _IV_3_PSK_TV: BytesCcmIvLen = hex!("5bf1ad0e4ffb9676d78df23f6e");
-    const PLAINTEXT_3B_PSK_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!(""));
+    const PLAINTEXT_3B_PSK_TV: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!(""));
     // === CIPHERTEXT_3B (9 bytes) ===
-    const CIPHERTEXT_3B_PSK_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("487f34496f3f69c288"));
+    const CIPHERTEXT_3B_PSK_TV: LakeMessageBuffer =
+        LakeBuffer::new_from_array(&hex!("487f34496f3f69c288"));
     // === KEYSTREAM_3A (10 bytes) ===
     const _KEYSTREAM_3A_PSK_TV: [u8; _MESSAGE_3_PSK_TV.len() - 1] = hex!("03e5d1571bbc9332471b");
     // === PLAINTEXT_3A (10 bytes) ===
-    const PLAINTEXT_3A_PSK_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("10487f34496f3f69c288"));
+    const PLAINTEXT_3A_PSK_TV: LakeMessageBuffer =
+        LakeBuffer::new_from_array(&hex!("10487f34496f3f69c288"));
     // === CIPHERTEXT_3A (10 bytes) ===
-    const CIPHERTEXT_3A_PSK_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("13adae6352d3ac5b8593"));
+    const CIPHERTEXT_3A_PSK_TV: LakeMessageBuffer =
+        LakeBuffer::new_from_array(&hex!("13adae6352d3ac5b8593"));
     // === message_3 (11 bytes) ===
-    const _MESSAGE_3_PSK_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("4a13adae6352d3ac5b8593"));
+    const _MESSAGE_3_PSK_TV: LakeMessageBuffer =
+        LakeBuffer::new_from_array(&hex!("4a13adae6352d3ac5b8593"));
     // === TH_4 ===
     const TH_4_PSK_TV: BytesHashLen =
         hex!("11481b9afef95c679a52038217eedd0e0ce08faa865bdc825511ca6dc3919413");
@@ -1230,18 +1230,17 @@ mod tests {
     const K_4_PSK_TV: BytesCcmKeyLen = hex!("bcab1df0138dc05c885fd371e950c67f");
     // === IV_4 (13 bytes) ===
     const IV_4_PSK_TV: BytesCcmIvLen = hex!("411134d0e0c508d95da7c3acdc");
-    const PLAINTEXT_4_PSK_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!(""));
+    const PLAINTEXT_4_PSK_TV: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!(""));
     // === message_4 (9 bytes) ===
-    const MESSAGE_4_PSK_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("488add93db404859f9"));
+    const MESSAGE_4_PSK_TV: LakeMessageBuffer =
+        LakeBuffer::new_from_array(&hex!("488add93db404859f9"));
     // === PRK_out ===
     const PRK_OUT_PSK_TV: BytesHashLen =
         hex!("bba6ded3b038d2323774d89214a513a24916f042296c7c729cd1a67b436fb414");
     // === PRK_exporter ===
     const PRK_EXPORTER_PSK_TV: BytesHashLen =
         hex!("2fcd08c0c01077c6d6486b9f9b677020e8d68f04bcdcce715dd277ed25931bef");
-    const _ENC_STRUCURE_MESSAGE_3: EdhocBuffer<MAX_BUFFER_LEN> =
-        EdhocBuffer::new_from_array(&hex!(
+    const _ENC_STRUCURE_MESSAGE_3: LakeBuffer<MAX_BUFFER_LEN> = LakeBuffer::new_from_array(&hex!(
         "8368456e637279707430405871105820386a9d052b255992eee5ffb594347d327418a2ea5183486c0c9e204
         26e0bca2fa20269696e69746961746f7208a101a30104024110205050930ff462a77a3540cf546325dea214a
         20269726573706f6e64657208a101a30104024110205050930ff462a77a3540cf546325dea214"
@@ -1249,60 +1248,60 @@ mod tests {
 
     // STAT-STAT METHOD
     // message_1 (first_time)
-    const METHOD_TV_FIRST_TIME: EDHOCMethod = EDHOCMethod::StatStat;
-    const SUITES_I_TV_FIRST_TIME: EdhocBuffer<MAX_SUITES_LEN> =
-        EdhocBuffer::new_from_array(&hex!("06"));
+    const METHOD_TV_FIRST_TIME: LAKEMethod = LAKEMethod::StatStat;
+    const SUITES_I_TV_FIRST_TIME: LakeBuffer<MAX_SUITES_LEN> =
+        LakeBuffer::new_from_array(&hex!("06"));
     const G_X_TV_FIRST_TIME: BytesP256ElemLen =
         hex!("741a13d7ba048fbb615e94386aa3b61bea5b3d8f65f32620b749bee8d278efa9");
     #[allow(deprecated)]
     const C_I_TV_FIRST_TIME: ConnId = ConnId::from_int_raw(0x0e);
-    const MESSAGE_1_TV_FIRST_TIME: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!(
+    const MESSAGE_1_TV_FIRST_TIME: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!(
         "03065820741a13d7ba048fbb615e94386aa3b61bea5b3d8f65f32620b749bee8d278efa90e"
     ));
 
     // message_1 (second time)
-    const METHOD_TV: EDHOCMethod = EDHOCMethod::StatStat;
+    const METHOD_TV: LAKEMethod = LAKEMethod::StatStat;
     // manually modified test vector to include a single supported cipher suite
-    const SUITES_I_TV: EdhocBuffer<MAX_SUITES_LEN> = EdhocBuffer::new_from_array(&hex!("0602"));
+    const SUITES_I_TV: LakeBuffer<MAX_SUITES_LEN> = LakeBuffer::new_from_array(&hex!("0602"));
     const G_X_TV: BytesP256ElemLen =
         hex!("8af6f430ebe18d34184017a9a11bf511c8dff8f834730b96c1b7c8dbca2fc3b6");
     #[allow(deprecated)]
     const C_I_TV: ConnId = ConnId::from_int_raw(0x37);
-    const MESSAGE_1_TV: BufferMessage1 = EdhocBuffer::new_from_array(&hex!(
+    const MESSAGE_1_TV: BufferMessage1 = LakeBuffer::new_from_array(&hex!(
         "0382060258208af6f430ebe18d34184017a9a11bf511c8dff8f834730b96c1b7c8dbca2fc3b637"
     ));
     // below are a few truncated messages for the purpose of testing cipher suites
     // message with one cipher suite (23..=255)
-    const MESSAGE_1_TV_SUITE_ONLY_A: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("031818"));
+    const MESSAGE_1_TV_SUITE_ONLY_A: LakeMessageBuffer =
+        LakeBuffer::new_from_array(&hex!("031818"));
     // message with an array having two cipher suites with small values (0..=23)
-    const MESSAGE_1_TV_SUITE_ONLY_B: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("03820201"));
+    const MESSAGE_1_TV_SUITE_ONLY_B: LakeMessageBuffer =
+        LakeBuffer::new_from_array(&hex!("03820201"));
     // message with an array having two cipher suites, where one is a large value (23..=255)
-    const MESSAGE_1_TV_SUITE_ONLY_C: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("0382021819"));
+    const MESSAGE_1_TV_SUITE_ONLY_C: LakeMessageBuffer =
+        LakeBuffer::new_from_array(&hex!("0382021819"));
     // message with an array having too many cipher suites (more than 9)
-    const MESSAGE_1_TV_SUITE_ONLY_ERR: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("038A02020202020202020202"));
+    const MESSAGE_1_TV_SUITE_ONLY_ERR: LakeMessageBuffer =
+        LakeBuffer::new_from_array(&hex!("038A02020202020202020202"));
     const EAD_DUMMY_LABEL_TV: u16 = 0x01;
     const EAD_DUMMY_VALUE_TV: &[u8] = &hex!("cccccc");
-    const EAD_DUMMY_CRITICAL_TV: EdhocBuffer<MAX_EAD_LEN> =
-        EdhocBuffer::new_from_array(&hex!("2043cccccc"));
-    const MESSAGE_1_WITH_DUMMY_EAD_NO_VALUE_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(
+    const EAD_DUMMY_CRITICAL_TV: LakeBuffer<MAX_EAD_LEN> =
+        LakeBuffer::new_from_array(&hex!("2043cccccc"));
+    const MESSAGE_1_WITH_DUMMY_EAD_NO_VALUE_TV: LakeMessageBuffer = LakeBuffer::new_from_array(
         &hex!("0382060258208af6f430ebe18d34184017a9a11bf511c8dff8f834730b96c1b7c8dbca2fc3b63701"),
     );
-    const MESSAGE_1_WITH_DUMMY_EAD_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!(
+    const MESSAGE_1_WITH_DUMMY_EAD_TV: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!(
         "0382060258208af6f430ebe18d34184017a9a11bf511c8dff8f834730b96c1b7c8dbca2fc3b6370143cccccc"
     ));
-    const MESSAGE_1_WITH_DUMMY_CRITICAL_EAD_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!("0382060258208af6f430ebe18d34184017a9a11bf511c8dff8f834730b96c1b7c8dbca2fc3b6372043cccccc"));
-    const MESSAGE_1_WITH_TWO_EADS: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!("0382060258208af6f430ebe18d34184017a9a11bf511c8dff8f834730b96c1b7c8dbca2fc3b6370143cccccc2043cccccc"));
+    const MESSAGE_1_WITH_DUMMY_CRITICAL_EAD_TV: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!("0382060258208af6f430ebe18d34184017a9a11bf511c8dff8f834730b96c1b7c8dbca2fc3b6372043cccccc"));
+    const MESSAGE_1_WITH_TWO_EADS: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!("0382060258208af6f430ebe18d34184017a9a11bf511c8dff8f834730b96c1b7c8dbca2fc3b6370143cccccc2043cccccc"));
     const G_Y_TV: BytesP256ElemLen =
         hex!("419701d7f00a26c2dc587a36dd752549f33763c893422c8ea0f955a13a4ff5d5");
     #[allow(deprecated)]
     const C_R_TV: ConnId = ConnId::from_int_raw(0x27);
-    const MESSAGE_2_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!("582b419701d7f00a26c2dc587a36dd752549f33763c893422c8ea0f955a13a4ff5d59862a1eef9e0e7e1886fcd"));
-    const CIPHERTEXT_2_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("9862a1eef9e0e7e1886fcd"));
+    const MESSAGE_2_TV: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!("582b419701d7f00a26c2dc587a36dd752549f33763c893422c8ea0f955a13a4ff5d59862a1eef9e0e7e1886fcd"));
+    const CIPHERTEXT_2_TV: LakeMessageBuffer =
+        LakeBuffer::new_from_array(&hex!("9862a1eef9e0e7e1886fcd"));
     const H_MESSAGE_1_TV: BytesHashLen =
         hex!("ca02cabda5a8902749b42f711050bb4dbd52153e87527594b39f50cdf019888c");
     const TH_2_TV: BytesHashLen =
@@ -1322,28 +1321,27 @@ mod tests {
     const MAC_2_TV: BytesMac2 = hex!("0943305c899f5c54");
     const ID_CRED_I_TV: [u8; 4] = hex!("a104412b");
     const MAC_3_TV: BytesMac3 = hex!("623c91df41e34c2f");
-    const MESSAGE_3_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("52e562097bc417dd5919485ac7891ffd90a9fc"));
+    const MESSAGE_3_TV: LakeMessageBuffer =
+        LakeBuffer::new_from_array(&hex!("52e562097bc417dd5919485ac7891ffd90a9fc"));
     const PRK_4E3M_TV: BytesP256ElemLen =
         hex!("81cc8a298e357044e3c466bb5c0a1e507e01d49238aeba138df94635407c0ff7");
-    const MESSAGE_4_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("4828c966b7ca304f83"));
-    const PLAINTEXT_4_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!(""));
+    const MESSAGE_4_TV: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!("4828c966b7ca304f83"));
+    const PLAINTEXT_4_TV: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!(""));
     const K_4_TV: BytesCcmKeyLen = hex!("d3c77872b6eeb508911bdbd308b2e6a0");
     const IV_4_TV: BytesCcmIvLen = hex!("04ff0f44456e96e217853c3601");
     const CRED_I_TV : [u8; 107] = hex!("a2027734322d35302d33312d46462d45462d33372d33322d333908a101a5010202412b2001215820ac75e9ece3e50bfc8ed60399889522405c47bf16df96660a41298cb4307f7eb62258206e5de611388a4b8a8211334ac7d37ecb52a387d257e6db3c2a93df21ff3affc8");
     const ID_CRED_R_TV: [u8; 4] = hex!("a1044132");
     const CRED_R_TV : [u8; 95] = hex!("a2026b6578616d706c652e65647508a101a501020241322001215820bbc34960526ea4d32e940cad2a234148ddc21791a12afbcbac93622046dd44f02258204519e257236b2a0ce2023f0931f1f386ca7afda64fcde0108c224c51eabf6072");
-    const PLAINTEXT_2_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("2732480943305c899f5c54"));
+    const PLAINTEXT_2_TV: LakeMessageBuffer =
+        LakeBuffer::new_from_array(&hex!("2732480943305c899f5c54"));
     const SK_I_TV: BytesP256ElemLen =
         hex!("fb13adeb6518cee5f88417660841142e830a81fe334380a953406a1305e8706b");
     const X_TV: BytesP256ElemLen =
         hex!("368ec1f69aeb659ba37d5a8d45b21bdc0299dceaa8ef235f3ca42ce3530f9525");
     const G_R_TV: BytesP256ElemLen =
         hex!("bbc34960526ea4d32e940cad2a234148ddc21791a12afbcbac93622046dd44f0");
-    const PLAINTEXT_3_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("2b48623c91df41e34c2f"));
+    const PLAINTEXT_3_TV: LakeMessageBuffer =
+        LakeBuffer::new_from_array(&hex!("2b48623c91df41e34c2f"));
     const SALT_3E2M_TV: BytesHashLen =
         hex!("af4e103a47cb3cf32570d5c25ad27732bd8d8178e9a69d061c31a27f8e3ca926");
     const SALT_4E3M_TV: BytesHashLen =
@@ -1358,24 +1356,24 @@ mod tests {
     const OSCORE_MASTER_SALT_TV: [u8; 8] = hex!("ada24c7dbfc85eeb");
 
     // invalid test vectors, should result in a parsing error
-    const MESSAGE_1_INVALID_ARRAY_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!(
+    const MESSAGE_1_INVALID_ARRAY_TV: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!(
         "8403025820741a13d7ba048fbb615e94386aa3b61bea5b3d8f65f32620b749bee8d278efa90e"
     ));
     // This is invalid because the h'0e' byte string is a text string instead
-    const MESSAGE_1_INVALID_C_I_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!(
+    const MESSAGE_1_INVALID_C_I_TV: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!(
         "03025820741a13d7ba048fbb615e94386aa3b61bea5b3d8f65f32620b749bee8d278efa9610e"
     ));
-    const MESSAGE_1_INVALID_CIPHERSUITE_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(
-        &hex!("0381025820741a13d7ba048fbb615e94386aa3b61bea5b3d8f65f32620b749bee8d278efa90e"),
-    );
-    const MESSAGE_1_INVALID_TEXT_EPHEMERAL_KEY_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(
+    const MESSAGE_1_INVALID_CIPHERSUITE_TV: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!(
+        "0381025820741a13d7ba048fbb615e94386aa3b61bea5b3d8f65f32620b749bee8d278efa90e"
+    ));
+    const MESSAGE_1_INVALID_TEXT_EPHEMERAL_KEY_TV: LakeMessageBuffer = LakeBuffer::new_from_array(
         &hex!("0302782020616972207370656564206F66206120756E6C6164656E207377616C6C6F77200e"),
     );
-    const MESSAGE_2_INVALID_NUMBER_OF_CBOR_SEQUENCE_TV: EdhocMessageBuffer = EdhocBuffer::new_from_array(&hex!("5820419701d7f00a26c2dc587a36dd752549f33763c893422c8ea0f955a13a4ff5d54B9862a11de42a95d785386a"));
-    const PLAINTEXT_2_SURPLUS_MAP_ID_CRED_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("27a10442321048fa5efa2ebf920bf3"));
-    const PLAINTEXT_2_SURPLUS_BSTR_ID_CRED_TV: EdhocMessageBuffer =
-        EdhocBuffer::new_from_array(&hex!("27413248fa5efa2ebf920bf3"));
+    const MESSAGE_2_INVALID_NUMBER_OF_CBOR_SEQUENCE_TV: LakeMessageBuffer = LakeBuffer::new_from_array(&hex!("5820419701d7f00a26c2dc587a36dd752549f33763c893422c8ea0f955a13a4ff5d54B9862a11de42a95d785386a"));
+    const PLAINTEXT_2_SURPLUS_MAP_ID_CRED_TV: LakeMessageBuffer =
+        LakeBuffer::new_from_array(&hex!("27a10442321048fa5efa2ebf920bf3"));
+    const PLAINTEXT_2_SURPLUS_BSTR_ID_CRED_TV: LakeMessageBuffer =
+        LakeBuffer::new_from_array(&hex!("27413248fa5efa2ebf920bf3"));
 
     #[test]
     fn test_ecdh() {
@@ -1453,7 +1451,7 @@ mod tests {
         // skip the fist byte (method)
         let decoder = CBORDecoder::new(&MESSAGE_1_TV_SUITE_ONLY_ERR.as_slice()[1..]);
         let res = parse_suites_i(decoder);
-        assert_eq!(res.unwrap_err(), EDHOCError::ParsingError);
+        assert_eq!(res.unwrap_err(), LAKEError::ParsingError);
     }
 
     #[test]
@@ -1499,22 +1497,22 @@ mod tests {
     fn test_parse_message_1_invalid_traces() {
         assert_eq!(
             parse_message_1(&MESSAGE_1_INVALID_ARRAY_TV).unwrap_err(),
-            EDHOCError::ParsingError
+            LAKEError::ParsingError
         );
 
         assert_eq!(
             parse_message_1(&MESSAGE_1_INVALID_C_I_TV).unwrap_err(),
-            EDHOCError::ParsingError
+            LAKEError::ParsingError
         );
 
         assert_eq!(
             parse_message_1(&MESSAGE_1_INVALID_CIPHERSUITE_TV).unwrap_err(),
-            EDHOCError::ParsingError
+            LAKEError::ParsingError
         );
 
         assert_eq!(
             parse_message_1(&MESSAGE_1_INVALID_TEXT_EPHEMERAL_KEY_TV).unwrap_err(),
-            EDHOCError::ParsingError
+            LAKEError::ParsingError
         );
     }
 
@@ -1522,7 +1520,7 @@ mod tests {
     fn test_parse_message_2_invalid_traces() {
         assert_eq!(
             parse_message_2(&MESSAGE_2_INVALID_NUMBER_OF_CBOR_SEQUENCE_TV).unwrap_err(),
-            EDHOCError::ParsingError
+            LAKEError::ParsingError
         );
     }
 
@@ -1623,16 +1621,15 @@ mod tests {
     }
 
     #[test]
-    fn test_edhoc_kdf() {
+    fn test_lake_kdf() {
         const LEN_TV: usize = PLAINTEXT_2_LEN_TV;
 
-        let output: [u8; LEN_TV] =
-            edhoc_kdf_owned(&mut default_crypto(), &PRK_2E_TV, 0u8, &TH_2_TV);
+        let output: [u8; LEN_TV] = lake_kdf_owned(&mut default_crypto(), &PRK_2E_TV, 0u8, &TH_2_TV);
         for i in 0..KEYSTREAM_2_TV.len() {
             assert_eq!(KEYSTREAM_2_TV[i], output[i]);
         }
 
-        let output_2: [u8; MAC_LENGTH_2] = edhoc_kdf_owned(
+        let output_2: [u8; MAC_LENGTH_2] = lake_kdf_owned(
             &mut default_crypto(),
             &PRK_3E2M_TV,
             2u8,
@@ -1726,7 +1723,7 @@ mod tests {
                     &malformed,
                     None,
                 ),
-                Err(EDHOCError::ParsingError)
+                Err(LAKEError::ParsingError)
             );
         }
     }
@@ -1736,26 +1733,26 @@ mod tests {
         for malformed in malformed_bstr_messages() {
             assert_eq!(
                 decrypt_message_4(&mut default_crypto(), &PRK_4E3M_TV, &TH_4_TV, &malformed),
-                Err(EDHOCError::ParsingError)
+                Err(LAKEError::ParsingError)
             );
         }
     }
 
     /// Inputs that are not exactly one definite-length byte string, or whose payload is shorter than
     /// the AEAD tag. All must be rejected with `ParsingError` rather than panicking.
-    fn malformed_bstr_messages() -> [EdhocMessageBuffer; 9] {
+    fn malformed_bstr_messages() -> [LakeMessageBuffer; 9] {
         [
-            EdhocMessageBuffer::new(),                                  // empty
-            EdhocMessageBuffer::new_from_slice(&[0x41]).unwrap(), // declares 1 byte, none present
-            EdhocMessageBuffer::new_from_slice(&[0x58]).unwrap(), // truncated extended-length header
-            EdhocMessageBuffer::new_from_slice(&[0x58, 0x20]).unwrap(), // declares 32 bytes, none present
-            EdhocMessageBuffer::new_from_slice(&[0x59, 0x00]).unwrap(), // 16-bit length form, unsupported by the decoder
-            EdhocMessageBuffer::new_from_slice(&[0x00]).unwrap(),       // not a byte string
-            EdhocMessageBuffer::new_from_slice(&[0x40]).unwrap(), // empty bstr, shorter than tag
-            EdhocMessageBuffer::new_from_slice(&[0x41, 0x00]).unwrap(), // 1-byte bstr, shorter than tag
+            LakeMessageBuffer::new(),                                  // empty
+            LakeMessageBuffer::new_from_slice(&[0x41]).unwrap(), // declares 1 byte, none present
+            LakeMessageBuffer::new_from_slice(&[0x58]).unwrap(), // truncated extended-length header
+            LakeMessageBuffer::new_from_slice(&[0x58, 0x20]).unwrap(), // declares 32 bytes, none present
+            LakeMessageBuffer::new_from_slice(&[0x59, 0x00]).unwrap(), // 16-bit length form, unsupported by the decoder
+            LakeMessageBuffer::new_from_slice(&[0x00]).unwrap(),       // not a byte string
+            LakeMessageBuffer::new_from_slice(&[0x40]).unwrap(), // empty bstr, shorter than tag
+            LakeMessageBuffer::new_from_slice(&[0x41, 0x00]).unwrap(), // 1-byte bstr, shorter than tag
             // An otherwise valid tag-length bstr with a trailing byte: only the trailing-byte check
             // rejects it, so this catches a regression in that behaviour.
-            EdhocMessageBuffer::new_from_slice(&[0x48, 0, 0, 0, 0, 0, 0, 0, 0, 0x00]).unwrap(),
+            LakeMessageBuffer::new_from_slice(&[0x48, 0, 0, 0, 0, 0, 0, 0, 0, 0x00]).unwrap(),
         ]
     }
 
@@ -1763,7 +1760,7 @@ mod tests {
     fn test_decrypt_tag_length_payload_returns_mac_error() {
         // A payload of exactly one AEAD tag is well-formed and reaches the AEAD, which then fails
         // tag verification rather than being rejected as a parsing error.
-        let tag_only = EdhocMessageBuffer::new_from_slice(&[0x48, 0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
+        let tag_only = LakeMessageBuffer::new_from_slice(&[0x48, 0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
         assert_eq!(
             decrypt_message_3(
                 &mut default_crypto(),
@@ -1772,11 +1769,11 @@ mod tests {
                 &tag_only,
                 None
             ),
-            Err(EDHOCError::MacVerificationFailed)
+            Err(LAKEError::MacVerificationFailed)
         );
         assert_eq!(
             decrypt_message_4(&mut default_crypto(), &PRK_4E3M_TV, &TH_4_TV, &tag_only),
-            Err(EDHOCError::MacVerificationFailed)
+            Err(LAKEError::MacVerificationFailed)
         );
     }
 
@@ -1835,10 +1832,10 @@ mod tests {
     #[test]
     fn test_parse_plaintext_2_invalid_traces() {
         let ret = decode_plaintext_2(&PLAINTEXT_2_SURPLUS_MAP_ID_CRED_TV);
-        assert_eq!(ret.unwrap_err(), EDHOCError::ParsingError);
+        assert_eq!(ret.unwrap_err(), LAKEError::ParsingError);
 
         let ret = decode_plaintext_2(&PLAINTEXT_2_SURPLUS_BSTR_ID_CRED_TV);
-        assert_eq!(ret.unwrap_err(), EDHOCError::ParsingError);
+        assert_eq!(ret.unwrap_err(), LAKEError::ParsingError);
     }
 
     #[test]
@@ -1946,7 +1943,7 @@ mod tests {
 
     #[test]
     fn test_encode_parse_ciphertext_3a_extended_bstr_len() {
-        let ciphertext = EdhocMessageBuffer::new_from_slice(&[0xAA; 24]).unwrap();
+        let ciphertext = LakeMessageBuffer::new_from_slice(&[0xAA; 24]).unwrap();
 
         let encoded = encode_ciphertext_3a(ciphertext).unwrap();
 
@@ -1978,7 +1975,7 @@ mod tests {
     #[test]
     fn test_compute_prk_4e3m_psk() {
         let psk = BufferPsk::new_from_slice(&PSK_TV)
-            .map_err(|_| EDHOCError::ParsingError)
+            .map_err(|_| LAKEError::ParsingError)
             .unwrap();
         let prk_4e3m = compute_prk_4e3m_psk(&mut default_crypto(), &SALT_4E3M_PSK_TV, &psk);
         assert_eq!(prk_4e3m, PRK_4E3M_PSK_TV);
@@ -2085,7 +2082,7 @@ mod tests {
         ead.try_push(ead_item).unwrap();
 
         let res = encode_message_1(method_tv, &SUITES_I_TV, &G_X_TV, c_i_tv, &ead);
-        assert_eq!(res.unwrap_err(), EDHOCError::EadTooLongError);
+        assert_eq!(res.unwrap_err(), LAKEError::EadTooLongError);
     }
 
     #[test]
@@ -2149,7 +2146,7 @@ mod tests {
     #[test]
     fn test_compute_prk_out() {
         let prk_out: BytesHashLen =
-            edhoc_kdf_owned(&mut default_crypto(), &PRK_4E3M_TV, 7u8, &TH_4_TV);
+            lake_kdf_owned(&mut default_crypto(), &PRK_4E3M_TV, 7u8, &TH_4_TV);
 
         assert_eq!(prk_out, PRK_OUT_TV);
     }
@@ -2157,21 +2154,21 @@ mod tests {
     #[test]
     fn test_compute_prk_out_psk() {
         let prk_out: BytesHashLen =
-            edhoc_kdf_owned(&mut default_crypto(), &PRK_4E3M_PSK_TV, 7u8, &TH_4_PSK_TV);
+            lake_kdf_owned(&mut default_crypto(), &PRK_4E3M_PSK_TV, 7u8, &TH_4_PSK_TV);
 
         assert_eq!(prk_out, PRK_OUT_PSK_TV);
     }
 
     #[test]
     fn test_compute_prk_exporter() {
-        let prk_exporter = edhoc_kdf_owned(&mut default_crypto(), &PRK_OUT_TV, 10u8, &[]);
+        let prk_exporter = lake_kdf_owned(&mut default_crypto(), &PRK_OUT_TV, 10u8, &[]);
 
         assert_eq!(prk_exporter, PRK_EXPORTER_TV);
     }
 
     #[test]
     fn test_compute_prk_exporter_psk() {
-        let prk_exporter = edhoc_kdf_owned(&mut default_crypto(), &PRK_OUT_PSK_TV, 10u8, &[]);
+        let prk_exporter = lake_kdf_owned(&mut default_crypto(), &PRK_OUT_PSK_TV, 10u8, &[]);
 
         assert_eq!(prk_exporter, PRK_EXPORTER_PSK_TV);
     }
@@ -2180,7 +2177,7 @@ mod tests {
     fn test_compute_oscore_master_secret_salt() {
         let mut oscore_master_secret_buf = Vec::new();
         oscore_master_secret_buf.resize(OSCORE_MASTER_SECRET_TV.len(), 0xff);
-        edhoc_kdf(
+        lake_kdf(
             &mut default_crypto(),
             &PRK_EXPORTER_TV,
             0u8,
@@ -2191,7 +2188,7 @@ mod tests {
 
         let mut oscore_master_salt_buf = Vec::new();
         oscore_master_salt_buf.resize(OSCORE_MASTER_SALT_TV.len(), 0x00);
-        edhoc_kdf(
+        lake_kdf(
             &mut default_crypto(),
             &PRK_EXPORTER_TV,
             1u8,

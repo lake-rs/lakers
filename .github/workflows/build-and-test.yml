@@ -60,7 +60,7 @@ jobs:
       run: RUST_BACKTRACE=1 cargo test -p lakers -p lakers-crypto -p lakers-shared ${{ matrix.ead == 'ead-authz' && '-p lakers-ead-authz' || '' }}  --no-default-features --features="${{ matrix.crypto_backend }}, test-${{ matrix.ead }}${{ matrix.buffers == 'large-buffers' && ', lakers-shared/large_buffers' || '' }}" --no-fail-fast -- --test-threads 1
 
 
-  build-edhoc-package:
+  build-lake-package:
     needs: unit-tests
     runs-on: ubuntu-24.04
 
@@ -287,7 +287,7 @@ jobs:
   release:
     runs-on: ubuntu-24.04
     needs: [
-      build-edhoc-package, build-lakers-c,
+      build-lake-package, build-lakers-c,
       generate-fstar,
       build-example-for-cortex-m4, build-coap-example, build-lakers-c-example,
       run-example-on-qemu,

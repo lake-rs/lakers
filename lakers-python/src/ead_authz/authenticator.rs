@@ -29,7 +29,7 @@ impl PyAuthzAutenticator {
         ead_1: EADItem,
         message_1: Vec<u8>,
     ) -> PyResult<(Bound<'a, PyString>, Bound<'a, PyBytes>)> {
-        let message_1 = EdhocBuffer::new_from_slice(message_1.as_slice())?;
+        let message_1 = LakeBuffer::new_from_slice(message_1.as_slice())?;
         let (state, loc_w, voucher_request) =
             self.authenticator.process_ead_1(&ead_1, &message_1)?;
         self.authenticator_wait = state;
@@ -41,7 +41,7 @@ impl PyAuthzAutenticator {
     }
 
     pub fn prepare_ead_2(&self, voucher_response: Vec<u8>) -> PyResult<EADItem> {
-        let voucher_response = EdhocMessageBuffer::new_from_slice(voucher_response.as_slice())?;
+        let voucher_response = LakeMessageBuffer::new_from_slice(voucher_response.as_slice())?;
         Ok(self.authenticator_wait.prepare_ead_2(&voucher_response)?)
     }
 }

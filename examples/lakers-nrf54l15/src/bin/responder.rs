@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 
-//! EDHOC Responder on the nRF54L15.
+//! LAKE Responder on the nRF54L15.
 
 use defmt::info;
 use lakers::*;
@@ -25,7 +25,7 @@ fn main() -> ! {
         let cred_r = Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
         // Each handshake gets its own hardware `Crypto`; the previous one was dropped at the end of
         // the last iteration, so only one is ever alive on the single CRACEN.
-        let responder = EdhocResponder::new(
+        let responder = LakeResponder::new(
             &mut crypto,
             ResponderIdentity::StatStat {
                 r: R.try_into().unwrap(),
@@ -33,10 +33,10 @@ fn main() -> ! {
             cred_r,
         );
 
-        let message_1: EdhocMessageBuffer = pckt.payload().try_into().expect("wrong length");
+        let message_1: LakeMessageBuffer = pckt.payload().try_into().expect("wrong length");
 
         let Ok((responder, _c_i, _ead_1)) = responder.process_message_1(&message_1) else {
-            info!("edhoc error at process_message_1");
+            info!("lake error at process_message_1");
             continue;
         };
 
@@ -58,16 +58,16 @@ fn main() -> ! {
         info!("received message_3");
 
         // the packet was filtered on c_r, so its header byte matches by construction
-        let message_3: EdhocMessageBuffer = pckt_3.payload().try_into().expect("wrong length");
+        let message_3: LakeMessageBuffer = pckt_3.payload().try_into().expect("wrong length");
         let Ok((responder, id_cred_i, _ead_3)) = responder.parse_message_3(&message_3) else {
-            info!("edhoc error at parse_message_3");
+            info!("lake error at parse_message_3");
             continue;
         };
 
         let cred_i = Credential::parse_ccs(CRED_I.try_into().unwrap()).unwrap();
         let valid_cred_i = credential_check_or_fetch(Some(cred_i), id_cred_i).unwrap();
         let Ok((responder, r_prk_out)) = responder.verify_message_3(valid_cred_i) else {
-            info!("edhoc error at verify_message_3");
+            info!("lake error at verify_message_3");
             continue;
         };
 

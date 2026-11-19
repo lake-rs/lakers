@@ -44,8 +44,8 @@ def test_authenticator_and_server():
     assert type(voucher_response) == bytes
 
 def test_handshake_with_authz():
-    initiator = lakers.EdhocInitiator()
-    responder = lakers.EdhocResponder(CRED_V, V)
+    initiator = lakers.LakeInitiator()
+    responder = lakers.LakeResponder(CRED_V, V)
 
     device = lakers.AuthzDevice(
         ID_U,

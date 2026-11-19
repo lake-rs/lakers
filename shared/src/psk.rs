@@ -1,8 +1,8 @@
-use crate::{EdhocBuffer, EdhocBufferError, MAX_PSK_LEN, MIN_PSK_LEN};
+use crate::{LakeBuffer, LakeBufferError, MAX_PSK_LEN, MIN_PSK_LEN};
 
-/// A pre-shared key for the EDHOC PSK method.
+/// A pre-shared key for the LAKE PSK method.
 ///
-/// This wraps an [`EdhocBuffer`] rather than being an alias for one, so that the key material is
+/// This wraps an [`LakeBuffer`] rather than being an alias for one, so that the key material is
 /// covered by two guarantees that a bare buffer cannot give:
 ///
 /// * **It is at least [`MIN_PSK_LEN`] bytes long.** The only way to obtain a value of this type is
@@ -23,14 +23,14 @@ use crate::{EdhocBuffer, EdhocBufferError, MAX_PSK_LEN, MIN_PSK_LEN};
 #[derive(Clone)]
 #[repr(C)]
 pub struct BufferPsk {
-    inner: EdhocBuffer<MAX_PSK_LEN>,
+    inner: LakeBuffer<MAX_PSK_LEN>,
 }
 impl BufferPsk {
-    pub const fn new_from_slice(slice: &[u8]) -> Result<Self, EdhocBufferError> {
+    pub const fn new_from_slice(slice: &[u8]) -> Result<Self, LakeBufferError> {
         if slice.len() < MIN_PSK_LEN {
-            return Err(EdhocBufferError::SliceTooShort);
+            return Err(LakeBufferError::SliceTooShort);
         }
-        match EdhocBuffer::new_from_slice(slice) {
+        match LakeBuffer::new_from_slice(slice) {
             Ok(inner) => Ok(Self { inner }),
             Err(e) => Err(e),
         }

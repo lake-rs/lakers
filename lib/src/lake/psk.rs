@@ -4,7 +4,7 @@ use super::{
     decode_plaintext_3_psk, decrypt_message_3, encode_ciphertext_3a, encode_plaintext_2,
     encode_plaintext_3, encrypt_decrypt_ciphertext_3a, encrypt_message_3, parse_message_3,
     BufferCiphertext3, BufferMessage3, BufferPlaintext2, BytesHashLen, ConnId, Credential,
-    CredentialKey, CredentialTransfer, DecodedMessage2, EDHOCError, EadItems, IdCred,
+    CredentialKey, CredentialTransfer, DecodedMessage2, EadItems, IdCred, LAKEError,
     ParsedMessage2Details, ParsedMessage3, PreparedMessage2, PreparedMessage3, ProcessedM2,
     ProcessedM2MethodSpecifics, ProcessingM2, ProcessingM2MethodSpecifics, ProcessingM3,
     ProcessingM3MethodSpecifics, Th4Input, VerifiedMessage2, VerifiedMessage3, WaitM3,
@@ -19,7 +19,7 @@ pub(crate) fn r_prepare_message_2_psk(
     ead_2: &EadItems,
     th_2: &BytesHashLen,
     prk_2e: &BytesHashLen,
-) -> Result<PreparedMessage2, EDHOCError> {
+) -> Result<PreparedMessage2, LAKEError> {
     // compute ciphertext_2
     let plaintext_2 = encode_plaintext_2(c_r, None, &ead_2)?;
 
@@ -45,16 +45,16 @@ pub(crate) fn r_parse_message_3_psk_with_cred_resolver<F>(
     message_3: &BufferMessage3,
     cred_r: &Credential,
     resolve_cred_i: F,
-) -> Result<ParsedMessage3, EDHOCError>
+) -> Result<ParsedMessage3, LAKEError>
 where
-    F: Fn(&IdCred) -> Result<Credential, EDHOCError>,
+    F: Fn(&IdCred) -> Result<Credential, LAKEError>,
 {
     let res = parse_message_3(message_3)?;
     let plaintext_3a = encrypt_decrypt_ciphertext_3a(crypto, &state.prk_3e2m, &state.th_3, &res);
     let mut decoder = CBORDecoder::new(plaintext_3a.as_slice());
     let id_cred_psk_encoded = decoder
         .any_as_encoded()
-        .map_err(|_| EDHOCError::ParsingError)?;
+        .map_err(|_| LAKEError::ParsingError)?;
     let id_cred_psk = IdCred::from_encoded_value(id_cred_psk_encoded)?;
     // ID_CRED_PSK must merely *identify* a PSK we already hold; it may never carry the credential
     // by value. Such a message would put the shared secret itself on the wire, and accepting it
@@ -63,23 +63,23 @@ where
     // problem; `IdCred::get_ccs` enforces the same rule for direct callers of the credential
     // lookup helpers.
     if !id_cred_psk.reference_only()? {
-        return Err(EDHOCError::WrongCredentialType);
+        return Err(LAKEError::WrongCredentialType);
     }
     let ciphertext_3b_bytes = decoder
         .remaining_buffer()
-        .map_err(|_| EDHOCError::ParsingError)?;
+        .map_err(|_| LAKEError::ParsingError)?;
 
     let cred_i = resolve_cred_i(&id_cred_psk)?;
 
     let mut ciphertext_3b = BufferCiphertext3::new();
     ciphertext_3b
         .fill_with_slice(ciphertext_3b_bytes)
-        .map_err(|_| EDHOCError::ParsingError)?;
+        .map_err(|_| LAKEError::ParsingError)?;
 
     let salt_4e3m = compute_salt_4e3m(crypto, &state.prk_3e2m, &state.th_3);
     let prk_4e3m = match &cred_i.key {
         CredentialKey::Symmetric(psk) => compute_prk_4e3m_psk(crypto, &salt_4e3m, psk),
-        _ => return Err(EDHOCError::UnsupportedMethod),
+        _ => return Err(LAKEError::UnsupportedMethod),
     };
 
     let plaintext_3b = decrypt_message_3(
@@ -117,11 +117,11 @@ pub(crate) fn r_verify_message_3_psk(
     id_cred_psk: &IdCred,
     cred_r: &Credential,
     salt_4e3m: &BytesHashLen,
-) -> Result<VerifiedMessage3, EDHOCError> {
+) -> Result<VerifiedMessage3, LAKEError> {
     let prk_4e3m = match valid_cred_i.key {
         CredentialKey::Symmetric(psk) => compute_prk_4e3m_psk(crypto, &salt_4e3m, &psk),
         // FIXME: find a good definition of error
-        _ => return Err(EDHOCError::UnsupportedMethod),
+        _ => return Err(LAKEError::UnsupportedMethod),
     };
 
     let th_4 = compute_th_4(
@@ -139,7 +139,7 @@ pub(crate) fn r_verify_message_3_psk(
 
 pub(crate) fn i_parse_message_2_psk(
     plaintext_2: &BufferPlaintext2,
-) -> Result<DecodedMessage2, EDHOCError> {
+) -> Result<DecodedMessage2, LAKEError> {
     let (c_r, ead_2) = decode_plaintext_2_psk(plaintext_2)?;
 
     Ok(DecodedMessage2 {
@@ -154,7 +154,7 @@ pub(crate) fn i_verify_message_2_psk(
     state: &ProcessingM2,
     crypto: &mut impl CryptoTrait,
     valid_cred_r: Credential,
-) -> Result<VerifiedMessage2, EDHOCError> {
+) -> Result<VerifiedMessage2, LAKEError> {
     let prk_3e2m = state.prk_2e;
 
     let th_3 = compute_th_3(crypto, &state.th_2, &state.plaintext_2, None);
@@ -164,7 +164,7 @@ pub(crate) fn i_verify_message_2_psk(
     let psk = match &valid_cred_r.key {
         CredentialKey::Symmetric(psk) => psk,
         // FIXME: find a good definition of error
-        _ => return Err(EDHOCError::UnsupportedMethod),
+        _ => return Err(LAKEError::UnsupportedMethod),
     };
 
     let prk_4e3m = compute_prk_4e3m_psk(crypto, &salt_4e3m, &psk);
@@ -185,7 +185,7 @@ pub(crate) fn i_prepare_message_3_psk(
     cred_i: Credential,
     cred_transfer: CredentialTransfer,
     ead_3: &EadItems,
-) -> Result<PreparedMessage3, EDHOCError> {
+) -> Result<PreparedMessage3, LAKEError> {
     let id_cred_psk = match cred_transfer {
         CredentialTransfer::ByValue => cred_i.by_value()?,
         CredentialTransfer::ByReference => cred_i.by_kid()?,
@@ -194,7 +194,7 @@ pub(crate) fn i_prepare_message_3_psk(
     let cred_r = match &state.method_specifics {
         ProcessedM2MethodSpecifics::Psk { cred_r } => cred_r,
         // FIXME: find a good definition of error
-        _ => return Err(EDHOCError::UnsupportedMethod),
+        _ => return Err(LAKEError::UnsupportedMethod),
     };
 
     let mut message_3: BufferMessage3 = BufferMessage3::new();
@@ -216,17 +216,17 @@ pub(crate) fn i_prepare_message_3_psk(
     let mut ct_3a: BufferCiphertext3 = BufferCiphertext3::new();
     ct_3a
         .extend_from_slice(pt_3a)
-        .map_err(|_| EDHOCError::EncodingError)?;
+        .map_err(|_| LAKEError::EncodingError)?;
     ct_3a
         .extend_from_slice(ciphertext_3b.as_slice())
-        .map_err(|_| EDHOCError::EncodingError)?;
+        .map_err(|_| LAKEError::EncodingError)?;
     let ciphertext_3a = encrypt_decrypt_ciphertext_3a(crypto, &state.prk_3e2m, &state.th_3, &ct_3a);
     // CBOR encoding of ct_3a
     let encoded_ciphertext_3a = encode_ciphertext_3a(ciphertext_3a)?;
     //compute message_3
     message_3
         .extend_from_slice(encoded_ciphertext_3a.as_slice())
-        .map_err(|_| EDHOCError::EncodingError)?;
+        .map_err(|_| LAKEError::EncodingError)?;
     let th_4 = compute_th_4(
         crypto,
         &state.th_3,
