@@ -28,6 +28,7 @@ cfg_if::cfg_if!(
         pub struct Nrf54l15ExtConfig;
         impl embedded_cal_software_demo::ExtenderConfig for Nrf54l15ExtConfig {
             const IMPLEMENT_SHA2SHORT: bool = true;
+            const IMPLEMENT_SHA2SHORT_PLUMBING: bool = false;
             type Base = embedded_cal_nrf54l15::Nrf54l15Cal;
         }
         pub type Crypto = lakers_crypto_embedded_cal::Crypto<
@@ -37,6 +38,7 @@ cfg_if::cfg_if!(
         pub struct Stm32wba55ExtConfig;
         impl embedded_cal_software_demo::ExtenderConfig for Stm32wba55ExtConfig {
             const IMPLEMENT_SHA2SHORT: bool = true;
+            const IMPLEMENT_SHA2SHORT_PLUMBING: bool = false;
             type Base = embedded_cal_stm32wba55::Stm32wba55Cal;
         }
         pub type Crypto = lakers_crypto_embedded_cal::Crypto<
