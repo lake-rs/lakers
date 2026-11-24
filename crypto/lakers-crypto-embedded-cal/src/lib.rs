@@ -9,15 +9,16 @@
 
 use embedded_cal::accessor::{
     AeadAlgorithmOf, DhAlgorithmOf, DhSecretKeyOf, HashAlgorithmOf, HashProviderOf, HashStateOf,
-    HmacAlgorithmOf,
+    HmacAlgorithmOf, SignAlgorithmOf, SignSecretKeyOf,
 };
 use embedded_cal::{
     AeadAlgorithm, AeadProvider, Cal, DhAlgorithm, DhProvider, HashAlgorithm, HashProvider,
-    HkdfProvider, HmacAlgorithm,
+    HkdfProvider, HmacAlgorithm, SignAlgorithm, SignProvider,
 };
 use lakers_shared::{
     BufferPsk, BytesCcmIvLen, BytesCcmKeyLen, BytesHashLen, BytesP256ElemLen, BytesSignature,
     CcmTagLen, Crypto as CryptoTrait, LAKEError, LAKESuite, LakeBuffer, MAX_SUITES_LEN,
+    P256_ELEM_LEN,
 };
 
 /// A [`lakers_shared::Crypto`] implementation that forwards to an embedded-cal [`Cal`] instance.
@@ -33,6 +34,21 @@ impl<C> Crypto<C> {
     /// Wraps an embedded-cal [`Cal`](embedded_cal::Cal) instance as a lakers crypto backend.
     pub const fn new(cal: C) -> Self {
         Self { cal }
+    }
+}
+
+impl<C: Cal> Crypto<C> {
+    /// Imports a raw P-256 private key as a [`CryptoTrait::SigningKey`].
+    pub fn import_signing_key(
+        &mut self,
+        private_key: &BytesP256ElemLen,
+    ) -> Result<SignSecretKeyOf<C>, LAKEError> {
+        let alg = es256_algorithm::<C>()?;
+        self.cal
+            .sign()
+            .import_secretkey_bytes(alg, private_key)
+            .map(Into::into)
+            .map_err(|_| LAKEError::SigningFailed)
     }
 }
 
@@ -212,24 +228,58 @@ impl<C: Cal + rand_core::TryCryptoRng> CryptoTrait for Crypto<C> {
         (private_key, public_key)
     }
 
-    type SigningKey = BytesP256ElemLen;
+    type SigningKey = SignSecretKeyOf<C>;
 
     fn p256_ecdsa_sign(
         &mut self,
-        _signing_key: &Self::SigningKey,
-        _message: &[u8],
+        signing_key: &Self::SigningKey,
+        message: &[u8],
     ) -> Result<BytesSignature, LAKEError> {
-        Err(LAKEError::UnsupportedCipherSuite)
+        let sign = self.cal.sign();
+        let signature = sign.sign(signing_key, message);
+        let signature_bytes = sign
+            .export_signature_bytes(&signature)
+            .as_ref()
+            .try_into()
+            .map_err(|_| LAKEError::SigningFailed);
+        signature_bytes
     }
 
     fn p256_ecdsa_verify(
         &mut self,
-        _public_key_x: &BytesP256ElemLen,
-        _message: &[u8],
-        _signature: &BytesSignature,
+        public_key_x: &BytesP256ElemLen,
+        message: &[u8],
+        signature: &BytesSignature,
     ) -> Result<bool, LAKEError> {
-        Err(LAKEError::UnsupportedCipherSuite)
+        let alg = es256_algorithm::<C>()?;
+        let sign = self.cal.sign();
+        let Ok(signature) = sign.import_signature_bytes(alg.clone(), signature) else {
+            return Ok(false);
+        };
+
+        // the compact representation of the credential omits the y coordinate, so both points
+        // with this x are tried; both belong to the same key holder (private keys d and n-d)
+        for sign_byte in [0x02, 0x03] {
+            let mut public_key_compressed = [0; P256_ELEM_LEN + 1];
+            public_key_compressed[0] = sign_byte;
+            public_key_compressed[1..].copy_from_slice(public_key_x);
+
+            let Ok(public_key) = sign.import_publickey_bytes(alg.clone(), &public_key_compressed)
+            else {
+                continue;
+            };
+
+            if sign.verify(&public_key, message, &signature).is_ok() {
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
     }
+}
+
+fn es256_algorithm<C: Cal>() -> Result<SignAlgorithmOf<C>, LAKEError> {
+    SignAlgorithmOf::<C>::from_cose_number(-7).ok_or(LAKEError::UnsupportedCipherSuite)
 }
 
 fn aes_ccm_algorithm<C: Cal, Tag: CcmTagLen>() -> AeadAlgorithmOf<C> {
@@ -271,3 +321,41 @@ impl<C: Cal> digest::FixedOutput for EmbeddedCalHash<'_, C> {
 }
 
 impl<C: Cal> digest::HashMarker for EmbeddedCalHash<'_, C> {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use embedded_cal::empty::EmptyCal;
+    use embedded_cal_rustcrypto::Standalone;
+    use lakers_shared::test_helper::{
+        test_ecdsa_known_answer, test_ecdsa_rejects_bad_signature, test_ecdsa_roundtrip,
+        RFC6979_PRIVATE_KEY,
+    };
+
+    #[test]
+    fn ecdsa() {
+        let mut crypto = Crypto::new(Standalone::standalone());
+        let signing_key = crypto.import_signing_key(&RFC6979_PRIVATE_KEY).unwrap();
+        test_ecdsa_known_answer(&mut crypto);
+        test_ecdsa_roundtrip(&mut crypto, &signing_key);
+        test_ecdsa_rejects_bad_signature(&mut crypto);
+    }
+
+    #[test]
+    fn invalid_signing_key_is_rejected() {
+        let mut crypto = Crypto::new(Standalone::standalone());
+        assert!(matches!(
+            crypto.import_signing_key(&[0; P256_ELEM_LEN]),
+            Err(LAKEError::SigningFailed)
+        ));
+    }
+
+    #[test]
+    fn missing_es256_is_an_error() {
+        let mut crypto = Crypto::new(EmptyCal);
+        assert!(matches!(
+            crypto.import_signing_key(&RFC6979_PRIVATE_KEY),
+            Err(LAKEError::UnsupportedCipherSuite)
+        ));
+    }
+}
