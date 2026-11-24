@@ -86,6 +86,19 @@ fn main() -> ! {
     test_p256_keys();
     info!("Test test_p256_keys passed.");
 
+    #[cfg(feature = "crypto-cryptocell310")]
+    {
+        use lakers::test_helper::{
+            test_ecdsa_known_answer, test_ecdsa_rejects_bad_signature, test_ecdsa_roundtrip,
+            RFC6979_PRIVATE_KEY,
+        };
+
+        test_ecdsa_known_answer(&mut default_crypto());
+        test_ecdsa_roundtrip(&mut default_crypto(), &RFC6979_PRIVATE_KEY);
+        test_ecdsa_rejects_bad_signature(&mut default_crypto());
+        info!("Test test_ecdsa passed.");
+    }
+
     fn test_prepare_message_1() {
         let initiator = LakeInitiator::new(
             lakers_crypto::default_crypto(),

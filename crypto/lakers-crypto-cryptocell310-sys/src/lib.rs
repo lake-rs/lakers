@@ -18,6 +18,20 @@ fn convert_array(input: &[u32]) -> [u8; SHA256_DIGEST_LEN] {
     output
 }
 
+fn init_library() -> bool {
+    unsafe { SaSi_LibInit() == SA_SilibRetCode_t_SA_SILIB_RET_OK }
+}
+
+// CryptoCell can only read RAM through DMA, but the caller's message may be in flash
+fn copy_to_ram(message: &[u8]) -> Result<[u8; MAX_BUFFER_LEN], LAKEError> {
+    let mut buffer = [0u8; MAX_BUFFER_LEN];
+    buffer
+        .get_mut(..message.len())
+        .ok_or(LAKEError::EncodingError)?
+        .copy_from_slice(message);
+    Ok(buffer)
+}
+
 #[derive(Debug)]
 pub struct Crypto;
 
@@ -323,19 +337,132 @@ impl CryptoTrait for Crypto {
 
     fn p256_ecdsa_sign(
         &mut self,
-        _signing_key: &Self::SigningKey,
-        _message: &[u8],
+        signing_key: &Self::SigningKey,
+        message: &[u8],
     ) -> Result<BytesSignature, LAKEError> {
-        Err(LAKEError::UnsupportedCipherSuite)
+        let mut message_in_ram = copy_to_ram(message)?;
+        if !init_library() {
+            return Err(LAKEError::SigningFailed);
+        }
+
+        let mut rnd_context = CRYS_RND_State_t::default();
+        let mut rnd_work_buffer = CRYS_RND_WorkBuff_t::default();
+        let ret = unsafe {
+            CRYS_RndInit(
+                &mut rnd_context as *mut _ as *mut c_void,
+                &mut rnd_work_buffer as *mut _,
+            )
+        };
+        if ret != CRYS_OK {
+            return Err(LAKEError::SigningFailed);
+        }
+
+        let domain =
+            unsafe { CRYS_ECPKI_GetEcDomain(CRYS_ECPKI_DomainID_t_CRYS_ECPKI_DomainID_secp256r1) };
+
+        let mut private_key_cc310: CRYS_ECPKI_UserPrivKey_t = Default::default();
+        let ret = unsafe {
+            CRYS_ECPKI_BuildPrivKey(
+                domain,
+                signing_key.as_ptr(),
+                P256_ELEM_LEN as u32,
+                &mut private_key_cc310,
+            )
+        };
+        if ret != CRYS_OK {
+            return Err(LAKEError::SigningFailed);
+        }
+
+        let mut sign_context: CRYS_ECDSA_SignUserContext_t = Default::default();
+        let mut signature: BytesSignature = [0x0u8; SIGNATURE_LENGTH];
+        let mut signature_len: u32 = SIGNATURE_LENGTH as u32;
+        let ret = unsafe {
+            CRYS_ECDSA_Sign(
+                &mut rnd_context as *mut _ as *mut c_void,
+                Some(CRYS_RND_GenerateVector),
+                &mut sign_context,
+                &mut private_key_cc310,
+                CRYS_ECPKI_HASH_OpMode_t_CRYS_ECPKI_HASH_SHA256_mode,
+                message_in_ram.as_mut_ptr(),
+                message.len() as u32,
+                signature.as_mut_ptr(),
+                &mut signature_len,
+            )
+        };
+        if ret != CRYS_OK || signature_len as usize != SIGNATURE_LENGTH {
+            return Err(LAKEError::SigningFailed);
+        }
+
+        Ok(signature)
     }
 
     fn p256_ecdsa_verify(
         &mut self,
-        _public_key_x: &BytesP256ElemLen,
-        _message: &[u8],
-        _signature: &BytesSignature,
+        public_key_x: &BytesP256ElemLen,
+        message: &[u8],
+        signature: &BytesSignature,
     ) -> Result<bool, LAKEError> {
-        Err(LAKEError::UnsupportedCipherSuite)
+        let mut message_in_ram = copy_to_ram(message)?;
+        let mut signature_in_ram = *signature;
+        if !init_library() {
+            return Err(LAKEError::SignatureVerificationFailed);
+        }
+
+        let domain =
+            unsafe { CRYS_ECPKI_GetEcDomain(CRYS_ECPKI_DomainID_t_CRYS_ECPKI_DomainID_secp256r1) };
+        let mut hardware_failed = false;
+
+        // the compact representation of the credential omits the y coordinate, so both points
+        // with this x are tried; both belong to the same key holder (private keys d and n-d)
+        for sign_byte in [0x02u8, 0x03u8] {
+            let mut public_key_compressed = [0x0u8; P256_ELEM_LEN + 1];
+            public_key_compressed[0] = sign_byte;
+            public_key_compressed[1..].copy_from_slice(&public_key_x[..]);
+
+            let mut public_key_cc310: CRYS_ECPKI_UserPublKey_t = Default::default();
+            let ret = unsafe {
+                _DX_ECPKI_BuildPublKey(
+                    domain,
+                    public_key_compressed.as_mut_ptr(),
+                    (P256_ELEM_LEN + 1) as u32,
+                    EC_PublKeyCheckMode_t_CheckPointersAndSizesOnly,
+                    &mut public_key_cc310,
+                    core::ptr::null_mut(),
+                )
+            };
+            match ret {
+                CRYS_OK => {}
+                CRYS_ECPKI_BUILD_KEY_INVALID_PUBL_KEY_DATA_ERROR => continue,
+                _ => {
+                    hardware_failed = true;
+                    continue;
+                }
+            }
+
+            let mut verify_context: CRYS_ECDSA_VerifyUserContext_t = Default::default();
+            let ret = unsafe {
+                CRYS_ECDSA_Verify(
+                    &mut verify_context,
+                    &mut public_key_cc310,
+                    CRYS_ECPKI_HASH_OpMode_t_CRYS_ECPKI_HASH_SHA256_mode,
+                    signature_in_ram.as_mut_ptr(),
+                    SIGNATURE_LENGTH as u32,
+                    message_in_ram.as_mut_ptr(),
+                    message.len() as u32,
+                )
+            };
+            match ret {
+                CRYS_OK => return Ok(true),
+                CRYS_ECDSA_VERIFY_INCONSISTENT_VERIFY_ERROR => {}
+                _ => hardware_failed = true,
+            }
+        }
+
+        if hardware_failed {
+            Err(LAKEError::SignatureVerificationFailed)
+        } else {
+            Ok(false)
+        }
     }
 }
 
@@ -408,7 +535,8 @@ impl digest::HashMarker for HashInProcessSha256 {}
 mod tests {
     use super::*;
     use lakers_shared::test_helper::{
-        test_aes_ccm_roundtrip, test_aes_ccm_tag_16, test_aes_ccm_tag_8,
+        test_aes_ccm_roundtrip, test_aes_ccm_tag_16, test_aes_ccm_tag_8, test_ecdsa_known_answer,
+        test_ecdsa_rejects_bad_signature, test_ecdsa_roundtrip, RFC6979_PRIVATE_KEY,
     };
 
     #[test]
@@ -418,5 +546,12 @@ mod tests {
 
         test_aes_ccm_tag_8::<Crypto>(&mut Crypto);
         test_aes_ccm_tag_16::<Crypto>(&mut Crypto);
+    }
+
+    #[test]
+    fn test_cryptocell_ecdsa() {
+        test_ecdsa_known_answer(&mut Crypto);
+        test_ecdsa_roundtrip(&mut Crypto, &RFC6979_PRIVATE_KEY);
+        test_ecdsa_rejects_bad_signature(&mut Crypto);
     }
 }
