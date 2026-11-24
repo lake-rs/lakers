@@ -454,6 +454,8 @@ pub enum LAKEError {
     /// See also
     /// <https://datatracker.ietf.org/doc/html/draft-ietf-lake-authz#name-edhoc-error-access-denied>
     AccessDenied,
+    SigningFailed,
+    SignatureVerificationFailed,
 }
 
 impl LAKEError {
@@ -487,6 +489,8 @@ impl LAKEError {
             EadTooLongError => ErrCode::UNSPECIFIED,
             EADUnprocessable => ErrCode::UNSPECIFIED,
             AccessDenied => ErrCode::ACCESS_DENIED,
+            SigningFailed => ErrCode::UNSPECIFIED,
+            SignatureVerificationFailed => ErrCode::UNSPECIFIED,
         }
     }
 }

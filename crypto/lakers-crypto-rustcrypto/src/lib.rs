@@ -2,7 +2,7 @@
 
 use lakers_shared::CcmTagLen;
 use lakers_shared::{
-    BufferPsk, BytesCcmIvLen, BytesCcmKeyLen, BytesHashLen, BytesP256ElemLen,
+    BufferPsk, BytesCcmIvLen, BytesCcmKeyLen, BytesHashLen, BytesP256ElemLen, BytesSignature,
     Crypto as CryptoTrait, LAKEError, LAKESuite, LakeBuffer, MAX_SUITES_LEN,
 };
 
@@ -195,6 +195,25 @@ impl<Rng: rand_core::RngCore + rand_core::CryptoRng> CryptoTrait for Crypto<Rng>
         let private_key = secret.to_bytes();
 
         (private_key.into(), public_key.into())
+    }
+
+    type SigningKey = BytesP256ElemLen;
+
+    fn p256_ecdsa_sign(
+        &mut self,
+        _signing_key: &Self::SigningKey,
+        _message: &[u8],
+    ) -> Result<BytesSignature, LAKEError> {
+        Err(LAKEError::UnsupportedCipherSuite)
+    }
+
+    fn p256_ecdsa_verify(
+        &mut self,
+        _public_key_x: &BytesP256ElemLen,
+        _message: &[u8],
+        _signature: &BytesSignature,
+    ) -> Result<bool, LAKEError> {
+        Err(LAKEError::UnsupportedCipherSuite)
     }
 }
 

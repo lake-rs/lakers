@@ -318,6 +318,25 @@ impl CryptoTrait for Crypto {
 
         (private_key, public_key)
     }
+
+    type SigningKey = BytesP256ElemLen;
+
+    fn p256_ecdsa_sign(
+        &mut self,
+        _signing_key: &Self::SigningKey,
+        _message: &[u8],
+    ) -> Result<BytesSignature, LAKEError> {
+        Err(LAKEError::UnsupportedCipherSuite)
+    }
+
+    fn p256_ecdsa_verify(
+        &mut self,
+        _public_key_x: &BytesP256ElemLen,
+        _message: &[u8],
+        _signature: &BytesSignature,
+    ) -> Result<bool, LAKEError> {
+        Err(LAKEError::UnsupportedCipherSuite)
+    }
 }
 
 impl Crypto {
