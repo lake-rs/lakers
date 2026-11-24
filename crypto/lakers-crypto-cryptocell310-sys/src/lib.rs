@@ -100,7 +100,7 @@ impl CryptoTrait for Crypto {
         let mut output = LakeBuffer::new();
         let mut tag: CRYS_AESCCM_Mac_Res_t = Default::default();
         let mut aesccm_key: CRYS_AESCCM_Key_t = Default::default();
-        let mut aesccm_ad = [0x00u8; ENC_STRUCTURE_LEN];
+        let mut aesccm_ad = [0x00u8; MAX_BUFFER_LEN];
 
         aesccm_key[0..AES_CCM_KEY_LEN].copy_from_slice(&key[..]);
         aesccm_ad[0..ad.len()].copy_from_slice(&ad[..]);
