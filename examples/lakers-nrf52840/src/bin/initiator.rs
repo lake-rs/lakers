@@ -13,13 +13,6 @@ use {defmt_rtt as _, panic_probe as _};
 use lakers::*;
 use lakers_nrf52840;
 
-extern crate alloc;
-
-use embedded_alloc::Heap;
-
-#[global_allocator]
-static HEAP: Heap = Heap::empty();
-
 bind_interrupts!(struct Irqs {
     RADIO => radio::InterruptHandler<peripherals::RADIO>;
 });

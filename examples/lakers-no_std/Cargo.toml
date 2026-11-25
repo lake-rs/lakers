@@ -15,9 +15,6 @@ embedded-cal-rustcrypto = { workspace = true, optional = true }
 rand_core = { version = "0.10", default-features = false, optional = true }
 hexlit = "0.5.3"
 
-# depend on an allocator
-embedded-alloc = "0.5.0"
-
 # cortex-m specifics
 cortex-m = { version = "0.7.6", features = ["critical-section-single-core"]}
 cortex-m-rt = "0.7.2"
