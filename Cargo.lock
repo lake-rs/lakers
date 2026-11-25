@@ -1144,6 +1144,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "embedded-cal-rand"
+version = "0.2.0"
+source = "git+https://github.com/lake-rs/embedded-cal#1c96a2e4b9882d2476b190bd963fa4cf87acec3e"
+dependencies = [
+ "embedded-cal",
+ "rand_core 0.10.1",
+]
+
+[[package]]
 name = "embedded-cal-rustcrypto"
 version = "0.2.0"
 source = "git+https://github.com/lake-rs/embedded-cal#1c96a2e4b9882d2476b190bd963fa4cf87acec3e"
@@ -2060,11 +2069,16 @@ dependencies = [
  "defmt 0.3.101",
  "defmt-rtt 0.4.2",
  "embedded-alloc",
+ "embedded-cal",
+ "embedded-cal-rand",
+ "embedded-cal-rustcrypto",
  "hexlit",
  "lakers",
  "lakers-crypto",
+ "lakers-crypto-embedded-cal",
  "lakers-ead-authz",
  "panic-semihosting",
+ "rand_core 0.10.1",
 ]
 
 [[package]]

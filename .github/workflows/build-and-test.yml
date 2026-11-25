@@ -227,7 +227,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        crypto_backend: [crypto-psa]
+        crypto_backend: [crypto-psa, crypto-software-test-rng]
 
     steps:
     - name: Checkout repo
@@ -251,7 +251,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        crypto_backend: [crypto-psa, crypto-cryptocell310]
+        crypto_backend: [crypto-psa, crypto-software-test-rng, crypto-cryptocell310]
 
     steps:
     - name: Checkout repo

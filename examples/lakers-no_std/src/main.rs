@@ -16,6 +16,10 @@ use lakers::*;
 use lakers_crypto::{default_crypto, CryptoTrait};
 use panic_semihosting as _;
 
+#[cfg(feature = "crypto-software-test-rng")]
+#[path = "test_crypto.rs"]
+mod lakers_crypto;
+
 extern crate alloc;
 
 use embedded_alloc::Heap;

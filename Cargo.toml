@@ -56,6 +56,7 @@ lakers = { package = "lakers", path = "lib/", version = "^0.9.0", default-featur
 
 embedded-cal = { git = "https://github.com/lake-rs/embedded-cal" }
 embedded-cal-nrf54l15 = { git = "https://github.com/lake-rs/embedded-cal" }
+embedded-cal-rand = { git = "https://github.com/lake-rs/embedded-cal" }
 embedded-cal-rustcrypto = { git = "https://github.com/lake-rs/embedded-cal" }
 embedded-cal-software-demo = { git = "https://github.com/lake-rs/embedded-cal" }
 embedded-cal-stm32wba55 = { git = "https://github.com/lake-rs/embedded-cal" }
