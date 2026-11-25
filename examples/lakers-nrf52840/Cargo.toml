@@ -36,7 +36,6 @@ panic-probe = { version = "0.3", features = ["print-defmt"] }
 [features]
 default = [ "crypto-cryptocell310", "ead-none" ]
 crypto-cryptocell310 = [ "lakers-crypto/cryptocell310" ]
-crypto-psa = [ "lakers-crypto/psa-baremetal" ]
 ead-none = [ ]
 
 [profile.release]

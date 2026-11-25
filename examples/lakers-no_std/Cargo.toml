@@ -31,7 +31,6 @@ defmt-rtt = "0.4"
 default = [ "rtt", "crypto-cryptocell310", "ead-none" ]
 rtt = [ ]
 crypto-software-test-rng = [ "lakers-crypto-embedded-cal", "embedded-cal", "embedded-cal-rand", "embedded-cal-rustcrypto", "rand_core" ]
-crypto-psa = [ "lakers-crypto/psa-baremetal" ]
 crypto-cryptocell310 = [ "lakers-crypto/cryptocell310" ]
 ead-none = [ ]
 ead-authz = [ "lakers-ead-authz" ]

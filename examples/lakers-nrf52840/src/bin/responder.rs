@@ -12,18 +12,12 @@ use {defmt_rtt as _, panic_probe as _};
 
 use lakers::*;
 
-use core::ffi::c_char;
-
 extern crate alloc;
 
 use embedded_alloc::Heap;
 
 #[global_allocator]
 static HEAP: Heap = Heap::empty();
-
-extern "C" {
-    pub fn mbedtls_memory_buffer_alloc_init(buf: *mut c_char, len: usize);
-}
 
 bind_interrupts!(struct Irqs {
     RADIO => radio::InterruptHandler<peripherals::RADIO>;
@@ -46,14 +40,6 @@ async fn main(_spawner: Spawner) {
     radio.set_header_expansion(false);
     radio.set_crc_init(ADV_CRC_INIT);
     radio.set_crc_poly(CRC_POLY);
-
-    // Memory buffer for mbedtls
-    #[cfg(feature = "crypto-psa")]
-    let mut buffer: [c_char; 4096 * 2] = [0; 4096 * 2];
-    #[cfg(feature = "crypto-psa")]
-    unsafe {
-        mbedtls_memory_buffer_alloc_init(buffer.as_mut_ptr(), buffer.len());
-    }
 
     info!("Responder started, will wait for messages");
 

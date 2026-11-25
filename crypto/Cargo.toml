@@ -12,9 +12,6 @@ readme.workspace = true
 cfg-if = { version = "1.0", default-features = false }
 lakers-shared = { package = "lakers-shared", path = "../shared", default-features = false }
 
-# psa
-lakers-crypto-psa = { workspace = true, default-features = false, optional = true }
-
 # cryptocell for nrf52840
 lakers-crypto-cryptocell310 = { workspace = true, optional = true }
 
@@ -33,8 +30,6 @@ rstest = "0.11.0"
 
 [features]
 default = [  ]
-psa = [ "lakers-crypto-psa" ]
-psa-baremetal = [ "psa", "lakers-crypto-psa/baremetal" ]
 cryptocell310 = [ "lakers-crypto-cryptocell310" ]
 # This requires std because we need to conjure randomness from thin air;
 # embedded systems can still use rustcrypto but need to provide a crypto from

@@ -11,8 +11,6 @@ env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -Dwarnings
 
-# Runners are pinned to ubuntu-24.04 because rust-psa-crypto's bindgen 0.69 generates broken
-# bindings with the newer libclang on ubuntu-26.04; go back to ubuntu-latest once rust-psa-crypto is removed.
 jobs:
   check-style:
     runs-on: ubuntu-24.04
@@ -48,7 +46,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        crypto_backend: [lakers-crypto/psa, lakers-crypto/rustcrypto]
+        crypto_backend: [lakers-crypto/rustcrypto]
         ead: [ead-none, ead-authz]
         buffers: [default-buffers, large-buffers]
 
@@ -67,7 +65,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        crypto_backend: [lakers-crypto/psa, lakers-crypto/psa-baremetal, lakers-crypto/cryptocell310, lakers-crypto/rustcrypto]
+        crypto_backend: [lakers-crypto/cryptocell310, lakers-crypto/rustcrypto]
 
     steps:
     - name: Checkout repo
@@ -135,7 +133,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        crypto_backend: [crypto-rustcrypto, crypto-psa-baremetal, crypto-cryptocell310]
+        crypto_backend: [crypto-rustcrypto, crypto-cryptocell310]
 
     steps:
     - name: Checkout repo
@@ -227,7 +225,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        crypto_backend: [crypto-psa, crypto-software-test-rng]
+        crypto_backend: [crypto-software-test-rng]
 
     steps:
     - name: Checkout repo
@@ -251,7 +249,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        crypto_backend: [crypto-psa, crypto-software-test-rng, crypto-cryptocell310]
+        crypto_backend: [crypto-software-test-rng, crypto-cryptocell310]
 
     steps:
     - name: Checkout repo

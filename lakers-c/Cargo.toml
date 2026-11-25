@@ -21,8 +21,6 @@ critical-section = { version = "1.1", features = ["std"], optional = true }
 [features]
 default = [ "crypto-cryptocell310", "ead-authz" ]
 crypto-rustcrypto = [ "lakers-crypto/rustcrypto", "critical-section" ]
-crypto-psa = [ "lakers-crypto/psa", "critical-section" ]
-crypto-psa-baremetal = [ "lakers-crypto/psa-baremetal" ]
 crypto-cryptocell310 = [ "lakers-crypto/cryptocell310" ]
 ead-none = [ ]
 ead-authz = [ "lakers-ead-authz" ]

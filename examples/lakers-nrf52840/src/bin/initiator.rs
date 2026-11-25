@@ -17,14 +17,8 @@ extern crate alloc;
 
 use embedded_alloc::Heap;
 
-use core::ffi::c_char;
-
 #[global_allocator]
 static HEAP: Heap = Heap::empty();
-
-extern "C" {
-    pub fn mbedtls_memory_buffer_alloc_init(buf: *mut c_char, len: usize);
-}
 
 bind_interrupts!(struct Irqs {
     RADIO => radio::InterruptHandler<peripherals::RADIO>;
@@ -52,14 +46,6 @@ async fn main(_spawner: Spawner) {
     radio.set_crc_poly(lakers_nrf52840::CRC_POLY);
 
     info!("init_handshake");
-
-    // Memory buffer for mbedtls
-    #[cfg(feature = "crypto-psa")]
-    let mut buffer: [c_char; 4096 * 2] = [0; 4096 * 2];
-    #[cfg(feature = "crypto-psa")]
-    unsafe {
-        mbedtls_memory_buffer_alloc_init(buffer.as_mut_ptr(), buffer.len());
-    }
 
     let cred_i = Credential::parse_ccs(lakers_nrf52840::CRED_I.try_into().unwrap()).unwrap();
     let cred_r = Credential::parse_ccs(lakers_nrf52840::CRED_R.try_into().unwrap()).unwrap();

@@ -7,8 +7,6 @@ Compile and run:
 make flash term
 ```
 
-Add `LAKE_CRYPTO=psa` if you want the `crypto-psa-baremetal` configuration.
-
 # Requirements
 
 - `lakers-c` library and headers:

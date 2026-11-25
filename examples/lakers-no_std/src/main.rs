@@ -16,10 +16,6 @@ use lakers::*;
 use lakers_crypto::{default_crypto, CryptoTrait};
 use panic_semihosting as _;
 
-#[cfg(feature = "crypto-software-test-rng")]
-#[path = "test_crypto.rs"]
-mod lakers_crypto;
-
 extern crate alloc;
 
 use embedded_alloc::Heap;
@@ -27,20 +23,12 @@ use embedded_alloc::Heap;
 #[global_allocator]
 static HEAP: Heap = Heap::empty();
 
-extern "C" {
-    pub fn mbedtls_memory_buffer_alloc_init(buf: *mut c_char, len: usize);
-}
+#[cfg(feature = "crypto-software-test-rng")]
+#[path = "test_crypto.rs"]
+mod lakers_crypto;
 
 #[entry]
 fn main() -> ! {
-    // Memory buffer for mbedtls
-    #[cfg(feature = "crypto-psa")]
-    let mut buffer: [c_char; 4096 * 2] = [0; 4096 * 2];
-    #[cfg(feature = "crypto-psa")]
-    unsafe {
-        mbedtls_memory_buffer_alloc_init(buffer.as_mut_ptr(), buffer.len());
-    }
-
     // testing output
     info!("Hello, lakers!");
 
@@ -243,11 +231,4 @@ fn main() -> ! {
 
     // the cortex_m_rt `entry` macro requires `main()` to never return
     loop {}
-}
-
-use core::ffi::c_char;
-
-#[no_mangle]
-pub extern "C" fn strstr(_cs: *const c_char, _ct: *const c_char) -> *mut c_char {
-    panic!("strstr handler!");
 }
