@@ -29,10 +29,7 @@ pub const CRED_R: &[u8] = &hex!("A2026008A101A5010202410A2001215820BBC34960526EA
 /// The nRF54L15 has a single CRACEN, so only one hardware `Crypto` may be alive at a time. Each of
 /// the two binaries drives only one LAKE party, so this is called once per handshake.
 pub fn hardware_crypto() -> lakers_crypto::Crypto {
-    let cal = embedded_cal_software_demo::Extender::<lakers_crypto::Nrf54l15ExtConfig>::new(
-        embedded_cal_nrf54l15::Nrf54l15Cal::new(nrf_pac::CRACEN_S, nrf_pac::CRACENCORE_S),
-    );
-    lakers_crypto::Crypto::new(cal)
+    lakers_crypto::default_crypto()
 }
 
 #[derive(Debug)]

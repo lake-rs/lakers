@@ -53,6 +53,15 @@ cfg_if::cfg_if!(
         pub type Crypto = lakers_crypto_embedded_cal::Crypto<
             embedded_cal_software_demo::Extender<Nrf54l15ExtConfig>,
         >;
+        /// Only call this once: dropping the returned value turns off the CRACEN.
+        pub fn default_crypto() -> Crypto {
+            lakers_crypto_embedded_cal::Crypto::new(embedded_cal_software_demo::Extender::new(
+                embedded_cal_nrf54l15::Nrf54l15Cal::new(
+                    nrf_pac::CRACEN_S,
+                    nrf_pac::CRACENCORE_S,
+                ),
+            ))
+        }
     } else if #[cfg(feature = "stm32wba55")] {
         pub struct Stm32wba55ExtConfig;
         impl embedded_cal_software_demo::ExtenderConfig for Stm32wba55ExtConfig {
@@ -63,6 +72,18 @@ cfg_if::cfg_if!(
         pub type Crypto = lakers_crypto_embedded_cal::Crypto<
             embedded_cal_software_demo::Extender<Stm32wba55ExtConfig>,
         >;
+        /// Only call this once: dropping the returned value turns off the crypto peripherals.
+        pub fn default_crypto() -> Crypto {
+            lakers_crypto_embedded_cal::Crypto::new(embedded_cal_software_demo::Extender::new(
+                embedded_cal_stm32wba55::Stm32wba55Cal::new(
+                    stm32_metapac::HASH,
+                    stm32_metapac::RCC,
+                    stm32_metapac::RNG,
+                    stm32_metapac::AES,
+                    stm32_metapac::PKA,
+                ),
+            ))
+        }
     }
     else {
         compile_error!("One of the features `rustcrypto`, `cryptocell310`, `cryptocell312`, `cracen` or `stm32wba55` must be enabled.");
