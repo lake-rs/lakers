@@ -252,3 +252,78 @@ impl<C: Cal> digest::FixedOutput for EmbeddedCalHash<'_, C> {
 }
 
 impl<C: Cal> digest::HashMarker for EmbeddedCalHash<'_, C> {}
+
+impl<C: Cal> Cal for Crypto<C> {
+    type DhProvider = C::DhProvider;
+    type AeadProvider = C::AeadProvider;
+    type HashProvider = C::HashProvider;
+    type HmacProvider = C::HmacProvider;
+    type SignProvider = C::SignProvider;
+
+    fn dh(&mut self) -> &mut Self::DhProvider {
+        self.cal.dh()
+    }
+
+    fn aead(&mut self) -> &mut Self::AeadProvider {
+        self.cal.aead()
+    }
+
+    fn hash(&mut self) -> &mut Self::HashProvider {
+        self.cal.hash()
+    }
+
+    fn hmac(&mut self) -> &mut Self::HmacProvider {
+        self.cal.hmac()
+    }
+
+    fn sign(&mut self) -> &mut Self::SignProvider {
+        self.cal.sign()
+    }
+}
+
+// TODO: update if https://github.com/lake-rs/embedded-cal/pull/159 is merged
+impl<C: Cal> Cal for &mut Crypto<C> {
+    type DhProvider = C::DhProvider;
+    type AeadProvider = C::AeadProvider;
+    type HashProvider = C::HashProvider;
+    type HmacProvider = C::HmacProvider;
+    type SignProvider = C::SignProvider;
+
+    fn dh(&mut self) -> &mut Self::DhProvider {
+        self.cal.dh()
+    }
+
+    fn aead(&mut self) -> &mut Self::AeadProvider {
+        self.cal.aead()
+    }
+
+    fn hash(&mut self) -> &mut Self::HashProvider {
+        self.cal.hash()
+    }
+
+    fn hmac(&mut self) -> &mut Self::HmacProvider {
+        self.cal.hmac()
+    }
+
+    fn sign(&mut self) -> &mut Self::SignProvider {
+        self.cal.sign()
+    }
+}
+
+impl<C: rand_core::TryRng> rand_core::TryRng for Crypto<C> {
+    type Error = C::Error;
+
+    fn try_next_u32(&mut self) -> Result<u32, Self::Error> {
+        self.cal.try_next_u32()
+    }
+
+    fn try_next_u64(&mut self) -> Result<u64, Self::Error> {
+        self.cal.try_next_u64()
+    }
+
+    fn try_fill_bytes(&mut self, dst: &mut [u8]) -> Result<(), Self::Error> {
+        self.cal.try_fill_bytes(dst)
+    }
+}
+
+impl<C: rand_core::TryCryptoRng> rand_core::TryCryptoRng for Crypto<C> {}
