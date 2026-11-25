@@ -164,7 +164,7 @@ This library is structured as a [cargo workspace](https://doc.rust-lang.org/book
 Its main members are:
 
 - `lib`: The main library providing the LAKE implementation.
-- `crypto`: Diferent cryptographic backends (e.g. cryptocell310, rustcrypto).
+- `crypto`: Selection of the [embedded-cal](https://github.com/lake-rs/embedded-cal) implementation that provides the cryptography.
 - `ead`: Implementation of extensions to LAKE via the External Authorization Data (EAD) field.
 - `shared`: Defines shared structs and modules used throughout the workspace members.
 - `lakers-c`: Provides a foreign function interface that enables using `lakers` from C code.

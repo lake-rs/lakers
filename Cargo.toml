@@ -4,7 +4,6 @@ members = [
   "lib",
   "ead/lakers-ead-authz",
   "crypto",
-  "crypto/lakers-crypto-cryptocell310-sys",
   "crypto/lakers-crypto-embedded-cal",
   "examples/coap",
   "examples/lakers-no_std",
@@ -42,7 +41,6 @@ lakers-shared = { package = "lakers-shared", path = "shared/", version = "^0.9.0
 lakers-ead-authz = { package = "lakers-ead-authz", path = "ead/lakers-ead-authz/", version = "^0.9.0" }
 
 lakers-crypto = { path = "crypto/" }
-lakers-crypto-cryptocell310 = { path = "crypto/lakers-crypto-cryptocell310-sys/" }
 lakers-crypto-embedded-cal = { package = "lakers-crypto-embedded-cal", path = "crypto/lakers-crypto-embedded-cal/" }
 
 lakers = { package = "lakers", path = "lib/", version = "^0.9.0", default-features = false }
