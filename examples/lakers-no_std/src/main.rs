@@ -13,7 +13,7 @@ use defmt::info;
 use defmt_rtt as _; // global logger
 
 use lakers::*;
-use lakers_crypto::{default_crypto, CryptoTrait};
+use lakers_crypto::{default_crypto, Crypto, CryptoTrait};
 use panic_semihosting as _;
 
 extern crate alloc;
@@ -35,6 +35,9 @@ fn main() -> ! {
     // testing asserts
     assert!(1 == 1);
 
+    let mut crypto_i = default_crypto();
+    let mut crypto_r = default_crypto();
+
     // lakers test code
     use hexlit::hex;
 
@@ -55,56 +58,44 @@ fn main() -> ! {
     const CRED_R_PSK: &[u8] =
         &hex!("A20269726573706F6E64657208A101A30104024110205050930FF462A77A3540CF546325DEA214");
 
-    fn test_new_initiator() {
-        let _initiator = LakeInitiator::new(
-            lakers_crypto::default_crypto(),
-            LAKEMethod::StatStat,
-            LAKESuite::CipherSuite2,
-        );
+    fn test_new_initiator(crypto: &mut Crypto) {
+        let _initiator = LakeInitiator::new(crypto, LAKEMethod::StatStat, LAKESuite::CipherSuite2);
     }
 
-    test_new_initiator();
+    test_new_initiator(&mut crypto_i);
     info!("Test test_new_initiator passed.");
 
-    fn test_p256_keys() {
-        let (x, g_x) = default_crypto().p256_generate_key_pair();
-        let (y, g_y) = default_crypto().p256_generate_key_pair();
+    fn test_p256_keys(crypto: &mut Crypto) {
+        let (x, g_x) = crypto.p256_generate_key_pair();
+        let (y, g_y) = crypto.p256_generate_key_pair();
 
-        let g_xy = default_crypto().p256_ecdh(&x, &g_y);
-        let g_yx = default_crypto().p256_ecdh(&y, &g_x);
+        let g_xy = crypto.p256_ecdh(&x, &g_y);
+        let g_yx = crypto.p256_ecdh(&y, &g_x);
 
         assert_eq!(g_xy, g_yx);
     }
-    test_p256_keys();
+    test_p256_keys(&mut crypto_i);
     info!("Test test_p256_keys passed.");
 
-    fn test_prepare_message_1() {
-        let initiator = LakeInitiator::new(
-            lakers_crypto::default_crypto(),
-            LAKEMethod::StatStat,
-            LAKESuite::CipherSuite2,
-        );
+    fn test_prepare_message_1(crypto: &mut Crypto) {
+        let _c_i = generate_connection_identifier_cbor(crypto).as_slice();
 
-        let _c_i =
-            generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto()).as_slice();
+        let initiator = LakeInitiator::new(crypto, LAKEMethod::StatStat, LAKESuite::CipherSuite2);
+
         let message_1 = initiator.prepare_message_1(None, &EadItems::new());
         assert!(message_1.is_ok());
     }
 
-    test_prepare_message_1();
+    test_prepare_message_1(&mut crypto_i);
     info!("Test test_prepare_message_1 passed.");
 
-    fn test_handshake() {
+    fn test_handshake(crypto_i: &mut Crypto, crypto_r: &mut Crypto) {
         let cred_i = Credential::parse_ccs(CRED_I.try_into().unwrap()).unwrap();
         let cred_r = Credential::parse_ccs(CRED_R.try_into().unwrap()).unwrap();
 
-        let initiator = LakeInitiator::new(
-            lakers_crypto::default_crypto(),
-            LAKEMethod::StatStat,
-            LAKESuite::CipherSuite2,
-        );
+        let initiator = LakeInitiator::new(crypto_i, LAKEMethod::StatStat, LAKESuite::CipherSuite2);
         let responder = LakeResponder::new(
-            lakers_crypto::default_crypto(),
+            crypto_r,
             ResponderIdentity::StatStat {
                 r: R.try_into().expect("Wrong length of responder private key"),
             },
@@ -158,20 +149,12 @@ fn main() -> ! {
         assert_eq!(i_oscore_salt, r_oscore_salt);
     }
 
-    fn test_handshake_psk() {
+    fn test_handshake_psk(crypto_i: &mut Crypto, crypto_r: &mut Crypto) {
         let cred_i = Credential::parse_ccs_symmetric(CRED_I_PSK.try_into().unwrap()).unwrap();
         let cred_r = Credential::parse_ccs_symmetric(CRED_R_PSK.try_into().unwrap()).unwrap();
 
-        let initiator = LakeInitiator::new(
-            lakers_crypto::default_crypto(),
-            LAKEMethod::PSK,
-            LAKESuite::CipherSuite2,
-        );
-        let responder = LakeResponder::new(
-            lakers_crypto::default_crypto(),
-            ResponderIdentity::Psk,
-            cred_r.clone(),
-        );
+        let initiator = LakeInitiator::new(crypto_i, LAKEMethod::PSK, LAKESuite::CipherSuite2);
+        let responder = LakeResponder::new(crypto_r, ResponderIdentity::Psk, cred_r.clone());
 
         let (initiator, message_1) = initiator.prepare_message_1(None, &EadItems::new()).unwrap();
 
@@ -219,10 +202,10 @@ fn main() -> ! {
         assert_eq!(i_oscore_salt, r_oscore_salt);
     }
 
-    test_handshake();
+    test_handshake(&mut crypto_i, &mut crypto_r);
     info!("Test test_handshake passed.");
 
-    test_handshake_psk();
+    test_handshake_psk(&mut crypto_i, &mut crypto_r);
     info!("Test test_handshake_psk passed.");
     info!("All tests passed.");
 

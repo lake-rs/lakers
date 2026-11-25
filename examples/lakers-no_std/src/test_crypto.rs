@@ -39,9 +39,10 @@ impl rand_core::TryRng for TestRng {
 
 impl rand_core::TryCryptoRng for TestRng {}
 
-pub type TestCal = RustcryptoCalExtender<WithRng<EmptyCal, TestRng>>;
+pub type Crypto =
+    lakers_crypto_embedded_cal::Crypto<RustcryptoCalExtender<WithRng<EmptyCal, TestRng>>>;
 
-pub fn default_crypto() -> lakers_crypto_embedded_cal::Crypto<TestCal> {
+pub fn default_crypto() -> Crypto {
     lakers_crypto_embedded_cal::Crypto::new(RustcryptoCalExtender::new_extending(WithRng::new(
         EmptyCal, TestRng,
     )))

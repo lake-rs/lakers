@@ -43,6 +43,8 @@ async fn main(_spawner: Spawner) {
 
     info!("Responder started, will wait for messages");
 
+    let mut crypto = lakers_crypto::default_crypto();
+
     loop {
         let pckt = lakers_nrf52840::receive_and_filter(&mut radio, Some(0xf5)) // filter all incoming packets waiting for CBOR TRUE (0xf5)
             .await
@@ -51,8 +53,9 @@ async fn main(_spawner: Spawner) {
         info!("Received message_1");
 
         let cred_r = Credential::parse_ccs(lakers_nrf52840::CRED_R.try_into().unwrap()).unwrap();
+        let c_r = Some(generate_connection_identifier_cbor(&mut crypto));
         let responder = LakeResponder::new(
-            lakers_crypto::default_crypto(),
+            &mut crypto,
             ResponderIdentity::StatStat {
                 r: lakers_nrf52840::R.try_into().unwrap(),
             },
@@ -64,9 +67,6 @@ async fn main(_spawner: Spawner) {
         let result = responder.process_message_1(&message_1);
 
         if let Ok((responder, _c_i, _ead_1)) = result {
-            let c_r = Some(generate_connection_identifier_cbor(
-                &mut lakers_crypto::default_crypto(),
-            ));
             let ead_2 = EadItems::new();
 
             let (responder, message_2) = responder
