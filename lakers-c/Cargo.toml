@@ -15,12 +15,10 @@ lakers-crypto = { path = "../crypto", default-features = false }
 hexlit = "0.5.3"
 
 panic-semihosting = { version = "0.6.0", features = ["exit"] }
-embedded-alloc = "0.5.1"
-critical-section = { version = "1.1", features = ["std"], optional = true }
 
 [features]
 default = [ "crypto-cryptocell310", "ead-authz" ]
-crypto-rustcrypto = [ "lakers-crypto/rustcrypto", "critical-section" ]
+crypto-rustcrypto = [ "lakers-crypto/rustcrypto" ]
 crypto-cryptocell310 = [ "lakers-crypto/cryptocell310" ]
 ead-none = [ ]
 ead-authz = [ "lakers-ead-authz" ]
