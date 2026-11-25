@@ -51,6 +51,7 @@ lakers-crypto-embedded-cal = { package = "lakers-crypto-embedded-cal", path = "c
 lakers = { package = "lakers", path = "lib/", version = "^0.9.0", default-features = false }
 
 embedded-cal = { git = "https://github.com/lake-rs/embedded-cal" }
+embedded-cal-cryptocell = { git = "https://github.com/lake-rs/embedded-cal" }
 embedded-cal-nrf54l15 = { git = "https://github.com/lake-rs/embedded-cal" }
 embedded-cal-rand = { git = "https://github.com/lake-rs/embedded-cal" }
 embedded-cal-rustcrypto = { git = "https://github.com/lake-rs/embedded-cal" }

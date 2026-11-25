@@ -1107,19 +1107,30 @@ dependencies = [
 [[package]]
 name = "embedded-cal"
 version = "0.2.0"
-source = "git+https://github.com/lake-rs/embedded-cal#1c96a2e4b9882d2476b190bd963fa4cf87acec3e"
+source = "git+https://github.com/lake-rs/embedded-cal#573020e80864a8a02dbec368523963a1b0c85d9e"
 dependencies = [
  "hax-lib 0.4.2",
  "rand_core 0.10.1",
 ]
 
 [[package]]
-name = "embedded-cal-nrf54l15"
+name = "embedded-cal-cryptocell"
 version = "0.2.0"
-source = "git+https://github.com/lake-rs/embedded-cal#1c96a2e4b9882d2476b190bd963fa4cf87acec3e"
+source = "git+https://github.com/lake-rs/embedded-cal#573020e80864a8a02dbec368523963a1b0c85d9e"
 dependencies = [
  "embedded-cal",
- "nrf-pac",
+ "nrf-pac 0.4.0",
+ "rand_core 0.10.1",
+ "zeroize",
+]
+
+[[package]]
+name = "embedded-cal-nrf54l15"
+version = "0.2.0"
+source = "git+https://github.com/lake-rs/embedded-cal#573020e80864a8a02dbec368523963a1b0c85d9e"
+dependencies = [
+ "embedded-cal",
+ "nrf-pac 0.2.0",
  "rand_core 0.10.1",
  "zeroize",
 ]
@@ -1127,7 +1138,7 @@ dependencies = [
 [[package]]
 name = "embedded-cal-rand"
 version = "0.2.0"
-source = "git+https://github.com/lake-rs/embedded-cal#1c96a2e4b9882d2476b190bd963fa4cf87acec3e"
+source = "git+https://github.com/lake-rs/embedded-cal#573020e80864a8a02dbec368523963a1b0c85d9e"
 dependencies = [
  "embedded-cal",
  "rand_core 0.10.1",
@@ -1136,7 +1147,7 @@ dependencies = [
 [[package]]
 name = "embedded-cal-rustcrypto"
 version = "0.2.0"
-source = "git+https://github.com/lake-rs/embedded-cal#1c96a2e4b9882d2476b190bd963fa4cf87acec3e"
+source = "git+https://github.com/lake-rs/embedded-cal#573020e80864a8a02dbec368523963a1b0c85d9e"
 dependencies = [
  "aes 0.9.4",
  "ccm 0.6.1",
@@ -1155,7 +1166,7 @@ dependencies = [
 [[package]]
 name = "embedded-cal-software-demo"
 version = "0.2.0"
-source = "git+https://github.com/lake-rs/embedded-cal#1c96a2e4b9882d2476b190bd963fa4cf87acec3e"
+source = "git+https://github.com/lake-rs/embedded-cal#573020e80864a8a02dbec368523963a1b0c85d9e"
 dependencies = [
  "embedded-cal",
  "rand_core 0.10.1",
@@ -1164,7 +1175,7 @@ dependencies = [
 [[package]]
 name = "embedded-cal-stm32wba55"
 version = "0.2.0"
-source = "git+https://github.com/lake-rs/embedded-cal#1c96a2e4b9882d2476b190bd963fa4cf87acec3e"
+source = "git+https://github.com/lake-rs/embedded-cal#573020e80864a8a02dbec368523963a1b0c85d9e"
 dependencies = [
  "embedded-cal",
  "rand_core 0.10.1",
@@ -1497,6 +1508,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "r-efi 6.0.0",
+ "rand_core 0.10.1",
 ]
 
 [[package]]
@@ -1964,15 +1976,18 @@ name = "lakers-crypto"
 version = "0.9.0"
 dependencies = [
  "cfg-if",
+ "embedded-cal",
+ "embedded-cal-cryptocell",
  "embedded-cal-nrf54l15",
+ "embedded-cal-rand",
+ "embedded-cal-rustcrypto",
  "embedded-cal-software-demo",
  "embedded-cal-stm32wba55",
+ "getrandom 0.4.3",
  "hexlit",
- "lakers-crypto-cryptocell310",
  "lakers-crypto-embedded-cal",
- "lakers-crypto-rustcrypto",
  "lakers-shared",
- "rand_core 0.6.4",
+ "rand_core 0.10.1",
  "rstest 0.11.0",
 ]
 
@@ -2077,7 +2092,7 @@ dependencies = [
  "hexlit",
  "lakers",
  "lakers-crypto",
- "nrf-pac",
+ "nrf-pac 0.2.0",
  "panic-probe 1.0.0",
 ]
 
@@ -2256,6 +2271,16 @@ name = "nrf-pac"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ae76c372d1838abeccf1d397688cd4bd90fe3213410c51cb74c6769fdf075067"
+dependencies = [
+ "cortex-m",
+ "cortex-m-rt",
+]
+
+[[package]]
+name = "nrf-pac"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83531b9f1e19f493018da9b8b20359e4cedd6d1357553b1ac50f3fa27a0104fa"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",

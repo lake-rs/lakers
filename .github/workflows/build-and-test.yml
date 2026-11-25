@@ -20,7 +20,7 @@ jobs:
     - name: Install Rust formatter
       run: rustup component add rustfmt
     - name: Run cargo check
-      run: cargo check --all-features
+      run: cargo check -p lakers -p lakers-crypto-rustcrypto -p coap@0.1.0 --all-features
     - name: Check if code is well formatted
       run: cargo fmt --check
 

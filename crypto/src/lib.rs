@@ -10,14 +10,38 @@ pub use lakers_shared::Crypto as CryptoTrait;
 
 cfg_if::cfg_if!(
     if #[cfg(feature = "rustcrypto")] {
-        pub type Crypto = lakers_crypto_rustcrypto::Crypto<rand_core::OsRng>;
+        pub type Crypto = lakers_crypto_embedded_cal::Crypto<
+            embedded_cal_rustcrypto::RustcryptoCalExtender<
+                embedded_cal_rand::WithRng<embedded_cal::empty::EmptyCal, rand_core::UnwrapErr<getrandom::SysRng>>,
+            >,
+        >;
         pub const fn default_crypto() -> Crypto {
-            lakers_crypto_rustcrypto::Crypto::new(rand_core::OsRng)
+            lakers_crypto_embedded_cal::Crypto::new(
+                embedded_cal_rustcrypto::RustcryptoCalExtender::new_extending(
+                    embedded_cal_rand::WithRng {
+                        cal: embedded_cal::empty::EmptyCal,
+                        rng: rand_core::UnwrapErr(getrandom::SysRng),
+                    },
+                ),
+            )
         }
-    } else if #[cfg(feature = "cryptocell310")] {
-        pub type Crypto = lakers_crypto_cryptocell310::Crypto;
-        pub const fn default_crypto() -> Crypto {
-            lakers_crypto_cryptocell310::Crypto
+    } else if #[cfg(feature = "_cryptocell")] {
+        pub struct CryptoCellExtConfig;
+        impl embedded_cal_software_demo::ExtenderConfig for CryptoCellExtConfig {
+            const IMPLEMENT_SHA2SHORT: bool = true;
+            const IMPLEMENT_SHA2SHORT_PLUMBING: bool = false;
+            type Base = embedded_cal_cryptocell::CryptoCellCal;
+        }
+        pub type Crypto = lakers_crypto_embedded_cal::Crypto<
+            embedded_cal_software_demo::Extender<CryptoCellExtConfig>,
+        >;
+        /// Only call this once: dropping the returned value turns off the CryptoCell.
+        pub fn default_crypto() -> Crypto {
+            lakers_crypto_embedded_cal::Crypto::new(embedded_cal_software_demo::Extender::new(
+                embedded_cal_cryptocell::CryptoCellCal::new(
+                    embedded_cal_cryptocell::Peripherals::all(),
+                ),
+            ))
         }
     } else if #[cfg(feature = "nrf54l15")] {
         pub struct Nrf54l15ExtConfig;
@@ -41,7 +65,7 @@ cfg_if::cfg_if!(
         >;
     }
     else {
-        compile_error!("One of the features `rustcrypto`, `cryptocell310`, `nrf54l15` or `stm32wba55` must be enabled.");
+        compile_error!("One of the features `rustcrypto`, `cryptocell310`, `nrf5340`, `nrf54l15` or `stm32wba55` must be enabled.");
     }
 );
 
