@@ -709,7 +709,6 @@ checksum = "9ed9a281f7bc9b7576e61468ba615a66a5c8cfdff42420a70aa82701a3b1e292"
 dependencies = [
  "block-buffer 0.10.4",
  "crypto-common 0.1.7",
- "subtle",
 ]
 
 [[package]]
@@ -995,7 +994,7 @@ dependencies = [
  "embedded-cal-rand",
  "generic-array 1.4.5",
  "heapless 0.9.4",
- "hmac 0.13.0",
+ "hmac",
  "p256",
  "rand_core 0.10.1",
  "sha2",
@@ -1486,16 +1485,7 @@ version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4aaa26c720c68b866f2c96ef5c1264b3e6f473fe5d4ce61cd44bbe913e553018"
 dependencies = [
- "hmac 0.13.0",
-]
-
-[[package]]
-name = "hmac"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e"
-dependencies = [
- "digest 0.10.7",
+ "hmac",
 ]
 
 [[package]]
@@ -1755,12 +1745,7 @@ dependencies = [
 name = "lakers-crypto-embedded-cal"
 version = "0.9.0"
 dependencies = [
- "digest 0.10.7",
  "embedded-cal",
- "embedded-cal-rustcrypto",
- "hexlit",
- "hmac 0.12.1",
- "lakers-shared",
  "rand_core 0.10.1",
 ]
 
@@ -1848,7 +1833,6 @@ version = "0.9.0"
 dependencies = [
  "defmt 0.3.101",
  "defmt-or-log",
- "digest 0.10.7",
  "embedded-cal",
  "embedded-cal-rustcrypto",
  "hax-lib 0.3.7",
@@ -2490,7 +2474,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4a459cddafb3fe76b31fd8f1108007566c40301feb64dc7b54656eb7388172b"
 dependencies = [
  "crypto-bigint",
- "hmac 0.13.0",
+ "hmac",
 ]
 
 [[package]]

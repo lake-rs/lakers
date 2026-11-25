@@ -19,7 +19,9 @@ use core::num::NonZeroI16;
 use defmt_or_log::trace;
 
 pub mod crypto;
-pub use crypto::{prepare_suites_i, test_helper, CcmTagLen, CcmTagLen16, CcmTagLen8, Crypto};
+pub use crypto::prepare_suites_i;
+#[cfg(not(hax))]
+pub use crypto::Crypto;
 
 mod cred;
 pub use cred::*;

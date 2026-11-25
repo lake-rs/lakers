@@ -94,8 +94,8 @@ cfg_if::cfg_if!(
 #[allow(dead_code)]
 fn test_helper<T: CryptoTrait>() {}
 
-/// Ensure at build time that whichever type as selected for Crypto actually implements the Crypto
-/// trait, and that one is actually defined.
+/// Ensure at build time that whichever type as selected for Crypto actually is usable with lakers,
+/// and that one is actually defined.
 #[allow(dead_code)]
 fn test_implements_crypto() {
     test_helper::<Crypto>()
@@ -104,6 +104,7 @@ fn test_implements_crypto() {
 #[cfg(test)]
 mod tests {
     use hexlit::hex;
+    use lakers_shared::crypto::hkdf_expand;
     use lakers_shared::{MAX_INFO_LEN, SHA256_DIGEST_LEN};
     use rstest::rstest;
 
@@ -138,7 +139,7 @@ mod tests {
 
         let mut output = Vec::new();
         output.resize(output_length, 0x00);
-        crypto.hkdf_expand(&prk, &info[..info_slice.len()], &mut output);
+        hkdf_expand(&mut crypto, &prk, &info[..info_slice.len()], &mut output);
         assert_eq!(output, expected_okm_slice[..]);
     }
 }
