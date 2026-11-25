@@ -1,19 +1,21 @@
 // use defmt_or_log::trace;
 use super::{
-    compute_prk_4e3m_psk, compute_salt_4e3m, compute_th_3, compute_th_4, decode_plaintext_2_psk,
-    decode_plaintext_3_psk, decrypt_message_3, encode_ciphertext_3a, encode_plaintext_2,
-    encode_plaintext_3, encrypt_decrypt_ciphertext_3a, encrypt_message_3, parse_message_3,
-    BufferCiphertext3, BufferMessage3, BufferPlaintext2, BytesHashLen, ConnId, Credential,
-    CredentialKey, CredentialTransfer, DecodedMessage2, EadItems, IdCred, LAKEError,
-    ParsedMessage2Details, ParsedMessage3, PreparedMessage2, PreparedMessage3, ProcessedM2,
-    ProcessedM2MethodSpecifics, ProcessingM2, ProcessingM2MethodSpecifics, ProcessingM3,
-    ProcessingM3MethodSpecifics, Th4Input, VerifiedMessage2, VerifiedMessage3, WaitM3,
-    WaitM3MethodSpecifics,
+    compute_prk_4e3m_psk, compute_salt_4e3m, compute_th_3, compute_th_4, decrypt_message_3,
+    encode_ciphertext_3a, encode_plaintext_2, encode_plaintext_3, encrypt_decrypt_ciphertext_3a,
+    encrypt_message_3, DecodedMessage2, ParsedMessage3, PreparedMessage2, PreparedMessage3,
+    Th4Input, VerifiedMessage2, VerifiedMessage3,
 };
-use lakers_shared::{CBORDecoder, Crypto as CryptoTrait};
+use lakers_shared::crypto::Cal;
+use lakers_shared::{
+    decode_plaintext_2_psk, decode_plaintext_3_psk, parse_message_3, BufferCiphertext3,
+    BufferMessage3, BufferPlaintext2, BytesHashLen, CBORDecoder, ConnId, Credential, CredentialKey,
+    CredentialTransfer, EadItems, IdCred, LAKEError, ParsedMessage2Details, ProcessedM2,
+    ProcessedM2MethodSpecifics, ProcessingM2, ProcessingM2MethodSpecifics, ProcessingM3,
+    ProcessingM3MethodSpecifics, WaitM3, WaitM3MethodSpecifics,
+};
 
 pub(crate) fn r_prepare_message_2_psk(
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     cred_r: Credential,
     c_r: ConnId,
     ead_2: &EadItems,
@@ -41,7 +43,7 @@ pub(crate) fn r_prepare_message_2_psk(
 /// so the application has to supply the lookup.
 pub(crate) fn r_parse_message_3_psk_with_cred_resolver<F>(
     state: &WaitM3,
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     message_3: &BufferMessage3,
     cred_r: &Credential,
     resolve_cred_i: F,
@@ -112,7 +114,7 @@ where
 
 pub(crate) fn r_verify_message_3_psk(
     state: &ProcessingM3,
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     valid_cred_i: Credential,
     id_cred_psk: &IdCred,
     cred_r: &Credential,
@@ -152,7 +154,7 @@ pub(crate) fn i_parse_message_2_psk(
 
 pub(crate) fn i_verify_message_2_psk(
     state: &ProcessingM2,
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     valid_cred_r: Credential,
 ) -> Result<VerifiedMessage2, LAKEError> {
     let prk_3e2m = state.prk_2e;
@@ -181,7 +183,7 @@ pub(crate) fn i_verify_message_2_psk(
 
 pub(crate) fn i_prepare_message_3_psk(
     state: &ProcessedM2,
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     cred_i: Credential,
     cred_transfer: CredentialTransfer,
     ead_3: &EadItems,

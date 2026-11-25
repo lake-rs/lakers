@@ -1711,7 +1711,6 @@ version = "0.9.0"
 dependencies = [
  "defmt 0.3.101",
  "defmt-or-log",
- "digest 0.10.7",
  "hexlit",
  "lakers-crypto",
  "lakers-ead-authz",

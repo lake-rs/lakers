@@ -1,18 +1,20 @@
 use super::{
     compute_mac_2, compute_mac_3, compute_prk_3e2m, compute_prk_4e3m, compute_salt_3e2m,
-    compute_salt_4e3m, compute_th_3, compute_th_4, decode_plaintext_2, decode_plaintext_3,
-    decrypt_message_3, encode_plaintext_2, encode_plaintext_3, encrypt_message_3, BufferMessage3,
-    BufferPlaintext2, BytesHashLen, BytesMac3, BytesP256ElemLen, ConnId, Credential, CredentialKey,
-    CredentialTransfer, DecodedMessage2, EadItems, IdCred, LAKEError, ParsedMessage2Details,
-    ParsedMessage3, PreparedMessage2, PreparedMessage3, ProcessedM2, ProcessedM2MethodSpecifics,
-    ProcessingM1, ProcessingM2, ProcessingM2MethodSpecifics, ProcessingM3,
-    ProcessingM3MethodSpecifics, Th4Input, VerifiedMessage2, VerifiedMessage3, WaitM3,
-    WaitM3MethodSpecifics,
+    compute_salt_4e3m, compute_th_3, compute_th_4, decrypt_message_3, encode_plaintext_2,
+    encode_plaintext_3, encrypt_message_3, DecodedMessage2, ParsedMessage3, PreparedMessage2,
+    PreparedMessage3, Th4Input, VerifiedMessage2, VerifiedMessage3,
 };
-use lakers_shared::Crypto as CryptoTrait;
+use lakers_shared::crypto::Cal;
+use lakers_shared::{
+    decode_plaintext_2, decode_plaintext_3, BufferMessage3, BufferPlaintext2, BytesHashLen,
+    BytesMac3, BytesP256ElemLen, ConnId, Credential, CredentialKey, CredentialTransfer, EadItems,
+    IdCred, LAKEError, ParsedMessage2Details, ProcessedM2, ProcessedM2MethodSpecifics,
+    ProcessingM1, ProcessingM2, ProcessingM2MethodSpecifics, ProcessingM3,
+    ProcessingM3MethodSpecifics, WaitM3, WaitM3MethodSpecifics,
+};
 pub(crate) fn r_prepare_message_2_statstat(
     state: &ProcessingM1,
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     cred_r: Credential,
     r: &BytesP256ElemLen, // R's static private DH key
     c_r: ConnId,
@@ -58,7 +60,7 @@ pub(crate) fn r_prepare_message_2_statstat(
 
 pub(crate) fn r_parse_message_3_statstat(
     state: &WaitM3,
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     message_3: &BufferMessage3,
 ) -> Result<ParsedMessage3, LAKEError> {
     let plaintext_3 = decrypt_message_3(crypto, &state.prk_3e2m, &state.th_3, message_3, None);
@@ -87,7 +89,7 @@ pub(crate) fn r_parse_message_3_statstat(
 
 pub(crate) fn r_verify_message_3_statstat(
     state: &ProcessingM3,
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     valid_cred_i: Credential,
     mac_3: BytesMac3,
     id_cred_i: &IdCred,
@@ -146,7 +148,7 @@ pub(crate) fn i_parse_message_2_statstat(
 
 pub(crate) fn i_verify_message_2_statstat(
     state: &ProcessingM2,
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     valid_cred_r: Credential,
     i: &BytesP256ElemLen, // I's static private DH key
 ) -> Result<VerifiedMessage2, LAKEError> {
@@ -202,7 +204,7 @@ pub(crate) fn i_verify_message_2_statstat(
 
 pub(crate) fn i_prepare_message_3_statstat(
     state: &ProcessedM2,
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     cred_i: Credential,
     cred_transfer: CredentialTransfer,
     ead_3: &EadItems,

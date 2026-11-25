@@ -1,6 +1,22 @@
 use crate::InitiatorIdentity;
-use digest::Digest;
-use lakers_shared::{Crypto as CryptoTrait, *};
+use lakers_shared::crypto::{
+    aes_ccm_decrypt, aes_ccm_encrypt, hkdf_expand, hkdf_extract, p256_ecdh, sha256_digest, Cal,
+    Sha256,
+};
+use lakers_shared::{
+    decode_plaintext_4, encode_info, parse_bstr_message, parse_message_1, parse_message_2,
+    BufferCiphertext2, BufferCiphertext3, BufferCiphertext4, BufferContext, BufferMessage1,
+    BufferMessage2, BufferMessage3, BufferMessage4, BufferPlaintext2, BufferPlaintext3,
+    BufferPlaintext4, BufferPsk, BytesCcmIvLen, BytesCcmKeyLen, BytesHashLen, BytesMac2, BytesMac3,
+    BytesP256ElemLen, Completed, ConnId, Credential, CredentialTransfer, EadItems, IdCred,
+    InitiatorStart, LAKEError, LAKEMethod, LakeBuffer, LakeMessageBuffer, ParsedMessage2Details,
+    PrepareMessage2Details, ProcessedM2, ProcessedM2MethodSpecifics, ProcessedM3, ProcessingM1,
+    ProcessingM2, ProcessingM2MethodSpecifics, ProcessingM3, ProcessingM3MethodSpecifics,
+    ResponderStart, WaitM2, WaitM3, WaitM3MethodSpecifics, WaitM4, AES_CCM_TAG_LEN,
+    CBOR_BYTE_STRING, CBOR_MAJOR_ARRAY, CBOR_MAJOR_BYTE_STRING, CBOR_MAJOR_TEXT_STRING,
+    CBOR_UINT_1BYTE, LAKE_SUPPORTED_SUITES, MAC_LENGTH_2, MAC_LENGTH_3, MAX_BUFFER_LEN,
+    MAX_EAD_LEN, MAX_MESSAGE_SIZE_LEN, MAX_SUITES_LEN, P256_ELEM_LEN, SHA256_DIGEST_LEN,
+};
 mod psk;
 mod statstat;
 
@@ -56,7 +72,7 @@ struct VerifiedMessage3 {
 
 pub fn lake_exporter(
     state: &Completed,
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     label: u8,
     context: &[u8],
     result: &mut [u8],
@@ -66,7 +82,7 @@ pub fn lake_exporter(
 
 pub fn lake_key_update(
     state: &mut Completed,
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     context: &[u8],
 ) -> BytesHashLen {
     // new PRK_out
@@ -80,7 +96,7 @@ pub fn lake_key_update(
 
 pub fn r_process_message_1(
     state: &ResponderStart,
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     message_1: &BufferMessage1,
 ) -> Result<(ProcessingM1, ConnId, EadItems), LAKEError> {
     // Step 1: decode message_1
@@ -94,7 +110,7 @@ pub fn r_process_message_1(
                 // Step 2: verify that the selected cipher suite is supported
                 if suites_i[suites_i.len() - 1] == LAKE_SUPPORTED_SUITES[0] {
                     // hash message_1 and save the hash to the state to avoid saving the whole message
-                    let h_message_1 = crypto.sha256_digest(message_1.as_slice());
+                    let h_message_1 = sha256_digest(crypto, message_1.as_slice());
                     Ok((
                         ProcessingM1 {
                             method: method,
@@ -121,7 +137,7 @@ pub fn r_process_message_1(
 
 pub fn r_prepare_message_2(
     state: &ProcessingM1,
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     cred_r: Credential,
     method_details: PrepareMessage2Details<'_>,
     c_r: ConnId,
@@ -172,7 +188,7 @@ pub fn r_prepare_message_2(
 
 pub fn r_parse_message_3(
     state: &WaitM3,
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     message_3: &BufferMessage3,
 ) -> Result<(ProcessingM3, IdCred, EadItems), LAKEError> {
     let parsed = match &state.method_specifics {
@@ -198,7 +214,7 @@ pub fn r_parse_message_3(
 
 pub fn r_parse_message_3_with_cred_resolver<F>(
     state: &mut WaitM3,
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     message_3: &BufferMessage3,
     resolve_cred_i: F,
 ) -> Result<(ProcessingM3, IdCred, EadItems), LAKEError>
@@ -234,7 +250,7 @@ where
 
 pub fn r_verify_message_3(
     state: &ProcessingM3,
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     valid_cred_i: Credential,
 ) -> Result<(ProcessedM3, BytesHashLen), LAKEError> {
     let salt_4e3m = compute_salt_4e3m(crypto, &state.prk_3e2m, &state.th_3);
@@ -274,7 +290,7 @@ pub fn r_verify_message_3(
 
 pub fn r_prepare_message_4(
     state: &ProcessedM3,
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     ead_4: &EadItems,
 ) -> Result<(Completed, BufferMessage4), LAKEError> {
     // compute ciphertext_4
@@ -299,7 +315,7 @@ pub fn r_complete_without_message_4(state: &ProcessedM3) -> Result<Completed, LA
 
 pub fn i_prepare_message_1(
     state: &InitiatorStart,
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     c_i: ConnId,
     ead_1: &EadItems,
 ) -> Result<(WaitM2, BufferMessage1), LAKEError> {
@@ -307,7 +323,7 @@ pub fn i_prepare_message_1(
     let message_1 = encode_message_1(state.method, &state.suites_i, &state.g_x, c_i, &ead_1)?;
 
     // hash message_1 here to avoid saving the whole message in the state
-    let h_message_1 = crypto.sha256_digest(message_1.as_slice());
+    let h_message_1 = sha256_digest(crypto, message_1.as_slice());
 
     Ok((
         WaitM2 {
@@ -321,7 +337,7 @@ pub fn i_prepare_message_1(
 
 pub fn i_parse_message_2<'a>(
     state: &WaitM2,
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     message_2: &BufferMessage2,
 ) -> Result<(ProcessingM2, ConnId, ParsedMessage2Details, EadItems), LAKEError> {
     let (g_y, ciphertext_2) = parse_message_2(message_2)?;
@@ -354,7 +370,7 @@ pub fn i_parse_message_2<'a>(
 
 pub fn i_verify_message_2(
     state: &ProcessingM2,
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     valid_cred_r: Credential,
     i: InitiatorIdentity, // I's static private DH key when required by method
 ) -> Result<ProcessedM2, LAKEError> {
@@ -383,7 +399,7 @@ pub fn i_verify_message_2(
 
 pub fn i_prepare_message_3(
     state: &ProcessedM2,
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     cred_i: Credential,
     cred_transfer: CredentialTransfer,
     ead_3: &EadItems,
@@ -417,7 +433,7 @@ pub fn i_prepare_message_3(
 
 pub fn i_process_message_4(
     state: &mut WaitM4,
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     message_4: &BufferMessage4,
 ) -> Result<(Completed, EadItems), LAKEError> {
     let plaintext_4 = decrypt_message_4(crypto, &state.prk_4e3m, &state.th_4, &message_4)?;
@@ -501,7 +517,7 @@ fn encode_message_2(g_y: &BytesP256ElemLen, ciphertext_2: &BufferCiphertext2) ->
 }
 
 fn compute_th_2(
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     g_y: &BytesP256ElemLen,
     h_message_1: &BytesHashLen,
 ) -> BytesHashLen {
@@ -516,20 +532,20 @@ fn compute_th_2(
     message[4 + P256_ELEM_LEN..4 + P256_ELEM_LEN + SHA256_DIGEST_LEN]
         .copy_from_slice(&h_message_1[..]);
 
-    crypto.sha256_digest(message.as_slice())
+    sha256_digest(crypto, message.as_slice())
 }
 
 fn compute_th_3(
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     th_2: &BytesHashLen,
     plaintext_2: &BufferPlaintext2,
     // `cred_r` is only included for STATSTAT method where TH_3 is computed over
     // TH_2 || plaintext_2 || CRED_R; PSK omits it.
     cred_r: Option<&[u8]>,
 ) -> BytesHashLen {
-    let mut hash = crypto.sha256_start();
+    let mut hash = Sha256::new(crypto);
 
-    hash.update([CBOR_BYTE_STRING, th_2.len() as u8]);
+    hash.update(&[CBOR_BYTE_STRING, th_2.len() as u8]);
     hash.update(th_2);
 
     hash.update(plaintext_2.as_slice());
@@ -537,7 +553,7 @@ fn compute_th_3(
         hash.update(cred_r);
     }
 
-    hash.finalize().into()
+    hash.finalize()
 }
 
 // TH_4 depends on the LAKE method: STAT uses plaintext_3 directly, while
@@ -554,14 +570,14 @@ enum Th4Input<'a> {
     },
 }
 fn compute_th_4(
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     th_3: &BytesHashLen,
     cred_i: &[u8],
     input: Th4Input<'_>,
 ) -> BytesHashLen {
-    let mut hash = crypto.sha256_start();
+    let mut hash = Sha256::new(crypto);
 
-    hash.update([CBOR_BYTE_STRING, th_3.len() as u8]);
+    hash.update(&[CBOR_BYTE_STRING, th_3.len() as u8]);
     hash.update(th_3);
 
     match input {
@@ -584,12 +600,12 @@ fn compute_th_4(
         }
     }
 
-    hash.finalize().into()
+    hash.finalize()
 }
 
 // TODO: consider moving this to a new 'lake crypto primitives' module
 fn lake_kdf(
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     prk: &BytesHashLen,
     label: u8,
     context: &[u8],
@@ -597,7 +613,7 @@ fn lake_kdf(
 ) {
     let info = encode_info(label, context, result.len());
 
-    crypto.hkdf_expand(prk, info.as_slice(), result);
+    hkdf_expand(crypto, prk, info.as_slice(), result);
 }
 
 /// Variant of [`lake_kdf`] that returns a filled fixed-size buffer.
@@ -606,7 +622,7 @@ fn lake_kdf(
 /// create a buffer, fill it and return it -- so this function does that.
 #[inline]
 fn lake_kdf_owned<const N: usize>(
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     prk: &BytesHashLen,
     label: u8,
     context: &[u8],
@@ -732,7 +748,7 @@ fn encode_bstr_header<const N: usize>(
 }
 
 fn compute_k_3_iv_3(
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     prk_3e2m: &BytesHashLen,
     th_3: &BytesHashLen,
 ) -> (BytesCcmKeyLen, BytesCcmIvLen) {
@@ -746,7 +762,7 @@ fn compute_k_3_iv_3(
 }
 
 fn compute_k_4_iv_4(
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     prk_4e3m: &BytesHashLen,
     th_4: &BytesHashLen,
 ) -> (BytesCcmKeyLen, BytesCcmIvLen) {
@@ -764,7 +780,7 @@ fn compute_k_4_iv_4(
 
 // calculates ciphertext_3 wrapped in a cbor byte string
 fn encrypt_message_3(
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     prk_3e2m: &BytesHashLen,
     th_3: &BytesHashLen,
     plaintext_3: &BufferPlaintext3,
@@ -797,13 +813,13 @@ fn encrypt_message_3(
     let enc_structure = encode_enc_structure(external_aad.as_slice())?;
     let (k_3, iv_3) = compute_k_3_iv_3(crypto, prk_3e2m, th_3);
 
-    let ciphertext_3: BufferCiphertext3 = crypto
-        .aes_ccm_encrypt::<MAX_MESSAGE_SIZE_LEN, CcmTagLen8>(
-            &k_3,
-            &iv_3,
-            &enc_structure.as_slice()[..enc_structure.len()],
-            plaintext_3.as_slice(),
-        );
+    let ciphertext_3: BufferCiphertext3 = aes_ccm_encrypt(
+        crypto,
+        &k_3,
+        &iv_3,
+        &enc_structure.as_slice()[..enc_structure.len()],
+        plaintext_3.as_slice(),
+    );
 
     output
         .extend_from_slice(ciphertext_3.as_slice())
@@ -813,7 +829,7 @@ fn encrypt_message_3(
 }
 
 fn decrypt_message_3(
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     prk_3e2m: &BytesHashLen,
     th_3: &BytesHashLen,
     message_3: &BufferMessage3,
@@ -823,7 +839,7 @@ fn decrypt_message_3(
     // `ciphertext_3` borrows from `BufferMessage3`, which is bounded by `MAX_MESSAGE_SIZE_LEN`.
     // Once the AEAD tag is accounted for, the plaintext necessarily fits the `N =
     // MAX_MESSAGE_SIZE_LEN` decrypt output buffer, so only the lower bound needs checking here.
-    if ciphertext_3.len() < CcmTagLen8::LEN {
+    if ciphertext_3.len() < AES_CCM_TAG_LEN {
         return Err(LAKEError::ParsingError);
     }
 
@@ -831,7 +847,8 @@ fn decrypt_message_3(
     let external_aad = build_external_aad(th_3, psk_fields)?;
     let enc_structure = encode_enc_structure(external_aad.as_slice())?;
 
-    crypto.aes_ccm_decrypt::<MAX_MESSAGE_SIZE_LEN, CcmTagLen8>(
+    aes_ccm_decrypt(
+        crypto,
         &k_3,
         &iv_3,
         &enc_structure.as_slice()[..enc_structure.len()],
@@ -840,7 +857,7 @@ fn decrypt_message_3(
 }
 
 fn encrypt_message_4(
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     prk_4e3m: &BytesHashLen,
     th_4: &BytesHashLen,
     plaintext_4: &BufferPlaintext4,
@@ -867,13 +884,13 @@ fn encrypt_message_4(
 
     let (k_4, iv_4) = compute_k_4_iv_4(crypto, prk_4e3m, th_4);
 
-    let ciphertext_4: BufferCiphertext4 = crypto
-        .aes_ccm_encrypt::<MAX_MESSAGE_SIZE_LEN, CcmTagLen8>(
-            &k_4,
-            &iv_4,
-            &enc_structure.as_slice()[..enc_structure.len()],
-            plaintext_4.as_slice(),
-        );
+    let ciphertext_4: BufferCiphertext4 = aes_ccm_encrypt(
+        crypto,
+        &k_4,
+        &iv_4,
+        &enc_structure.as_slice()[..enc_structure.len()],
+        plaintext_4.as_slice(),
+    );
 
     output
         .extend_from_slice(ciphertext_4.as_slice())
@@ -883,7 +900,7 @@ fn encrypt_message_4(
 }
 
 fn decrypt_message_4(
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     prk_4e3m: &BytesHashLen,
     th_4: &BytesHashLen,
     message_4: &BufferMessage4,
@@ -891,7 +908,7 @@ fn decrypt_message_4(
     let ciphertext_4 = parse_bstr_message(message_4)?;
     // See the note in `decrypt_message_3`: the ciphertext is bounded by `MAX_MESSAGE_SIZE_LEN`, so
     // the plaintext cannot exceed the decrypt output buffer.
-    if ciphertext_4.len() < CcmTagLen8::LEN {
+    if ciphertext_4.len() < AES_CCM_TAG_LEN {
         return Err(LAKEError::ParsingError);
     }
 
@@ -899,7 +916,8 @@ fn decrypt_message_4(
 
     let enc_structure = encode_enc_structure(th_4)?;
 
-    crypto.aes_ccm_decrypt::<MAX_MESSAGE_SIZE_LEN, CcmTagLen8>(
+    aes_ccm_decrypt(
+        crypto,
         &k_4,
         &iv_4,
         &enc_structure.as_slice()[..enc_structure.len()],
@@ -935,7 +953,7 @@ fn encode_kdf_context(
 }
 
 fn compute_mac_3(
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     prk_4e3m: &BytesHashLen,
     th_3: &BytesHashLen,
     id_cred_i: &[u8],
@@ -955,7 +973,7 @@ fn compute_mac_3(
 }
 
 fn compute_mac_2(
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     prk_3e2m: &BytesHashLen,
     c_r: ConnId,
     id_cred_r: &[u8],
@@ -1014,7 +1032,7 @@ fn encode_ciphertext_3a(ciphertext: LakeMessageBuffer) -> Result<BufferCiphertex
 /// in the ciphertext_2 argument (which may alternatively contain plaintext), returning the cipher
 /// (or plain-)text.
 fn encrypt_decrypt_ciphertext_2(
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     prk_2e: &BytesHashLen,
     th_2: &BytesHashLen,
     ciphertext_2: &BufferCiphertext2,
@@ -1034,7 +1052,7 @@ fn encrypt_decrypt_ciphertext_2(
     result
 }
 fn encrypt_decrypt_ciphertext_3a(
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     prk_3e2m: &BytesHashLen,
     th_3: &BytesHashLen,
     ciphertext_3a: &BufferCiphertext2,
@@ -1060,7 +1078,7 @@ fn encrypt_decrypt_ciphertext_3a(
 }
 
 fn compute_salt_4e3m(
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     prk_3e2m: &BytesHashLen,
     th_3: &BytesHashLen,
 ) -> BytesHashLen {
@@ -1068,27 +1086,27 @@ fn compute_salt_4e3m(
 }
 
 fn compute_prk_4e3m(
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     salt_4e3m: &BytesHashLen,
     i: &BytesP256ElemLen,
     g_y: &BytesP256ElemLen,
 ) -> BytesHashLen {
     // compute g_rx from static R's public key and private ephemeral key
-    let g_iy = crypto.p256_ecdh(i, g_y);
+    let g_iy = p256_ecdh(crypto, i, g_y);
 
-    crypto.hkdf_extract(salt_4e3m, &g_iy)
+    hkdf_extract(crypto, salt_4e3m, &g_iy)
 }
 
 fn compute_prk_4e3m_psk(
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     salt_4e3m: &BytesHashLen,
     cred: &BufferPsk,
 ) -> BytesHashLen {
-    crypto.hkdf_extract_psk(salt_4e3m, &cred)
+    hkdf_extract(crypto, salt_4e3m, cred.as_slice())
 }
 
 fn compute_salt_3e2m(
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     prk_2e: &BytesHashLen,
     th_2: &BytesHashLen,
 ) -> BytesHashLen {
@@ -1096,28 +1114,28 @@ fn compute_salt_3e2m(
 }
 
 fn compute_prk_3e2m(
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     salt_3e2m: &BytesHashLen,
     x: &BytesP256ElemLen,
     g_r: &BytesP256ElemLen,
 ) -> BytesHashLen {
     // compute g_rx from static R's public key and private ephemeral key
-    let g_rx = crypto.p256_ecdh(x, g_r);
+    let g_rx = p256_ecdh(crypto, x, g_r);
 
-    crypto.hkdf_extract(salt_3e2m, &g_rx)
+    hkdf_extract(crypto, salt_3e2m, &g_rx)
 }
 
 fn compute_prk_2e(
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     x: &BytesP256ElemLen,
     g_y: &BytesP256ElemLen,
     th_2: &BytesHashLen,
 ) -> BytesHashLen {
     // compute the shared secret
-    let g_xy = crypto.p256_ecdh(x, g_y);
+    let g_xy = p256_ecdh(crypto, x, g_y);
     // compute prk_2e as PRK_2e = HMAC-SHA-256( salt, G_XY )
 
-    crypto.hkdf_extract(th_2, &g_xy)
+    hkdf_extract(crypto, th_2, &g_xy)
 }
 
 #[cfg(test)]
@@ -1125,6 +1143,10 @@ mod tests {
     use super::*;
     use hexlit::hex;
     use lakers_crypto::default_crypto;
+    use lakers_shared::{
+        decode_plaintext_2, decode_plaintext_3, parse_eads, parse_message_3, parse_suites_i,
+        CBORDecoder, EADItem,
+    };
     // test vectors (TV)
 
     // LAKE-PSK
@@ -1377,14 +1399,14 @@ mod tests {
 
     #[test]
     fn test_ecdh() {
-        let g_xy = default_crypto().p256_ecdh(&X_TV, &G_Y_TV);
+        let g_xy = p256_ecdh(&mut default_crypto(), &X_TV, &G_Y_TV);
 
         assert_eq!(g_xy, G_XY_TV);
     }
     #[test]
     fn test_ecdh_psk() {
-        let g_xy = default_crypto().p256_ecdh(&X_PSK_TV, &G_Y_PSK_TV);
-        let g_yx = default_crypto().p256_ecdh(&Y_PSK_TV, &G_X_PSK_TV);
+        let g_xy = p256_ecdh(&mut default_crypto(), &X_PSK_TV, &G_Y_PSK_TV);
+        let g_yx = p256_ecdh(&mut default_crypto(), &Y_PSK_TV, &G_X_PSK_TV);
 
         assert_eq!(g_xy, G_XY_PSK_TV);
         assert_eq!(g_yx, G_XY_PSK_TV);

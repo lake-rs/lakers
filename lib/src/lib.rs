@@ -16,7 +16,12 @@
 #![cfg_attr(not(test), no_std)]
 
 use defmt_or_log::trace;
-pub use {lakers_shared::Crypto as CryptoTrait, lakers_shared::*};
+use lakers_shared::crypto::{
+    get_random_byte, p256_ecdh, p256_generate_key_pair, supported_suites, Cal, TryCryptoRng,
+};
+#[cfg(not(hax))]
+pub use lakers_shared::Crypto as CryptoTrait;
+pub use lakers_shared::*;
 
 mod lake;
 pub use lake::*;
@@ -26,86 +31,74 @@ mod deprecated;
 pub use deprecated::*;
 
 /// Starting point for performing LAKE in the role of the Initiator.
-#[derive(Debug)]
-pub struct LakeInitiator<Crypto: CryptoTrait> {
+pub struct LakeInitiator<Crypto: Cal> {
     state: InitiatorStart,        // opaque state
     i: Option<InitiatorIdentity>, // static authentication identity of I when required by method
     cred_i: Option<Credential>,
     crypto: Crypto,
 }
 
-#[derive(Debug)]
-pub struct LakeInitiatorWaitM2<Crypto: CryptoTrait> {
+pub struct LakeInitiatorWaitM2<Crypto: Cal> {
     state: WaitM2, // opaque state
     i: Option<InitiatorIdentity>,
     cred_i: Option<Credential>,
     crypto: Crypto,
 }
 
-#[derive(Debug)]
-pub struct LakeInitiatorProcessingM2<Crypto: CryptoTrait> {
+pub struct LakeInitiatorProcessingM2<Crypto: Cal> {
     state: ProcessingM2, // opaque state
     i: Option<InitiatorIdentity>,
     cred_i: Option<Credential>,
     crypto: Crypto,
 }
 
-#[derive(Debug)]
-pub struct LakeInitiatorProcessedM2<Crypto: CryptoTrait> {
+pub struct LakeInitiatorProcessedM2<Crypto: Cal> {
     state: ProcessedM2, // opaque state
     cred_i: Option<Credential>,
     crypto: Crypto,
 }
 
-#[derive(Debug)]
-pub struct LakeInitiatorWaitM4<Crypto: CryptoTrait> {
+pub struct LakeInitiatorWaitM4<Crypto: Cal> {
     state: WaitM4, // opaque state
     crypto: Crypto,
 }
 
-#[derive(Debug)]
-pub struct LakeInitiatorDone<Crypto: CryptoTrait> {
+pub struct LakeInitiatorDone<Crypto: Cal> {
     state: Completed,
     crypto: Crypto,
 }
 
 /// Starting point for performing LAKE in the role of the Responder.
-#[derive(Debug)]
-pub struct LakeResponder<Crypto: CryptoTrait> {
+pub struct LakeResponder<Crypto: Cal> {
     state: ResponderStart, // opaque state
     r: ResponderIdentity,  // private authentication key of R when required by method
     cred_r: Credential,    // R's full credential
     crypto: Crypto,
 }
 
-#[derive(Debug)]
-pub struct LakeResponderProcessedM1<Crypto: CryptoTrait> {
+pub struct LakeResponderProcessedM1<Crypto: Cal> {
     state: ProcessingM1,  // opaque state
     r: ResponderIdentity, // private authentication key of R when required by method
     cred_r: Credential,   // R's full credential
     crypto: Crypto,
 }
 
-#[derive(Debug)]
-pub struct LakeResponderWaitM3<Crypto: CryptoTrait> {
+pub struct LakeResponderWaitM3<Crypto: Cal> {
     state: WaitM3, // opaque state
     crypto: Crypto,
 }
 
-#[derive(Debug)]
-pub struct LakeResponderProcessingM3<Crypto: CryptoTrait> {
+pub struct LakeResponderProcessingM3<Crypto: Cal> {
     state: ProcessingM3, // opaque state
     crypto: Crypto,
 }
 
-#[derive(Debug)]
-pub struct LakeResponderProcessedM3<Crypto: CryptoTrait> {
+pub struct LakeResponderProcessedM3<Crypto: Cal> {
     state: ProcessedM3, // opaque state
     crypto: Crypto,
 }
 
-#[derive(Debug)]
-pub struct LakeResponderDone<Crypto: CryptoTrait> {
+pub struct LakeResponderDone<Crypto: Cal> {
     state: Completed,
     crypto: Crypto,
 }
@@ -122,10 +115,41 @@ pub enum InitiatorIdentity {
     Psk,
 }
 
-impl<Crypto: CryptoTrait> LakeResponder<Crypto> {
+#[cfg(not(hax))]
+macro_rules! impl_debug {
+    ($($name:ident),* $(,)?) => {
+        $(
+            impl<Crypto: Cal> core::fmt::Debug for $name<Crypto> {
+                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                    f.debug_struct(stringify!($name))
+                        .field("state", &self.state)
+                        .finish_non_exhaustive()
+                }
+            }
+        )*
+    };
+}
+
+#[cfg(not(hax))]
+impl_debug!(
+    LakeInitiator,
+    LakeInitiatorWaitM2,
+    LakeInitiatorProcessingM2,
+    LakeInitiatorProcessedM2,
+    LakeInitiatorWaitM4,
+    LakeInitiatorDone,
+    LakeResponder,
+    LakeResponderProcessedM1,
+    LakeResponderWaitM3,
+    LakeResponderProcessingM3,
+    LakeResponderProcessedM3,
+    LakeResponderDone,
+);
+
+impl<Crypto: Cal> LakeResponder<Crypto> {
     pub fn new(mut crypto: Crypto, identity: ResponderIdentity, cred_r: Credential) -> Self {
         trace!("Initializing LakeResponder");
-        let (y, g_y) = crypto.p256_generate_key_pair();
+        let (y, g_y) = p256_generate_key_pair(&mut crypto);
 
         LakeResponder {
             state: ResponderStart { y, g_y },
@@ -155,13 +179,16 @@ impl<Crypto: CryptoTrait> LakeResponder<Crypto> {
     }
 }
 
-impl<Crypto: CryptoTrait> LakeResponderProcessedM1<Crypto> {
+impl<Crypto: Cal> LakeResponderProcessedM1<Crypto> {
     pub fn prepare_message_2(
         mut self,
         cred_transfer: CredentialTransfer,
         c_r: Option<ConnId>,
         ead_2: &EadItems,
-    ) -> Result<(LakeResponderWaitM3<Crypto>, BufferMessage2), LAKEError> {
+    ) -> Result<(LakeResponderWaitM3<Crypto>, BufferMessage2), LAKEError>
+    where
+        Crypto: TryCryptoRng,
+    {
         trace!("Enter prepare_message_2");
         let c_r = match c_r {
             Some(c_r) => c_r,
@@ -197,7 +224,7 @@ impl<Crypto: CryptoTrait> LakeResponderProcessedM1<Crypto> {
     }
 }
 
-impl<'a, Crypto: CryptoTrait> LakeResponderWaitM3<Crypto> {
+impl<'a, Crypto: Cal> LakeResponderWaitM3<Crypto> {
     /// Parse message 3, recovering `ID_CRED_I` without any credential lookup.
     ///
     /// Not supported for the PSK method, where it fails with `UnsupportedMethod`: resolving
@@ -256,7 +283,7 @@ impl<'a, Crypto: CryptoTrait> LakeResponderWaitM3<Crypto> {
     }
 }
 
-impl<'a, Crypto: CryptoTrait> LakeResponderProcessingM3<Crypto> {
+impl<'a, Crypto: Cal> LakeResponderProcessingM3<Crypto> {
     pub fn verify_message_3(
         mut self,
         cred_i: Credential,
@@ -275,7 +302,7 @@ impl<'a, Crypto: CryptoTrait> LakeResponderProcessingM3<Crypto> {
     }
 }
 
-impl<Crypto: CryptoTrait> LakeResponderProcessedM3<Crypto> {
+impl<Crypto: Cal> LakeResponderProcessedM3<Crypto> {
     pub fn prepare_message_4(
         mut self,
         ead_4: &EadItems,
@@ -305,7 +332,7 @@ impl<Crypto: CryptoTrait> LakeResponderProcessedM3<Crypto> {
     }
 }
 
-impl<Crypto: CryptoTrait> LakeResponderDone<Crypto> {
+impl<Crypto: Cal> LakeResponderDone<Crypto> {
     pub fn lake_exporter(&mut self, label: u8, context: &[u8], result: &mut [u8]) {
         lake_exporter(&self.state, &mut self.crypto, label, context, result);
     }
@@ -315,11 +342,11 @@ impl<Crypto: CryptoTrait> LakeResponderDone<Crypto> {
     }
 }
 
-impl<'a, Crypto: CryptoTrait> LakeInitiator<Crypto> {
+impl<'a, Crypto: Cal> LakeInitiator<Crypto> {
     pub fn new(mut crypto: Crypto, method: LAKEMethod, selected_suite: LAKESuite) -> Self {
         trace!("Initializing LakeInitiator");
-        let suites_i = prepare_suites_i(&crypto.supported_suites(), selected_suite.into()).unwrap();
-        let (x, g_x) = crypto.p256_generate_key_pair();
+        let suites_i = prepare_suites_i(&supported_suites(), selected_suite.into()).unwrap();
+        let (x, g_x) = p256_generate_key_pair(&mut crypto);
 
         LakeInitiator {
             state: InitiatorStart {
@@ -351,7 +378,10 @@ impl<'a, Crypto: CryptoTrait> LakeInitiator<Crypto> {
         mut self,
         c_i: Option<ConnId>,
         ead_1: &EadItems,
-    ) -> Result<(LakeInitiatorWaitM2<Crypto>, BufferMessage1), LAKEError> {
+    ) -> Result<(LakeInitiatorWaitM2<Crypto>, BufferMessage1), LAKEError>
+    where
+        Crypto: TryCryptoRng,
+    {
         trace!("Enter prepare_message_1");
         let c_i = match c_i {
             Some(c_i) => c_i,
@@ -373,7 +403,7 @@ impl<'a, Crypto: CryptoTrait> LakeInitiator<Crypto> {
     }
 
     pub fn compute_ephemeral_secret(&mut self, g_a: &BytesP256ElemLen) -> BytesP256ElemLen {
-        self.crypto.p256_ecdh(&self.state.x, g_a)
+        p256_ecdh(&mut self.crypto, &self.state.x, g_a)
     }
 
     pub fn selected_cipher_suite(&self) -> u8 {
@@ -381,7 +411,7 @@ impl<'a, Crypto: CryptoTrait> LakeInitiator<Crypto> {
     }
 }
 
-impl<'a, Crypto: CryptoTrait> LakeInitiatorWaitM2<Crypto> {
+impl<'a, Crypto: Cal> LakeInitiatorWaitM2<Crypto> {
     pub fn parse_message_2(
         mut self,
         message_2: &'a BufferMessage2,
@@ -403,7 +433,7 @@ impl<'a, Crypto: CryptoTrait> LakeInitiatorWaitM2<Crypto> {
     }
 }
 
-impl<'a, Crypto: CryptoTrait> LakeInitiatorProcessingM2<Crypto> {
+impl<'a, Crypto: Cal> LakeInitiatorProcessingM2<Crypto> {
     pub fn set_identity(
         &mut self,
         identity: InitiatorIdentity,
@@ -442,7 +472,7 @@ impl<'a, Crypto: CryptoTrait> LakeInitiatorProcessingM2<Crypto> {
     }
 }
 
-impl<'a, Crypto: CryptoTrait> LakeInitiatorProcessedM2<Crypto> {
+impl<'a, Crypto: Cal> LakeInitiatorProcessedM2<Crypto> {
     pub fn prepare_message_3(
         mut self,
         cred_transfer: CredentialTransfer,
@@ -479,7 +509,7 @@ impl<'a, Crypto: CryptoTrait> LakeInitiatorProcessedM2<Crypto> {
     }
 }
 
-impl<'a, Crypto: CryptoTrait> LakeInitiatorWaitM4<Crypto> {
+impl<'a, Crypto: Cal> LakeInitiatorWaitM4<Crypto> {
     pub fn process_message_4(
         mut self,
         message_4: &'a BufferMessage4,
@@ -509,7 +539,7 @@ impl<'a, Crypto: CryptoTrait> LakeInitiatorWaitM4<Crypto> {
     }
 }
 
-impl<Crypto: CryptoTrait> LakeInitiatorDone<Crypto> {
+impl<Crypto: Cal> LakeInitiatorDone<Crypto> {
     pub fn lake_exporter(&mut self, label: u8, context: &[u8], result: &mut [u8]) {
         lake_exporter(&self.state, &mut self.crypto, label, context, result);
     }
@@ -519,7 +549,7 @@ impl<Crypto: CryptoTrait> LakeInitiatorDone<Crypto> {
     }
 }
 
-pub fn generate_connection_identifier_cbor<Crypto: CryptoTrait>(crypto: &mut Crypto) -> ConnId {
+pub fn generate_connection_identifier_cbor<Crypto: TryCryptoRng>(crypto: &mut Crypto) -> ConnId {
     let c_i = generate_connection_identifier(crypto);
     #[allow(deprecated)]
     ConnId::from_int_raw(if c_i >= 0 && c_i <= 23 {
@@ -533,10 +563,10 @@ pub fn generate_connection_identifier_cbor<Crypto: CryptoTrait>(crypto: &mut Cry
 }
 
 /// generates an identifier that can be serialized as a single CBOR integer, i.e. -24 <= x <= 23
-pub fn generate_connection_identifier<Crypto: CryptoTrait>(crypto: &mut Crypto) -> i8 {
-    let mut conn_id = crypto.get_random_byte() as i8;
+pub fn generate_connection_identifier<Crypto: TryCryptoRng>(crypto: &mut Crypto) -> i8 {
+    let mut conn_id = get_random_byte(crypto) as i8;
     while conn_id < -24 || conn_id > 23 {
-        conn_id = crypto.get_random_byte() as i8;
+        conn_id = get_random_byte(crypto) as i8;
     }
     conn_id
 }
@@ -619,7 +649,7 @@ pub fn credential_lookup_or_fetch(
 #[cfg(test)]
 mod test_vectors_common {
     use hexlit::hex;
-    use lakers_shared::*;
+    use lakers_shared::BufferMessage1;
 
     pub const CRED_I: &[u8] = &hex!("A2027734322D35302D33312D46462D45462D33372D33322D333908A101A5010202412B2001215820AC75E9ECE3E50BFC8ED60399889522405C47BF16DF96660A41298CB4307F7EB62258206E5DE611388A4B8A8211334AC7D37ECB52A387D257E6DB3C2A93DF21FF3AFFC8");
     pub const I: &[u8] = &hex!("fb13adeb6518cee5f88417660841142e830a81fe334380a953406a1305e8706b");
