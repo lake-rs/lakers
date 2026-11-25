@@ -118,7 +118,7 @@ In the output you should find the LAKE handshake messages and the derived OSCORE
 
 The source code for these examples is at `examples/coap/src/bin`.
 
-## Example: LAKE on nRF52840 device with different crypto backends
+## Example: LAKE on nRF52840 device
 
 To build an example application that works on
 the [nrf52840dk](https://www.nordicsemi.com/Products/Development-hardware/nrf52840-dk), do as follows:
@@ -127,11 +127,8 @@ the [nrf52840dk](https://www.nordicsemi.com/Products/Development-hardware/nrf528
 # head to the example `no_std` example
 cd ./examples/lakers-no_std
 
-# build, flash, and run with the cryptocell310 crypto backend (hardware-accelerated)
+# build, flash, and run with the CryptoCell crypto backend (hardware-accelerated)
 cargo run --target="thumbv7em-none-eabihf" --release
-
-# build, flash, and run with the psa crypto backend (software-based)
-cargo run --target="thumbv7em-none-eabihf" --no-default-features --features="crypto-psa, ead-none, rtt" --release
 
 ```
 
@@ -167,7 +164,7 @@ This library is structured as a [cargo workspace](https://doc.rust-lang.org/book
 Its main members are:
 
 - `lib`: The main library providing the LAKE implementation.
-- `crypto`: Diferent cryptographic backends (e.g. psa, cryptocell310, rustcrypto).
+- `crypto`: Selection of the [embedded-cal](https://github.com/lake-rs/embedded-cal) implementation that provides the cryptography.
 - `ead`: Implementation of extensions to LAKE via the External Authorization Data (EAD) field.
 - `shared`: Defines shared structs and modules used throughout the workspace members.
 - `lakers-c`: Provides a foreign function interface that enables using `lakers` from C code.

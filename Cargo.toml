@@ -4,9 +4,6 @@ members = [
   "lib",
   "ead/lakers-ead-authz",
   "crypto",
-  "crypto/lakers-crypto-psa",
-  "crypto/lakers-crypto-rustcrypto",
-  "crypto/lakers-crypto-cryptocell310-sys",
   "crypto/lakers-crypto-embedded-cal",
   "examples/coap",
   "examples/lakers-no_std",
@@ -21,15 +18,12 @@ members = [
 default-members = [
   "lib",
   "crypto",
-  "crypto/lakers-crypto-rustcrypto",
   "examples/coap",
 ]
 
 # according to https://doc.rust-lang.org/edition-guide/rust-2021/default-cargo-resolver.html,
 # this needs to be explicitly set if using virtual manifests (like this).
 # We need this so dependency crates use it *in all cases*.
-# Specifically, `psa-crypto` merges build-dependency and regular dependency
-# features without this, causing forced "std" in downstream crate.
 resolver = "2"
 
 [workspace.package]
@@ -47,15 +41,14 @@ lakers-shared = { package = "lakers-shared", path = "shared/", version = "^0.9.0
 lakers-ead-authz = { package = "lakers-ead-authz", path = "ead/lakers-ead-authz/", version = "^0.9.0" }
 
 lakers-crypto = { path = "crypto/" }
-lakers-crypto-cryptocell310 = { path = "crypto/lakers-crypto-cryptocell310-sys/" }
-lakers-crypto-psa = { path = "crypto/lakers-crypto-psa/" }
-lakers-crypto-rustcrypto = { package = "lakers-crypto-rustcrypto", path = "crypto/lakers-crypto-rustcrypto/", version = "^0.9.0" }
 lakers-crypto-embedded-cal = { package = "lakers-crypto-embedded-cal", path = "crypto/lakers-crypto-embedded-cal/" }
 
 lakers = { package = "lakers", path = "lib/", version = "^0.9.0", default-features = false }
 
 embedded-cal = { git = "https://github.com/lake-rs/embedded-cal" }
+embedded-cal-cryptocell = { git = "https://github.com/lake-rs/embedded-cal" }
 embedded-cal-nrf54l15 = { git = "https://github.com/lake-rs/embedded-cal" }
+embedded-cal-rand = { git = "https://github.com/lake-rs/embedded-cal" }
 embedded-cal-rustcrypto = { git = "https://github.com/lake-rs/embedded-cal" }
 embedded-cal-software-demo = { git = "https://github.com/lake-rs/embedded-cal" }
 embedded-cal-stm32wba55 = { git = "https://github.com/lake-rs/embedded-cal" }
@@ -63,6 +56,3 @@ embedded-cal-stm32wba55 = { git = "https://github.com/lake-rs/embedded-cal" }
 # Beware that those two lines are mogrified in CI so that hax can find the proof-libs through the git path:
 hax-lib = { version = "0.3.1", default-features = false, features = ["macros"] }
 # to get proof-libs: hax-lib = { git = "https://github.com/cryspen/hax", default-features = false, features = ["macros"] }
-
-[patch.crates-io]
-psa-crypto = { git = "https://github.com/malishav/rust-psa-crypto", branch = "baremetal" }

@@ -8,13 +8,6 @@ BOARD ?= nrf52840dk
 INCLUDES += -I$(CURDIR)/../../target/include
 ARCHIVES += $(CURDIR)/../../target/thumbv7em-none-eabihf/release/liblakers_c.a
 
-ifeq ($(LAKE_CRYPTO), psa)
-	CFLAGS += -DCRYPTO_PSA
-else
-	CFLAGS += -DCRYPTO_CRYPTOCELL310
-endif
-
-# This is actually only needed in the CRYPTO_CRYPTOCELL310 configuration
 CFLAGS += -DTHREAD_STACKSIZE_DEFAULT=16384 -DISR_STACKSIZE=16384
 
 USEMODULE += od

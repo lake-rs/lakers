@@ -17,14 +17,8 @@ extern crate alloc;
 
 use embedded_alloc::Heap;
 
-use core::ffi::c_char;
-
 #[global_allocator]
 static HEAP: Heap = Heap::empty();
-
-extern "C" {
-    pub fn mbedtls_memory_buffer_alloc_init(buf: *mut c_char, len: usize);
-}
 
 bind_interrupts!(struct Irqs {
     RADIO => radio::InterruptHandler<peripherals::RADIO>;
@@ -53,22 +47,13 @@ async fn main(_spawner: Spawner) {
 
     info!("init_handshake");
 
-    // Memory buffer for mbedtls
-    #[cfg(feature = "crypto-psa")]
-    let mut buffer: [c_char; 4096 * 2] = [0; 4096 * 2];
-    #[cfg(feature = "crypto-psa")]
-    unsafe {
-        mbedtls_memory_buffer_alloc_init(buffer.as_mut_ptr(), buffer.len());
-    }
-
     let cred_i = Credential::parse_ccs(lakers_nrf52840::CRED_I.try_into().unwrap()).unwrap();
     let cred_r = Credential::parse_ccs(lakers_nrf52840::CRED_R.try_into().unwrap()).unwrap();
 
-    let mut initiator = LakeInitiator::new(
-        lakers_crypto::default_crypto(),
-        LAKEMethod::StatStat,
-        LAKESuite::CipherSuite2,
-    );
+    let mut crypto = lakers_crypto::default_crypto();
+    let c_i = generate_connection_identifier_cbor(&mut crypto);
+
+    let mut initiator = LakeInitiator::new(crypto, LAKEMethod::StatStat, LAKESuite::CipherSuite2);
     initiator
         .set_identity(
             InitiatorIdentity::StatStat {
@@ -79,7 +64,6 @@ async fn main(_spawner: Spawner) {
         .unwrap();
 
     // Send Message 1 over raw BLE and convert the response to byte
-    let c_i = generate_connection_identifier_cbor(&mut lakers_crypto::default_crypto());
     let (initiator, message_1) = initiator
         .prepare_message_1(Some(c_i), &EadItems::new())
         .unwrap();

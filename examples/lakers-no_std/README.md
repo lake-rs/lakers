@@ -16,7 +16,7 @@ be supported by QEMU's system emulation.
 This folder's `.cargo/config.toml` configures the target (`thumbv7m-none-eabi`)
 and some needed RUSTFLAGS, so this should pretty much just work(tm):
 
-    cargo run --no-default-features --features="crypto-psa" --release
+    cargo run --no-default-features --features="crypto-software-test-rng" --release
 
 You can exit QEMU pressing `CTRL-A`, then `X`. Or, if you're using tmux like
 me, `CTRL-A`, `A`, `X`.

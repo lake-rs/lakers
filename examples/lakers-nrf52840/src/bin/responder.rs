@@ -12,18 +12,12 @@ use {defmt_rtt as _, panic_probe as _};
 
 use lakers::*;
 
-use core::ffi::c_char;
-
 extern crate alloc;
 
 use embedded_alloc::Heap;
 
 #[global_allocator]
 static HEAP: Heap = Heap::empty();
-
-extern "C" {
-    pub fn mbedtls_memory_buffer_alloc_init(buf: *mut c_char, len: usize);
-}
 
 bind_interrupts!(struct Irqs {
     RADIO => radio::InterruptHandler<peripherals::RADIO>;
@@ -47,15 +41,9 @@ async fn main(_spawner: Spawner) {
     radio.set_crc_init(ADV_CRC_INIT);
     radio.set_crc_poly(CRC_POLY);
 
-    // Memory buffer for mbedtls
-    #[cfg(feature = "crypto-psa")]
-    let mut buffer: [c_char; 4096 * 2] = [0; 4096 * 2];
-    #[cfg(feature = "crypto-psa")]
-    unsafe {
-        mbedtls_memory_buffer_alloc_init(buffer.as_mut_ptr(), buffer.len());
-    }
-
     info!("Responder started, will wait for messages");
+
+    let mut crypto = lakers_crypto::default_crypto();
 
     loop {
         let pckt = lakers_nrf52840::receive_and_filter(&mut radio, Some(0xf5)) // filter all incoming packets waiting for CBOR TRUE (0xf5)
@@ -65,8 +53,9 @@ async fn main(_spawner: Spawner) {
         info!("Received message_1");
 
         let cred_r = Credential::parse_ccs(lakers_nrf52840::CRED_R.try_into().unwrap()).unwrap();
+        let c_r = Some(generate_connection_identifier_cbor(&mut crypto));
         let responder = LakeResponder::new(
-            lakers_crypto::default_crypto(),
+            &mut crypto,
             ResponderIdentity::StatStat {
                 r: lakers_nrf52840::R.try_into().unwrap(),
             },
@@ -78,9 +67,6 @@ async fn main(_spawner: Spawner) {
         let result = responder.process_message_1(&message_1);
 
         if let Ok((responder, _c_i, _ead_1)) = result {
-            let c_r = Some(generate_connection_identifier_cbor(
-                &mut lakers_crypto::default_crypto(),
-            ));
             let ead_2 = EadItems::new();
 
             let (responder, message_2) = responder

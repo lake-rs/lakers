@@ -18,18 +18,6 @@ lakers-crypto = { path = "../crypto", default-features = false, features = ["rus
 log = "0.4"
 pyo3-log = "0.13.5"
 
-[dev-dependencies]
-# We don't need it to build, but it is listed in the manifest Cargo.toml, and
-# unless that gets reduced during the Python package building, listing crates
-# here is an easy way to ensure that they are present in the source tar ball.
-# Their presence is necessary for a build from the source tar ball to not fail at cargo time with
-#
-# error: failed to load manifest for workspace member `${PWD}/lakers-python`
-# [...]
-# Caused by:
-#   failed to read `${PWD}/crypto/lakers-crypto-psa/Cargo.toml`
-lakers-crypto-psa = { path = "../crypto/lakers-crypto-psa/" }
-
 [lib]
 name = "lakers" # this will be the name of the python package (as in `import lakers`), and it must match the module name in lib.rs
 crate-type = ["cdylib"]

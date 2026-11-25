@@ -12,20 +12,21 @@ readme.workspace = true
 cfg-if = { version = "1.0", default-features = false }
 lakers-shared = { package = "lakers-shared", path = "../shared", default-features = false }
 
-# psa
-lakers-crypto-psa = { workspace = true, default-features = false, optional = true }
-
-# cryptocell for nrf52840
-lakers-crypto-cryptocell310 = { workspace = true, optional = true }
+lakers-crypto-embedded-cal = { workspace = true, optional = true }
+embedded-cal = { workspace = true, optional = true }
+rand_core = { version = "0.10", optional = true, default-features = false }
 
 # software implementations from rustcrypto
-lakers-crypto-rustcrypto = { workspace = true, optional = true }
-rand_core = { version = "0.6.4", optional = true, default-features = false }
+embedded-cal-rand = { workspace = true, optional = true }
+embedded-cal-rustcrypto = { workspace = true, optional = true }
+getrandom = { version = "0.4.3", optional = true, default-features = false, features = ["sys_rng"] }
 
-lakers-crypto-embedded-cal = { workspace = true, optional = true }
 embedded-cal-software-demo = { workspace = true, optional = true }
 embedded-cal-nrf54l15 = { workspace = true, optional = true }
 embedded-cal-stm32wba55 = { workspace = true, optional = true }
+
+# cryptocell for nrf52840 and nrf5340
+embedded-cal-cryptocell = { workspace = true, optional = true }
 
 [dev-dependencies]
 hexlit = "0.5.3"
@@ -33,14 +34,13 @@ rstest = "0.11.0"
 
 [features]
 default = [  ]
-psa = [ "lakers-crypto-psa" ]
-psa-baremetal = [ "psa", "lakers-crypto-psa/baremetal" ]
-cryptocell310 = [ "lakers-crypto-cryptocell310" ]
+cryptocell310 = [ "_cryptocell", "embedded-cal-cryptocell/nrf52840" ]
+nrf5340 = [ "_cryptocell", "embedded-cal-cryptocell/nrf5340" ]
+_cryptocell = [ "lakers-crypto-embedded-cal", "embedded-cal-software-demo" ]
 # This requires std because we need to conjure randomness from thin air;
-# embedded systems can still use rustcrypto but need to provide a crypto from
-# lakers-crypto-rustcrypto on their own, and combine it with an entropy choice
-# of their avail.
-rustcrypto = [ "lakers-crypto-rustcrypto", "rand_core/getrandom" ]
+# embedded systems can still use embedded-cal-rustcrypto, but need to combine it
+# with an entropy choice of their avail.
+rustcrypto = [ "lakers-crypto-embedded-cal", "embedded-cal", "embedded-cal-rand", "embedded-cal-rustcrypto", "getrandom", "rand_core" ]
 
 nrf54l15 = [ "lakers-crypto-embedded-cal", "embedded-cal-software-demo", "embedded-cal-nrf54l15" ]
 stm32wba55 = [ "lakers-crypto-embedded-cal", "embedded-cal-software-demo", "embedded-cal-stm32wba55" ]

@@ -9,13 +9,13 @@ The `./build.sh` script will:
 The results will be available in the `target` folder.
 
 # Examples
-To build with the PSA backend, to run in the host:
+To build with the software backend, to run in the host:
 
 ```bash
-./build.sh crypto-psa-baremetal
+./build.sh crypto-rustcrypto
 ```
 
-To build with the CC310 backend, to run in an embedded device:
+To build with the CryptoCell backend, to run in an embedded device:
 
 ```bash
 ./build.sh crypto-cryptocell310
