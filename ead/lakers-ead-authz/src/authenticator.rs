@@ -1,7 +1,10 @@
 use crate::consts::*;
 use crate::shared::*;
 use defmt_or_log::trace;
-use lakers_shared::*;
+use lakers_shared::{
+    BufferMessage1, BytesVoucher, CBORDecoder, EADItem, LAKEError, LakeMessageBuffer,
+    CBOR_BYTE_STRING, CBOR_MAJOR_ARRAY, VOUCHER_LEN,
+};
 
 #[derive(Debug, Default)]
 pub struct ZeroTouchAuthenticator;
@@ -130,6 +133,7 @@ fn parse_voucher_response(
 mod test_authenticator {
     use super::*;
     use crate::test_vectors::*;
+    use lakers_shared::MAX_MESSAGE_SIZE_LEN;
 
     #[test]
     fn test_parse_ead_1_value() {

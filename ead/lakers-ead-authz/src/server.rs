@@ -1,7 +1,12 @@
 use crate::consts::EAD_AUTHZ_LABEL;
 use crate::shared::*;
 use defmt_or_log::trace;
-use lakers_shared::{Crypto as CryptoTrait, *};
+use lakers_shared::crypto::{aes_ccm_decrypt, sha256_digest, Cal};
+use lakers_shared::{
+    parse_message_1, BufferMessage1, BytesHashLen, BytesP256ElemLen, BytesVoucher, CBORDecoder,
+    LAKEError, LakeMessageBuffer, CBOR_BYTE_STRING, CBOR_MAJOR_ARRAY, CBOR_MAJOR_BYTE_STRING,
+    LAKE_SUPPORTED_SUITES, VOUCHER_LEN,
+};
 
 /// This server also stores an ACL
 #[derive(PartialEq, Debug, Clone)]
@@ -28,7 +33,7 @@ impl ZeroTouchServer {
         }
     }
 
-    pub fn handle_voucher_request<Crypto: CryptoTrait>(
+    pub fn handle_voucher_request<Crypto: Cal>(
         &self,
         crypto: &mut Crypto,
         vreq: &LakeMessageBuffer,
@@ -51,7 +56,7 @@ impl ZeroTouchServer {
         // A too-short ID_U has no KID; with an ACL it cannot be authorized.
         let kid = id_u.as_slice().get(3).copied();
         if self.acl.is_none() || kid.is_some_and(|kid| self.authorized(kid)) {
-            let h_message_1 = crypto.sha256_digest(message_1.as_slice());
+            let h_message_1 = sha256_digest(crypto, message_1.as_slice());
 
             let voucher = prepare_voucher(crypto, &h_message_1, &self.cred_v.as_slice(), &prk);
             encode_voucher_response(&message_1, &voucher, &opaque_state)
@@ -75,7 +80,7 @@ impl ZeroTouchServerUserAcl {
         Self { w, cred_v }
     }
 
-    pub fn decode_voucher_request<Crypto: CryptoTrait>(
+    pub fn decode_voucher_request<Crypto: Cal>(
         &self,
         crypto: &mut Crypto,
         vreq: &LakeMessageBuffer,
@@ -93,7 +98,7 @@ impl ZeroTouchServerUserAcl {
         decode_id_u(id_u_encoded)
     }
 
-    pub fn prepare_voucher<Crypto: CryptoTrait>(
+    pub fn prepare_voucher<Crypto: Cal>(
         &self,
         crypto: &mut Crypto,
         vreq: &LakeMessageBuffer,
@@ -103,7 +108,7 @@ impl ZeroTouchServerUserAcl {
         let (_method, _suites_i, g_x, _c_i, _ead_1) = parse_message_1(&message_1)?;
         let prk = compute_prk(crypto, &self.w, &g_x);
 
-        let h_message_1 = crypto.sha256_digest(message_1.as_slice());
+        let h_message_1 = sha256_digest(crypto, message_1.as_slice());
 
         let voucher = prepare_voucher(crypto, &h_message_1, &self.cred_v.as_slice(), &prk);
         encode_voucher_response(&message_1, &voucher, &opaque_state)
@@ -129,7 +134,7 @@ fn parse_voucher_request(
     }
 }
 
-fn decrypt_enc_id<Crypto: CryptoTrait>(
+fn decrypt_enc_id<Crypto: Cal>(
     crypto: &mut Crypto,
     prk: &BytesHashLen,
     enc_id: &LakeMessageBuffer,
@@ -141,12 +146,7 @@ fn decrypt_enc_id<Crypto: CryptoTrait>(
     let enc_structure = encode_enc_structure(ss);
 
     // ENC_ID = 'ciphertext' of COSE_Encrypt0
-    crypto.aes_ccm_decrypt::<MAX_MESSAGE_SIZE_LEN, CcmTagLen8>(
-        &k_1,
-        &iv_1,
-        &enc_structure[..],
-        enc_id.as_slice(),
-    )
+    aes_ccm_decrypt(crypto, &k_1, &iv_1, &enc_structure[..], enc_id.as_slice())
 }
 
 fn decode_id_u(id_u_bstr: LakeMessageBuffer) -> Result<LakeMessageBuffer, LAKEError> {
@@ -223,6 +223,7 @@ mod test_enrollment_server {
     use crate::test_vectors::*;
     use crate::ZeroTouchDevice;
     use lakers_crypto::default_crypto;
+    use lakers_shared::{EADItem, MAX_MESSAGE_SIZE_LEN};
 
     // Layout of `MESSAGE_1_WITH_EAD_TV`: METHOD, SUITES_I, G_X and C_I, then the EAD items.
     const G_X_OFFSET: usize = 6;

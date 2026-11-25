@@ -2,7 +2,11 @@ use crate::consts::*;
 use crate::shared::*;
 use crate::ZeroTouchError;
 use defmt_or_log::trace;
-use lakers_shared::{Crypto as CryptoTrait, *};
+use lakers_shared::crypto::{aes_ccm_encrypt, Cal};
+use lakers_shared::{
+    BytesHashLen, BytesMac, BytesP256ElemLen, EADBuffer, EADItem, LakeBuffer, LakeMessageBuffer,
+    CBOR_MAJOR_BYTE_STRING, CBOR_TEXT_STRING, SHA256_DIGEST_LEN,
+};
 
 #[derive(Default, Debug)]
 #[repr(C)]
@@ -31,7 +35,7 @@ impl ZeroTouchDevice {
         ZeroTouchDevice { id_u, g_w, loc_w }
     }
 
-    pub fn prepare_ead_1<Crypto: CryptoTrait>(
+    pub fn prepare_ead_1<Crypto: Cal>(
         &self,
         crypto: &mut Crypto,
         secret: BytesP256ElemLen,
@@ -64,7 +68,7 @@ impl ZeroTouchDeviceWaitEAD2 {
         self.h_message_1 = h_message_1;
     }
 
-    pub fn process_ead_2<Crypto: CryptoTrait>(
+    pub fn process_ead_2<Crypto: Cal>(
         &self,
         crypto: &mut Crypto,
         ead_2: &EADItem,
@@ -95,7 +99,7 @@ fn encode_id_u(id_u: &LakeMessageBuffer) -> LakeMessageBuffer {
     plaintext
 }
 
-fn encrypt_enc_id<Crypto: CryptoTrait>(
+fn encrypt_enc_id<Crypto: Cal>(
     crypto: &mut Crypto,
     prk: &BytesHashLen,
     plaintext: &LakeMessageBuffer,
@@ -107,7 +111,8 @@ fn encrypt_enc_id<Crypto: CryptoTrait>(
     let enc_structure = encode_enc_structure(ss);
 
     // ENC_ID = 'ciphertext' of COSE_Encrypt0
-    crypto.aes_ccm_encrypt::<MAX_MESSAGE_SIZE_LEN, CcmTagLen8>(
+    aes_ccm_encrypt(
+        crypto,
         &k_1,
         &iv_1,
         &enc_structure[..],
@@ -130,7 +135,7 @@ fn encode_ead_1_value(loc_w: &LakeMessageBuffer, enc_id: &LakeMessageBuffer) -> 
     output
 }
 
-pub(crate) fn verify_voucher<Crypto: CryptoTrait>(
+pub(crate) fn verify_voucher<Crypto: Cal>(
     crypto: &mut Crypto,
     received_voucher: &[u8],
     h_message_1: &BytesHashLen,
@@ -150,6 +155,7 @@ mod test_device {
     use super::*;
     use crate::test_vectors::*;
     use lakers_crypto::default_crypto;
+    use lakers_shared::MAC_LENGTH;
 
     #[test]
     fn test_encrypt_enc_id() {

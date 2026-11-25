@@ -1,7 +1,13 @@
 use crate::consts::*;
-use lakers_shared::{Crypto as CryptoTrait, *};
+use lakers_shared::crypto::{hkdf_expand, hkdf_extract, p256_ecdh, Cal};
+use lakers_shared::{
+    encode_info, BytesCcmIvLen, BytesCcmKeyLen, BytesHashLen, BytesMac, BytesP256ElemLen,
+    BytesVoucher, CBORDecoder, LAKEError, LakeBuffer, LakeMessageBuffer, AES_CCM_IV_LEN,
+    AES_CCM_KEY_LEN, CBOR_BYTE_STRING, CBOR_MAJOR_ARRAY, CBOR_MAJOR_BYTE_STRING,
+    CBOR_MAJOR_TEXT_STRING, MAC_LENGTH, SHA256_DIGEST_LEN,
+};
 
-pub(crate) fn compute_prk<Crypto: CryptoTrait>(
+pub(crate) fn compute_prk<Crypto: Cal>(
     crypto: &mut Crypto,
     a: &BytesP256ElemLen,
     g_b: &BytesP256ElemLen,
@@ -9,21 +15,21 @@ pub(crate) fn compute_prk<Crypto: CryptoTrait>(
     // NOTE: salt should be h'' (the zero-length byte string), but crypto backends are hardcoded to salts of size SHA256_DIGEST_LEN (32).
     //       nevertheless, using a salt of HashLen zeros works as well (see RFC 5869, Section 2.2).
     let salt: BytesHashLen = [0u8; SHA256_DIGEST_LEN];
-    let g_ab = crypto.p256_ecdh(a, g_b);
-    crypto.hkdf_extract(&salt, &g_ab)
+    let g_ab = p256_ecdh(crypto, a, g_b);
+    hkdf_extract(crypto, &salt, &g_ab)
 }
 
-pub(crate) fn compute_prk_from_secret<Crypto: CryptoTrait>(
+pub(crate) fn compute_prk_from_secret<Crypto: Cal>(
     crypto: &mut Crypto,
     g_ab: &BytesP256ElemLen,
 ) -> BytesHashLen {
     // NOTE: salt should be h'' (the zero-length byte string), but crypto backends are hardcoded to salts of size SHA256_DIGEST_LEN (32).
     //       nevertheless, using a salt of HashLen zeros works as well (see RFC 5869, Section 2.2).
     let salt: BytesHashLen = [0u8; SHA256_DIGEST_LEN];
-    crypto.hkdf_extract(&salt, &g_ab)
+    hkdf_extract(crypto, &salt, g_ab)
 }
 
-pub(crate) fn prepare_voucher<Crypto: CryptoTrait>(
+pub(crate) fn prepare_voucher<Crypto: Cal>(
     crypto: &mut Crypto,
     h_message_1: &BytesHashLen,
     cred_v: &[u8],
@@ -34,7 +40,7 @@ pub(crate) fn prepare_voucher<Crypto: CryptoTrait>(
     voucher_mac
 }
 
-pub(crate) fn compute_k_1_iv_1<Crypto: CryptoTrait>(
+pub(crate) fn compute_k_1_iv_1<Crypto: Cal>(
     crypto: &mut Crypto,
     prk: &BytesHashLen,
 ) -> (BytesCcmKeyLen, BytesCcmIvLen) {
@@ -102,7 +108,7 @@ fn encode_voucher_input(h_message_1: &BytesHashLen, cred_v: &[u8]) -> LakeMessag
     voucher_input
 }
 
-fn compute_voucher_mac<Crypto: CryptoTrait>(
+fn compute_voucher_mac<Crypto: Cal>(
     crypto: &mut Crypto,
     prk: &BytesHashLen,
     voucher_input: &LakeMessageBuffer,
@@ -114,7 +120,7 @@ fn compute_voucher_mac<Crypto: CryptoTrait>(
     voucher_mac
 }
 
-fn lake_kdf_expand<Crypto: CryptoTrait>(
+fn lake_kdf_expand<Crypto: Cal>(
     crypto: &mut Crypto,
     prk: &BytesHashLen,
     label: u8,
@@ -122,7 +128,7 @@ fn lake_kdf_expand<Crypto: CryptoTrait>(
     result: &mut [u8],
 ) {
     let info = encode_info(label, context, result.len());
-    crypto.hkdf_expand(prk, info.as_slice(), result);
+    hkdf_expand(crypto, prk, info.as_slice(), result);
 }
 
 #[cfg(test)]
