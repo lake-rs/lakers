@@ -134,7 +134,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        crypto: [crypto-rustcrypto, crypto-cryptocell310]
+        # crypto-cryptocell310 is a deprecated alias of crypto-nrf52840, kept so
+        # the release still ships lakers-c-crypto-cryptocell310-*.zip
+        crypto: [crypto-rustcrypto, crypto-nrf52840, crypto-cryptocell310]
 
     steps:
     - name: Checkout repo
@@ -246,7 +248,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        crypto: [crypto-software-test-rng, crypto-cryptocell310]
+        crypto: [crypto-software-test-rng, crypto-nrf52840]
 
     steps:
     - name: Checkout repo

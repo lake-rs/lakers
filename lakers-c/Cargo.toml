@@ -17,11 +17,13 @@ hexlit = "0.5.3"
 panic-semihosting = { version = "0.6.0", features = ["exit"] }
 
 [features]
-default = [ "crypto-cryptocell310", "ead-authz" ]
+default = [ "crypto-nrf52840", "ead-authz" ]
 crypto-rustcrypto = [ "lakers-crypto/rustcrypto" ]
-crypto-cryptocell310 = [ "lakers-crypto/cryptocell310" ]
+crypto-nrf52840 = [ "lakers-crypto/cryptocell310" ]
 ead-none = [ ]
 ead-authz = [ "lakers-ead-authz" ]
+# deprecated name
+crypto-cryptocell310 = [ "crypto-nrf52840" ]
 
 [lib]
 crate-type = ["staticlib"]

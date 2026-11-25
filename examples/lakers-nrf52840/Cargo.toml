@@ -31,9 +31,11 @@ cortex-m-rt = "0.7.0"
 panic-probe = { version = "0.3", features = ["print-defmt"] }
 
 [features]
-default = [ "crypto-cryptocell310", "ead-none" ]
-crypto-cryptocell310 = [ "lakers-crypto/cryptocell310" ]
+default = [ "crypto-nrf52840", "ead-none" ]
+crypto-nrf52840 = [ "lakers-crypto/cryptocell310" ]
 ead-none = [ ]
+# deprecated name
+crypto-cryptocell310 = [ "crypto-nrf52840" ]
 
 [profile.release]
 debug = 2

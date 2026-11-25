@@ -18,5 +18,5 @@ To build with the software backend, to run in the host:
 To build with the CryptoCell backend, to run in an embedded device:
 
 ```bash
-./build.sh crypto-cryptocell310
+./build.sh crypto-nrf52840
 ```

@@ -43,7 +43,7 @@ cfg_if::cfg_if!(
                 ),
             ))
         }
-    } else if #[cfg(feature = "nrf54l15")] {
+    } else if #[cfg(feature = "cracen")] {
         pub struct Nrf54l15ExtConfig;
         impl embedded_cal_software_demo::ExtenderConfig for Nrf54l15ExtConfig {
             const IMPLEMENT_SHA2SHORT: bool = true;
@@ -65,7 +65,7 @@ cfg_if::cfg_if!(
         >;
     }
     else {
-        compile_error!("One of the features `rustcrypto`, `cryptocell310`, `nrf5340`, `nrf54l15` or `stm32wba55` must be enabled.");
+        compile_error!("One of the features `rustcrypto`, `cryptocell310`, `cryptocell312`, `cracen` or `stm32wba55` must be enabled.");
     }
 );
 

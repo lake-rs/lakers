@@ -5,7 +5,7 @@
 /// Specifically in the case of `Option<..>` we use a pointer instead, where `NULL` indicates `None`.
 ///
 /// Example command to compile this module for the nRF52840:
-/// cargo build --target='thumbv7em-none-eabihf' --no-default-features --features="crypto-cryptocell310"
+/// cargo build --target='thumbv7em-none-eabihf' --no-default-features --features="crypto-nrf52840"
 use lakers::{credential_check_or_fetch as credential_check_or_fetch_rust, *};
 use lakers_crypto::{default_crypto, CryptoTrait};
 

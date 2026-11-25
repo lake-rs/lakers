@@ -2,7 +2,7 @@
 
 Bare-metal (`no_std`) examples of LAKE running on the nRF54L15, using the chip's
 hardware-accelerated CRACEN crypto through the [`embedded-cal`](../../../embedded-cal) backend
-(the `lakers-crypto/nrf54l15` dispatch feature).
+(the `lakers-crypto/cracen` dispatch feature).
 
 ## Binaries
 

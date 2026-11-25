@@ -35,12 +35,15 @@ rstest = "0.11.0"
 [features]
 default = [  ]
 cryptocell310 = [ "_cryptocell", "embedded-cal-cryptocell/nrf52840" ]
-nrf5340 = [ "_cryptocell", "embedded-cal-cryptocell/nrf5340" ]
+cryptocell312 = [ "_cryptocell", "embedded-cal-cryptocell/nrf5340" ]
+# deprecated names
+nrf5340 = [ "cryptocell312" ]
+nrf54l15 = [ "cracen" ]
 _cryptocell = [ "lakers-crypto-embedded-cal", "embedded-cal-software-demo" ]
 # This requires std because we need to conjure randomness from thin air;
 # embedded systems can still use embedded-cal-rustcrypto, but need to combine it
 # with an entropy choice of their avail.
 rustcrypto = [ "lakers-crypto-embedded-cal", "embedded-cal", "embedded-cal-rand", "embedded-cal-rustcrypto", "getrandom", "rand_core" ]
 
-nrf54l15 = [ "lakers-crypto-embedded-cal", "embedded-cal-software-demo", "embedded-cal-nrf54l15" ]
+cracen = [ "lakers-crypto-embedded-cal", "embedded-cal-software-demo", "embedded-cal-nrf54l15" ]
 stm32wba55 = [ "lakers-crypto-embedded-cal", "embedded-cal-software-demo", "embedded-cal-stm32wba55" ]
