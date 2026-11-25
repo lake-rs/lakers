@@ -23,9 +23,9 @@ lakers-crypto-rustcrypto = { workspace = true, optional = true }
 rand_core = { version = "0.6.4", optional = true, default-features = false }
 
 lakers-crypto-embedded-cal = { workspace = true, optional = true }
-embedded-cal-software-demo = { git = "https://github.com/lake-rs/embedded-cal", optional = true }
-embedded-cal-nrf54l15 = { git = "https://github.com/lake-rs/embedded-cal", optional = true }
-embedded-cal-stm32wba55 = { git = "https://github.com/lake-rs/embedded-cal", optional = true }
+embedded-cal-software-demo = { workspace = true, optional = true }
+embedded-cal-nrf54l15 = { workspace = true, optional = true }
+embedded-cal-stm32wba55 = { workspace = true, optional = true }
 
 [dev-dependencies]
 hexlit = "0.5.3"
