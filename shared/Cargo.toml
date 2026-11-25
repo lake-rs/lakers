@@ -22,8 +22,11 @@ log = { version = "0.4", optional = true }
 defmt = { version = "0.3", optional = true }
 hax-lib.workspace = true
 digest = { version = "0.10.7", default-features = false }
+embedded-cal.workspace = true
+rand_core = { version = "0.10", default-features = false }
 
 [dev-dependencies]
+embedded-cal-rustcrypto = { workspace = true, features = ["standalone"] }
 hexlit = "0.5.3"
 rstest = "0.21.0"
 
