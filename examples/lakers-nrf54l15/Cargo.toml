@@ -9,9 +9,6 @@ lakers = { package = "lakers", path = "../../lib" }
 # The hardware-accelerated backend, selected via the lakers-crypto dispatch feature.
 lakers-crypto = { path = "../../crypto", default-features = false, features = ["cracen"] }
 
-embedded-cal-nrf54l15.workspace = true
-embedded-cal-software-demo.workspace = true
-
 nrf-pac = { version = "0.2.0", features = ["nrf54l15-app", "rt"] }
 
 cortex-m = { version = "0.7.6", features = ["critical-section-single-core"] }

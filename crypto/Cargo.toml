@@ -23,7 +23,9 @@ getrandom = { version = "0.4.3", optional = true, default-features = false, feat
 
 embedded-cal-software-demo = { workspace = true, optional = true }
 embedded-cal-nrf54l15 = { workspace = true, optional = true }
+nrf-pac = { version = "0.2.0", optional = true }
 embedded-cal-stm32wba55 = { workspace = true, optional = true }
+stm32-metapac = { version = "18.0", optional = true }
 
 # cryptocell for nrf52840 and nrf5340
 embedded-cal-cryptocell = { workspace = true, optional = true }
@@ -45,5 +47,5 @@ _cryptocell = [ "lakers-crypto-embedded-cal", "embedded-cal-software-demo" ]
 # with an entropy choice of their avail.
 rustcrypto = [ "lakers-crypto-embedded-cal", "embedded-cal", "embedded-cal-rand", "embedded-cal-rustcrypto", "getrandom", "rand_core" ]
 
-cracen = [ "lakers-crypto-embedded-cal", "embedded-cal-software-demo", "embedded-cal-nrf54l15" ]
-stm32wba55 = [ "lakers-crypto-embedded-cal", "embedded-cal-software-demo", "embedded-cal-stm32wba55" ]
+cracen = [ "lakers-crypto-embedded-cal", "embedded-cal-software-demo", "embedded-cal-nrf54l15", "nrf-pac" ]
+stm32wba55 = [ "lakers-crypto-embedded-cal", "embedded-cal-software-demo", "embedded-cal-stm32wba55", "stm32-metapac" ]
