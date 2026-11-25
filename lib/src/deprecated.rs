@@ -1,4 +1,5 @@
 use crate::*;
+use lakers_shared::crypto::Cal;
 
 #[deprecated(since = "0.9.0", note = "renamed to `LakeInitiator`")]
 pub type EdhocInitiator<Crypto> = LakeInitiator<Crypto>;
@@ -39,7 +40,7 @@ pub type EdhocResponderDone<Crypto> = LakeResponderDone<Crypto>;
 #[deprecated(since = "0.9.0", note = "renamed to `lake_exporter`")]
 pub fn edhoc_exporter(
     state: &Completed,
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     label: u8,
     context: &[u8],
     result: &mut [u8],
@@ -50,13 +51,13 @@ pub fn edhoc_exporter(
 #[deprecated(since = "0.9.0", note = "renamed to `lake_key_update`")]
 pub fn edhoc_key_update(
     state: &mut Completed,
-    crypto: &mut impl CryptoTrait,
+    crypto: &mut impl Cal,
     context: &[u8],
 ) -> BytesHashLen {
     lake_key_update(state, crypto, context)
 }
 
-impl<Crypto: CryptoTrait> LakeInitiatorDone<Crypto> {
+impl<Crypto: Cal> LakeInitiatorDone<Crypto> {
     #[deprecated(since = "0.9.0", note = "renamed to `lake_exporter`")]
     pub fn edhoc_exporter(&mut self, label: u8, context: &[u8], result: &mut [u8]) {
         self.lake_exporter(label, context, result)
@@ -68,7 +69,7 @@ impl<Crypto: CryptoTrait> LakeInitiatorDone<Crypto> {
     }
 }
 
-impl<Crypto: CryptoTrait> LakeResponderDone<Crypto> {
+impl<Crypto: Cal> LakeResponderDone<Crypto> {
     #[deprecated(since = "0.9.0", note = "renamed to `lake_exporter`")]
     pub fn edhoc_exporter(&mut self, label: u8, context: &[u8], result: &mut [u8]) {
         self.lake_exporter(label, context, result)
