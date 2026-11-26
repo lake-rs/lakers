@@ -1,0 +1,59 @@
+name: Verification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -Dwarnings
+
+jobs:
+  generate-fstar:
+    runs-on: ubuntu-24.04
+
+    steps:
+    - name: Checkout lakers
+      uses: actions/checkout@v4
+
+    - name: Preprocess repository for hax
+      run: |
+        # Workaround-For: https://github.com/cryspen/hax/issues/923
+        find -name '*.rs' -print0 | xargs -0 sed -i 's@const /. BUT NOT FOR HAX ./ {@{@g'
+        # The hax-and-then-fstar Makefile asks: "> Do you have `hax-lib` in your `Cargo.toml` as a git or path dependency?"
+        sed -i -e 's/^hax-lib = /#&/' -e 's/^# to get proof-libs: //' Cargo.toml
+
+    - name: Install hax and F* (Fstar)
+      uses: hacspec/hax-actions@main
+      with:
+        # pin hax to known-working
+        hax_reference: "87ba96831ecfeb7dbb54efcf97036fbc5f25bc71"
+        fstar: v2025.10.06
+
+    - name: Hax extract from lakers and lakers-shared into F* (Fstar)
+      run: |
+        cargo-hax -C -p lakers --no-default-features --features='lakers-crypto/rustcrypto' --release \; into -i '-lakers::generate_connection_identifier_cbor -lakers::generate_connection_identifier' fstar
+        cargo-hax -C -p lakers-shared \; into -i '-lakers_shared::ffi::**' fstar
+
+    - name: Check for missing items
+      run: |
+        # even if fstar generation was ok, fail if something is not implemented
+        [ -z "$(find -name *.fst -type f | xargs grep 'something is not implemented yet')" ]
+    - name: Pack up artifact
+      run: |
+        zip -j -r lakers-fstar.zip $(find . -name *fst)
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: fstar-code
+        path: ./lakers-fstar.zip
+
+    - name: "Typecheck shared::buffer"
+      working-directory: ./shared/proofs/fstar/extraction
+      run: |
+        curl -o Makefile https://gist.githubusercontent.com/W95Psp/4c304132a1f85c5af4e4959dd6b356c3/raw/Makefile
+        ROOTS=Lakers_shared.Buffer.fst make verify
