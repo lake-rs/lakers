@@ -12,7 +12,7 @@ use lakers_shared::{
     ProcessingM1, ProcessingM2, ProcessingM2MethodSpecifics, ProcessingM3,
     ProcessingM3MethodSpecifics, WaitM3, WaitM3MethodSpecifics,
 };
-pub(crate) fn r_prepare_message_2_statstat(
+pub(crate) fn r_prepare_message_2_stat(
     state: &ProcessingM1,
     crypto: &mut impl Cal,
     cred_r: Credential,
@@ -58,7 +58,7 @@ pub(crate) fn r_prepare_message_2_statstat(
     })
 }
 
-pub(crate) fn r_parse_message_3_statstat(
+pub(crate) fn r_parse_message_3_stat(
     state: &WaitM3,
     crypto: &mut impl Cal,
     message_3: &BufferMessage3,
@@ -87,7 +87,7 @@ pub(crate) fn r_parse_message_3_statstat(
     }
 }
 
-pub(crate) fn r_verify_message_3_statstat(
+pub(crate) fn r_verify_message_3_stat(
     state: &ProcessingM3,
     crypto: &mut impl Cal,
     valid_cred_i: Credential,
@@ -130,7 +130,7 @@ pub(crate) fn r_verify_message_3_statstat(
     }
 }
 
-pub(crate) fn i_parse_message_2_statstat(
+pub(crate) fn i_parse_message_2_stat(
     plaintext_2: &BufferPlaintext2,
 ) -> Result<DecodedMessage2, LAKEError> {
     let (c_r, id_cred_r, mac_2, ead_2) = decode_plaintext_2(plaintext_2)?;
@@ -146,7 +146,7 @@ pub(crate) fn i_parse_message_2_statstat(
     })
 }
 
-pub(crate) fn i_verify_message_2_statstat(
+pub(crate) fn i_verify_message_2_stat(
     state: &ProcessingM2,
     crypto: &mut impl Cal,
     valid_cred_r: Credential,
@@ -202,7 +202,7 @@ pub(crate) fn i_verify_message_2_statstat(
     }
 }
 
-pub(crate) fn i_prepare_message_3_statstat(
+pub(crate) fn i_prepare_message_3_stat(
     state: &ProcessedM2,
     crypto: &mut impl Cal,
     cred_i: Credential,

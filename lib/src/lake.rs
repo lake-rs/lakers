@@ -18,15 +18,15 @@ use lakers_shared::{
     MAX_EAD_LEN, MAX_MESSAGE_SIZE_LEN, MAX_SUITES_LEN, P256_ELEM_LEN, SHA256_DIGEST_LEN,
 };
 mod psk;
-mod statstat;
+mod stat;
 
 use psk::{
     i_parse_message_2_psk, i_prepare_message_3_psk, i_verify_message_2_psk,
     r_parse_message_3_psk_with_cred_resolver, r_prepare_message_2_psk, r_verify_message_3_psk,
 };
-use statstat::{
-    i_parse_message_2_statstat, i_prepare_message_3_statstat, i_verify_message_2_statstat,
-    r_parse_message_3_statstat, r_prepare_message_2_statstat, r_verify_message_3_statstat,
+use stat::{
+    i_parse_message_2_stat, i_prepare_message_3_stat, i_verify_message_2_stat,
+    r_parse_message_3_stat, r_prepare_message_2_stat, r_verify_message_3_stat,
 };
 //FIXME: maybe not the best place to put it. shared/src/lib?
 // Temporary result used by method-specific message_2 preparation before the
@@ -148,7 +148,7 @@ pub fn r_prepare_message_2(
 
     let prepared = match (state.method, method_details) {
         (LAKEMethod::StatStat, PrepareMessage2Details::StatStat { r, cred_transfer }) => {
-            r_prepare_message_2_statstat(
+            r_prepare_message_2_stat(
                 state,
                 crypto,
                 cred_r,
@@ -192,9 +192,7 @@ pub fn r_parse_message_3(
     message_3: &BufferMessage3,
 ) -> Result<(ProcessingM3, IdCred, EadItems), LAKEError> {
     let parsed = match &state.method_specifics {
-        WaitM3MethodSpecifics::StatStat { .. } => {
-            r_parse_message_3_statstat(state, crypto, message_3)?
-        }
+        WaitM3MethodSpecifics::StatStat { .. } => r_parse_message_3_stat(state, crypto, message_3)?,
         WaitM3MethodSpecifics::Psk { .. } => return Err(LAKEError::UnsupportedMethod),
     };
 
@@ -222,9 +220,7 @@ where
     F: Fn(&IdCred) -> Result<Credential, LAKEError>,
 {
     let parsed = match &state.method_specifics {
-        WaitM3MethodSpecifics::StatStat { .. } => {
-            r_parse_message_3_statstat(state, crypto, message_3)?
-        }
+        WaitM3MethodSpecifics::StatStat { .. } => r_parse_message_3_stat(state, crypto, message_3)?,
         WaitM3MethodSpecifics::Psk { cred_r } => r_parse_message_3_psk_with_cred_resolver(
             state,
             crypto,
@@ -257,7 +253,7 @@ pub fn r_verify_message_3(
 
     let verified = match &state.method_specifics {
         ProcessingM3MethodSpecifics::StatStat { mac_3, id_cred_i } => {
-            r_verify_message_3_statstat(state, crypto, valid_cred_i, *mac_3, id_cred_i, &salt_4e3m)?
+            r_verify_message_3_stat(state, crypto, valid_cred_i, *mac_3, id_cred_i, &salt_4e3m)?
         }
         ProcessingM3MethodSpecifics::Psk {
             id_cred_psk,
@@ -346,7 +342,7 @@ pub fn i_parse_message_2<'a>(
     let plaintext_2 = encrypt_decrypt_ciphertext_2(crypto, &prk_2e, &th_2, &ciphertext_2);
 
     let decoded = match state.method {
-        LAKEMethod::StatStat => i_parse_message_2_statstat(&plaintext_2),
+        LAKEMethod::StatStat => i_parse_message_2_stat(&plaintext_2),
         LAKEMethod::PSK => i_parse_message_2_psk(&plaintext_2),
         _ => Err(LAKEError::UnsupportedMethod),
     }?;
@@ -380,7 +376,7 @@ pub fn i_verify_message_2(
     // `ProcessedM2` assembly here.
     let verified = match (&state.method_specifics, &i) {
         (ProcessingM2MethodSpecifics::StatStat { .. }, InitiatorIdentity::StatStat { i }) => {
-            i_verify_message_2_statstat(state, crypto, valid_cred_r, i)?
+            i_verify_message_2_stat(state, crypto, valid_cred_r, i)?
         }
         (ProcessingM2MethodSpecifics::Psk { .. }, InitiatorIdentity::Psk) => {
             i_verify_message_2_psk(state, crypto, valid_cred_r)?
@@ -406,7 +402,7 @@ pub fn i_prepare_message_3(
 ) -> Result<(WaitM4, BufferMessage3, BytesHashLen), LAKEError> {
     let prepared = match state.method_specifics {
         ProcessedM2MethodSpecifics::StatStat { .. } => {
-            i_prepare_message_3_statstat(state, crypto, cred_i, cred_transfer, ead_3)?
+            i_prepare_message_3_stat(state, crypto, cred_i, cred_transfer, ead_3)?
         }
         ProcessedM2MethodSpecifics::Psk { .. } => {
             i_prepare_message_3_psk(state, crypto, cred_i, cred_transfer, ead_3)?
