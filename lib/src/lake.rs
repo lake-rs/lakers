@@ -7,15 +7,16 @@ use lakers_shared::{
     decode_plaintext_4, encode_info, parse_bstr_message, parse_message_1, parse_message_2,
     BufferCiphertext2, BufferCiphertext3, BufferCiphertext4, BufferContext, BufferMessage1,
     BufferMessage2, BufferMessage3, BufferMessage4, BufferPlaintext2, BufferPlaintext3,
-    BufferPlaintext4, BufferPsk, BytesCcmIvLen, BytesCcmKeyLen, BytesHashLen, BytesMac2, BytesMac3,
-    BytesP256ElemLen, Completed, ConnId, Credential, CredentialTransfer, EadItems, IdCred,
-    InitiatorStart, LAKEError, LAKEMethod, LakeBuffer, LakeMessageBuffer, ParsedMessage2Details,
-    PrepareMessage2Details, ProcessedM2, ProcessedM2MethodSpecifics, ProcessedM3, ProcessingM1,
-    ProcessingM2, ProcessingM2MethodSpecifics, ProcessingM3, ProcessingM3MethodSpecifics,
-    ResponderStart, WaitM2, WaitM3, WaitM3MethodSpecifics, WaitM4, AES_CCM_TAG_LEN,
-    CBOR_BYTE_STRING, CBOR_MAJOR_ARRAY, CBOR_MAJOR_BYTE_STRING, CBOR_MAJOR_TEXT_STRING,
-    CBOR_UINT_1BYTE, LAKE_SUPPORTED_SUITES, MAC_LENGTH_2, MAC_LENGTH_3, MAX_BUFFER_LEN,
-    MAX_EAD_LEN, MAX_MESSAGE_SIZE_LEN, MAX_SUITES_LEN, P256_ELEM_LEN, SHA256_DIGEST_LEN,
+    BufferPlaintext4, BufferPsk, BytesCcmIvLen, BytesCcmKeyLen, BytesHashLen, BytesMac,
+    BytesP256ElemLen, BytesSignature, Completed, ConnId, Credential, CredentialTransfer, EadItems,
+    IdCred, InitiatorStart, LAKEError, LAKEMethod, LakeBuffer, LakeMessageBuffer,
+    ParsedMessage2Details, PrepareMessage2Details, ProcessedM2, ProcessedM2MethodSpecifics,
+    ProcessedM3, ProcessingM1, ProcessingM2, ProcessingM2MethodSpecifics, ProcessingM3,
+    ProcessingM3MethodSpecifics, ResponderStart, WaitM2, WaitM3, WaitM3MethodSpecifics, WaitM4,
+    AES_CCM_TAG_LEN, CBOR_BYTE_STRING, CBOR_MAJOR_ARRAY, CBOR_MAJOR_BYTE_STRING,
+    CBOR_MAJOR_TEXT_STRING, CBOR_UINT_1BYTE, LAKE_SUPPORTED_SUITES, MAC_LENGTH_2, MAC_LENGTH_3,
+    MAC_LENGTH_SIG, MAX_BUFFER_LEN, MAX_EAD_LEN, MAX_MESSAGE_SIZE_LEN, MAX_SUITES_LEN,
+    P256_ELEM_LEN, SHA256_DIGEST_LEN,
 };
 mod psk;
 mod stat;
@@ -68,6 +69,32 @@ struct PreparedMessage3 {
 struct VerifiedMessage3 {
     prk_4e3m: BytesHashLen,
     th_4: BytesHashLen,
+}
+
+#[derive(Debug)]
+enum SignatureOrMac {
+    Mac(BytesMac),
+    Signature(BytesSignature),
+}
+
+impl SignatureOrMac {
+    fn as_slice(&self) -> &[u8] {
+        match self {
+            SignatureOrMac::Mac(mac) => mac.as_slice(),
+            SignatureOrMac::Signature(signature) => signature.as_slice(),
+        }
+    }
+}
+
+impl From<BytesMac> for SignatureOrMac {
+    fn from(value: BytesMac) -> Self {
+        SignatureOrMac::Mac(value)
+    }
+}
+impl From<BytesSignature> for SignatureOrMac {
+    fn from(value: BytesSignature) -> Self {
+        SignatureOrMac::Signature(value)
+    }
 }
 
 pub fn lake_exporter(
@@ -629,18 +656,17 @@ fn lake_kdf_owned<const N: usize>(
 }
 
 fn encode_plaintext_3(
-    stat_fields: Option<(&[u8], &BytesMac3)>,
+    stat_fields: Option<(&[u8], &SignatureOrMac)>,
     ead_3: &EadItems,
 ) -> Result<BufferPlaintext3, LAKEError> {
     let mut plaintext_3 = match stat_fields {
-        Some((id_cred_i, mac_3)) => {
+        Some((id_cred_i, sig_or_mac_3)) => {
+            let sig_or_mac_3 = sig_or_mac_3.as_slice();
             let mut plaintext_3 =
                 BufferPlaintext3::new_from_slice(id_cred_i).or(Err(LAKEError::EncodingError))?;
+            encode_bstr_header(&mut plaintext_3, sig_or_mac_3.len())?;
             plaintext_3
-                .push(CBOR_MAJOR_BYTE_STRING | MAC_LENGTH_3 as u8)
-                .or(Err(LAKEError::EncodingError))?;
-            plaintext_3
-                .extend_from_slice(mac_3)
+                .extend_from_slice(sig_or_mac_3)
                 .or(Err(LAKEError::EncodingError))?;
             plaintext_3
         }
@@ -948,14 +974,20 @@ fn encode_kdf_context(
     output
 }
 
-fn compute_mac_3(
+fn compute_mac_3<const N: usize>(
     crypto: &mut impl Cal,
     prk_4e3m: &BytesHashLen,
     th_3: &BytesHashLen,
     id_cred_i: &[u8],
     cred_i: &[u8],
     ead_3: &EadItems,
-) -> BytesMac3 {
+) -> [u8; N] {
+    const /* BUT NOT FOR HAX */ {
+        assert!(
+            N == MAC_LENGTH_3 || N == MAC_LENGTH_SIG,
+            "mac length must be mac_length_3 or the hash length"
+        )
+    };
     // MAC_3 = LAKE-KDF( PRK_4e3m, 6, context_3, mac_length_3 )
     let context = encode_kdf_context(None, id_cred_i, th_3, cred_i, ead_3);
 
@@ -968,7 +1000,7 @@ fn compute_mac_3(
     )
 }
 
-fn compute_mac_2(
+fn compute_mac_2<const N: usize>(
     crypto: &mut impl Cal,
     prk_3e2m: &BytesHashLen,
     c_r: ConnId,
@@ -976,7 +1008,13 @@ fn compute_mac_2(
     cred_r: &[u8],
     th_2: &BytesHashLen,
     ead_2: &EadItems,
-) -> BytesMac2 {
+) -> [u8; N] {
+    const /* BUT NOT FOR HAX */ {
+        assert!(
+            N == MAC_LENGTH_2 || N == MAC_LENGTH_SIG,
+            "mac length must be mac_length_2 or the hash length"
+        )
+    };
     // compute MAC_2
     let context = encode_kdf_context(Some(c_r), id_cred_r, th_2, cred_r, ead_2);
 
@@ -986,7 +1024,7 @@ fn compute_mac_2(
 
 fn encode_plaintext_2(
     c_r: ConnId,
-    stat_fields: Option<(&[u8], &BytesMac2)>,
+    stat_fields: Option<(&[u8], &SignatureOrMac)>,
     ead_2: &EadItems,
 ) -> Result<BufferPlaintext2, LAKEError> {
     let mut plaintext_2: BufferPlaintext2 = BufferPlaintext2::new();
@@ -996,15 +1034,14 @@ fn encode_plaintext_2(
         .extend_from_slice(c_r)
         .or(Err(LAKEError::EncodingError))?;
 
-    if let Some((id_cred_r, mac_2)) = stat_fields {
+    if let Some((id_cred_r, sig_or_mac_2)) = stat_fields {
+        let sig_or_mac_2 = sig_or_mac_2.as_slice();
         plaintext_2
             .extend_from_slice(id_cred_r)
             .or(Err(LAKEError::EncodingError))?;
 
-        plaintext_2
-            .push(CBOR_MAJOR_BYTE_STRING | MAC_LENGTH_2 as u8)
-            .unwrap();
-        plaintext_2.extend_from_slice(&mac_2[..]).unwrap();
+        encode_bstr_header(&mut plaintext_2, sig_or_mac_2.len())?;
+        plaintext_2.extend_from_slice(&sig_or_mac_2).unwrap();
     }
 
     // Encode optional EAD_2
@@ -1141,7 +1178,7 @@ mod tests {
     use lakers_crypto::default_crypto;
     use lakers_shared::{
         decode_plaintext_2, decode_plaintext_3, parse_eads, parse_message_3, parse_suites_i,
-        CBORDecoder, EADItem,
+        BytesMac2, BytesMac3, CBORDecoder, EADItem,
     };
     // test vectors (TV)
 
@@ -1831,7 +1868,7 @@ mod tests {
                 IdCred::from_full_value(&ID_CRED_R_TV[..])
                     .unwrap()
                     .as_encoded_value(),
-                &MAC_2_TV,
+                &MAC_2_TV.into(),
             )),
             &EadItems::new(),
         )
@@ -2032,7 +2069,7 @@ mod tests {
                 IdCred::from_full_value(&ID_CRED_I_TV[..])
                     .unwrap()
                     .as_encoded_value(),
-                &MAC_3_TV,
+                &MAC_3_TV.into(),
             )),
             &EadItems::new(),
         )
