@@ -1,8 +1,8 @@
 # lakers &emsp; [![CI status]][actions] [![Latest Version]][crates.io] [![API Documentation]][docs.rs]
 
-[CI status]: https://github.com/lake-rs/lakers/actions/workflows/build-and-test.yml/badge.svg
+[CI status]: https://github.com/lake-rs/lakers/actions/workflows/rust.yml/badge.svg
 
-[actions]: https://github.com/lake-rs/lakers/actions/workflows/build-and-test.yml
+[actions]: https://github.com/lake-rs/lakers/actions/workflows/rust.yml
 
 [Latest Version]: https://img.shields.io/crates/v/lakers.svg
 

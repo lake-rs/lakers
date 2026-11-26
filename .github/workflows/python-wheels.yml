@@ -8,6 +8,35 @@ on:
     pull_request:
 
 jobs:
+  test-lakers-python:
+    runs-on: ubuntu-24.04
+
+    env:
+      CARGO_TERM_COLOR: always
+      RUSTFLAGS: -Dwarnings
+
+    strategy:
+      fail-fast: false
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
+
+    - name: set up python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Test Python package
+      run: |
+        cd lakers-python
+        python3 -m venv .venv
+        source .venv/bin/activate
+        pip install --upgrade pip
+        pip install -U maturin pytest cbor2
+        pip freeze
+        maturin develop && pytest
+
   build-python-wheels:
     name: Build wheels on ${{ matrix.os }} with Python ${{ matrix.python-version }}
     runs-on: ${{ matrix.os }}

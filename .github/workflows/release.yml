@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    tags: 'v*'
+
+jobs:
+  rust:
+    uses: ./.github/workflows/rust.yml
+
+  lakers-c:
+    needs: rust
+    uses: ./.github/workflows/lakers-c.yml
+
+  verification:
+    uses: ./.github/workflows/verification.yml
+
+  release:
+    runs-on: ubuntu-24.04
+    needs: [rust, lakers-c, verification]
+    if: >-
+      github.event_name == 'push' &&
+      startsWith(github.event.ref, 'refs/tags')
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+      - name: Download artifacts
+        uses: actions/download-artifact@v4.1.7
+        with:
+          name: fstar-code
+          path: ./release-artifacts
+      - name: Download artifacts
+        uses: actions/download-artifact@v4.1.7
+        with:
+          pattern: lakers-c*
+          path: ./release-artifacts
+          merge-multiple: true
+      - name: Release
+        uses: ncipollo/release-action@v1
+        with:
+          generateReleaseNotes: true
+          artifacts: "release-artifacts/*"
+          token: ${{ secrets.RELEASE_TOKEN }}

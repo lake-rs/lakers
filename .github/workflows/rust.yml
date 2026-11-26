@@ -1,0 +1,139 @@
+name: Rust
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -Dwarnings
+
+jobs:
+  check-style:
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
+    - name: Install Rust formatter
+      run: rustup component add rustfmt
+    - name: Run cargo check
+      run: cargo check -p lakers -p coap@0.1.0 --all-features
+    - name: Check if code is well formatted
+      run: cargo fmt --check
+
+  unit-tests-default:
+    needs: check-style
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
+
+    - name: Run unit tests with default features
+      run: RUST_BACKTRACE=1 cargo test
+
+
+  unit-tests:
+    needs: check-style
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        ead: [ead-none, ead-authz]
+        buffers: [default-buffers, large-buffers]
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
+
+    - name: Run unit tests with feature matrix # note that we only add `--package lakers-ead-authz` when testing with that config
+      run: RUST_BACKTRACE=1 cargo test -p lakers -p lakers-crypto -p lakers-shared ${{ matrix.ead == 'ead-authz' && '-p lakers-ead-authz' || '' }}  --no-default-features --features="lakers-crypto/rustcrypto, test-${{ matrix.ead }}${{ matrix.buffers == 'large-buffers' && ', lakers-shared/large_buffers' || '' }}" --no-fail-fast -- --test-threads 1
+
+
+  build-lake-package:
+    needs: unit-tests
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - crypto: lakers-crypto/cryptocell310
+            target: thumbv7em-none-eabihf
+          - crypto: lakers-crypto/rustcrypto
+            target: x86_64-unknown-linux-gnu
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
+
+    - name: Install the target for Rust
+      run: rustup target add "${{ matrix.target }}"
+
+    - name: Build
+      run: cargo build --package lakers --package lakers-crypto --package lakers-ead-authz --no-default-features --features="${{ matrix.crypto }}" --target="${{ matrix.target }}" --release
+
+
+  run-example-on-qemu:
+    needs: unit-tests
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
+
+    - name: Install arm targets for Rust
+      run: rustup target add thumbv7m-none-eabi
+    - name: Install QEMU ARM emulator
+      run: sudo apt-get -y update && sudo apt-get -y install qemu-system-arm
+
+    - name: Run tests in QEMU
+      run: cd examples/lakers-no_std && cargo run --target="thumbv7m-none-eabi" --no-default-features --features="crypto-software-test-rng" --release
+
+
+  build-example-for-cortex-m4:
+    needs: unit-tests
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        crypto: [crypto-software-test-rng, crypto-nrf52840]
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
+
+    - name: Install arm targets for Rust
+      run: rustup target add thumbv7em-none-eabihf
+
+    - name: Build example
+      run: cd examples/lakers-no_std && cargo build --target="thumbv7em-none-eabihf" --no-default-features --features="${{ matrix.crypto }}, rtt" --release
+
+
+  build-coap-example:
+    needs: unit-tests
+    runs-on: ubuntu-24.04
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
+
+    - name: Build server
+      run: cargo build --bin coapserver
+
+    - name: Build client
+      run: cargo build --bin coapclient
+
+    - name: Build coap-handler based server
+      run: cargo build --bin coapserver-coaphandler

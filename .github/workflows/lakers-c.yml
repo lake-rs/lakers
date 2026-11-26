@@ -1,0 +1,77 @@
+name: lakers-c
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -Dwarnings
+
+jobs:
+  build-lakers-c:
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # crypto-cryptocell310 is a deprecated alias of crypto-nrf52840, kept so
+        # the release still ships lakers-c-crypto-cryptocell310-*.zip
+        crypto: [crypto-rustcrypto, crypto-nrf52840, crypto-cryptocell310]
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
+
+    - name: Install arm targets for Rust
+      run: rustup target add thumbv7em-none-eabihf
+    - name: Install cbindgen
+      run: sudo apt-get -y update && sudo apt-get -y install cbindgen
+
+    - name: Build static library, generate headers, and zip to file
+      run: cd lakers-c && ./build.sh "${{ matrix.crypto }}"
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: lakers-c-${{ matrix.crypto }}
+        path: ./target/lakers-c-*.zip
+
+
+  build-lakers-c-example:
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
+
+    - name: Checkout libcoap
+      uses: actions/checkout@v4
+      with:
+        repository: obgm/libcoap
+        path: libcoap
+
+    - name: Install libcoap
+      run: |
+        cd libcoap && ./autogen.sh
+        ./configure --disable-doxygen --disable-manpages --disable-dtls --disable-oscore --disable-oscore-group
+        make && sudo make install
+
+    - name: Install arm targets for Rust
+      run: rustup target add thumbv7em-none-eabihf
+    - name: Install cbindgen
+      run: sudo apt-get -y update && sudo apt-get -y install cbindgen
+
+    - name: Build static library and generate headers
+      run: cd lakers-c && ./build.sh crypto-rustcrypto
+
+    - name: Build and run native C eaxmple
+      run: |
+        cd examples/lakers-c-native
+        make all LAKERS_EAD=authz
