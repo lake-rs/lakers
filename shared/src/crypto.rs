@@ -16,6 +16,10 @@ use crate::{
     LakeBuffer, AES_CCM_TAG_LEN, MAX_SUITES_LEN,
 };
 
+/// P-256 identifier from the IANA COSE Elliptic Curves registry
+/// <https://www.iana.org/assignments/cose/cose.xhtml#elliptic-curves>
+const COSE_CRV_P256: i128 = 1;
+
 /// Returns the SUITES_I array, or an error if selected_suite is not supported.
 ///
 /// The SUITES_I list will contain:
@@ -168,7 +172,7 @@ pub fn aes_ccm_decrypt<C: Cal, const N: usize>(
 }
 
 fn p256_algorithm<C: Cal>() -> DhAlgorithmOf<C> {
-    DhAlgorithmOf::<C>::from_cose_ecdh(1).expect("cal must support ecdh p-256")
+    DhAlgorithmOf::<C>::from_cose_ecdh(COSE_CRV_P256).expect("cal must support ecdh p-256")
 }
 
 #[hax_lib::opaque]
