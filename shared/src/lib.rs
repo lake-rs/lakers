@@ -70,6 +70,8 @@ pub const AES_CCM_TAG_LEN: usize = 8;
 pub const MAC_LENGTH: usize = 8; // used for EAD Zeroconf
 pub const MAC_LENGTH_2: usize = MAC_LENGTH;
 pub const MAC_LENGTH_3: usize = MAC_LENGTH_2;
+pub const MAC_LENGTH_SIG: usize = SHA256_DIGEST_LEN;
+pub const SIGNATURE_LENGTH: usize = 64;
 pub const VOUCHER_LEN: usize = MAC_LENGTH;
 pub const MAX_EAD_ITEMS: usize = 4;
 
@@ -180,6 +182,8 @@ pub type BufferPlaintext3 = LakeMessageBuffer;
 pub type BufferPlaintext4 = LakeMessageBuffer;
 pub type BytesMac2 = [u8; MAC_LENGTH_2];
 pub type BytesMac3 = [u8; MAC_LENGTH_3];
+pub type BytesMacSig = [u8; MAC_LENGTH_SIG];
+pub type BytesSignature = [u8; SIGNATURE_LENGTH];
 pub type BufferMessage1 = LakeMessageBuffer;
 pub type BufferMessage3 = LakeMessageBuffer;
 pub type BufferMessage4 = LakeMessageBuffer;
@@ -1169,8 +1173,20 @@ mod lake_parser {
     pub fn decode_plaintext_2(
         plaintext_2: &BufferCiphertext2,
     ) -> Result<(ConnId, IdCred, BytesMac2, EadItems), LAKEError> {
+        decode_plaintext_2_sized::<MAC_LENGTH_2>(plaintext_2)
+    }
+
+    pub fn decode_plaintext_2_sig(
+        plaintext_2: &BufferCiphertext2,
+    ) -> Result<(ConnId, IdCred, BytesSignature, EadItems), LAKEError> {
+        decode_plaintext_2_sized::<SIGNATURE_LENGTH>(plaintext_2)
+    }
+
+    fn decode_plaintext_2_sized<const N: usize>(
+        plaintext_2: &BufferCiphertext2,
+    ) -> Result<(ConnId, IdCred, [u8; N], EadItems), LAKEError> {
         trace!("Enter decode_plaintext_2");
-        let mut mac_2: BytesMac2 = [0x00; MAC_LENGTH_2];
+        let mut sig_or_mac_2 = [0x00; N];
 
         let mut decoder = CBORDecoder::new(plaintext_2.as_slice());
 
@@ -1179,18 +1195,18 @@ mod lake_parser {
         // the id_cred may have been encoded as a single int, a byte string, or a map
         let id_cred_r = IdCred::from_encoded_value(decoder.any_as_encoded()?)?;
 
-        mac_2[..].copy_from_slice(decoder.bytes_sized(MAC_LENGTH_2)?);
+        sig_or_mac_2[..].copy_from_slice(decoder.bytes_sized(N)?);
 
         // if there is still more to parse, the rest will be the EADs
         if plaintext_2.len() > decoder.position() {
             let ead_res = parse_eads(decoder.remaining_buffer()?);
             if let Ok(ead2_buffer) = ead_res {
-                Ok((c_r, id_cred_r, mac_2, ead2_buffer))
+                Ok((c_r, id_cred_r, sig_or_mac_2, ead2_buffer))
             } else {
                 Err(ead_res.unwrap_err())
             }
         } else if decoder.finished() {
-            Ok((c_r, id_cred_r, mac_2, EadItems::new()))
+            Ok((c_r, id_cred_r, sig_or_mac_2, EadItems::new()))
         } else {
             Err(LAKEError::ParsingError)
         }
@@ -1222,26 +1238,38 @@ mod lake_parser {
     pub fn decode_plaintext_3(
         plaintext_3: &BufferPlaintext3,
     ) -> Result<(IdCred, BytesMac3, EadItems), LAKEError> {
+        decode_plaintext_3_sized::<MAC_LENGTH_3>(plaintext_3)
+    }
+
+    pub fn decode_plaintext_3_sig(
+        plaintext_3: &BufferPlaintext3,
+    ) -> Result<(IdCred, BytesSignature, EadItems), LAKEError> {
+        decode_plaintext_3_sized::<SIGNATURE_LENGTH>(plaintext_3)
+    }
+
+    fn decode_plaintext_3_sized<const N: usize>(
+        plaintext_3: &BufferPlaintext3,
+    ) -> Result<(IdCred, [u8; N], EadItems), LAKEError> {
         trace!("Enter decode_plaintext_3");
-        let mut mac_3: BytesMac3 = [0x00; MAC_LENGTH_3];
+        let mut sig_or_mac_3 = [0x00; N];
 
         let mut decoder = CBORDecoder::new(plaintext_3.as_slice());
 
         // the id_cred may have been encoded as a single int, a byte string, or a map
         let id_cred_i = IdCred::from_encoded_value(decoder.any_as_encoded()?)?;
 
-        mac_3[..].copy_from_slice(decoder.bytes_sized(MAC_LENGTH_3)?);
+        sig_or_mac_3[..].copy_from_slice(decoder.bytes_sized(N)?);
 
         // if there is still more to parse, the rest will be the EADs
         if plaintext_3.len() > decoder.position() {
             let ead_res = parse_eads(decoder.remaining_buffer()?);
             if let Ok(ead3_buffer) = ead_res {
-                Ok((id_cred_i, mac_3, ead3_buffer))
+                Ok((id_cred_i, sig_or_mac_3, ead3_buffer))
             } else {
                 Err(ead_res.unwrap_err())
             }
         } else if decoder.finished() {
-            Ok((id_cred_i, mac_3, EadItems::new()))
+            Ok((id_cred_i, sig_or_mac_3, EadItems::new()))
         } else {
             Err(LAKEError::ParsingError)
         }
@@ -1844,5 +1872,89 @@ mod test_encode_info {
         assert_eq!(info.len(), 1 + 3 + context.len() + 2);
         assert_eq!(&info.as_slice()[4..4 + context.len()], &context[..]);
         assert_eq!(&info.as_slice()[info.len() - 2..], &[0x18, 0x20]);
+    }
+}
+
+#[cfg(test)]
+mod test_decode_plaintext {
+    use super::*;
+    use hexlit::hex;
+
+    // RFC 9529 sections 3.4 and 3.5
+    const PLAINTEXT_2_MAC: &[u8] = &hex!("273248 0943305c899f5c54");
+    const PLAINTEXT_3_MAC: &[u8] = &hex!("2b48 623c91df41e34c2f");
+
+    // RFC 9529 sections 2.2 and 2.3
+    const SIGNATURE_2: BytesSignature = hex!(
+        "c3b5bd44d1e44a085c03d3aede4e1e6c11c572a1968cc3629b505f98c681608d"
+        "3d1de793d1c40eb5dd5d89acf1966aea07022b48cdc99870ebc40374e8fa6e09"
+    );
+    const SIGNATURE_3: BytesSignature = hex!(
+        "96e1cd5fceadfac1b5af819443f70924f5719955957fd02655beb4775e1a7318"
+        "6a0d1d3ea683f08f8d03dcecb9cf154e1c6f555a1e12ca118ce42bdba6878907"
+    );
+
+    // C_R and kid from RFC 9529 section 3, followed by a 64-byte bstr header
+    const HEADER_2_SIG: &[u8] = &hex!("27325840");
+    const HEADER_3_SIG: &[u8] = &hex!("2b5840");
+
+    // label 8, without a value
+    const EAD: &[u8] = &hex!("08");
+
+    fn plaintext(parts: &[&[u8]]) -> LakeMessageBuffer {
+        LakeMessageBuffer::new_from_slice(&parts.concat()).unwrap()
+    }
+
+    #[test]
+    fn plaintext_2_sig() {
+        let plaintext_2 = plaintext(&[HEADER_2_SIG, &SIGNATURE_2]);
+        let (c_r, id_cred_r, signature_2, ead_2) = decode_plaintext_2_sig(&plaintext_2).unwrap();
+        assert_eq!(c_r.as_cbor(), hex!("27"));
+        assert_eq!(id_cred_r.as_full_value(), hex!("a1044132"));
+        assert_eq!(signature_2, SIGNATURE_2);
+        assert!(ead_2.is_empty());
+
+        let plaintext_2 = plaintext(&[HEADER_2_SIG, &SIGNATURE_2, EAD]);
+        let (_, _, signature_2, ead_2) = decode_plaintext_2_sig(&plaintext_2).unwrap();
+        assert_eq!(signature_2, SIGNATURE_2);
+        assert_eq!(ead_2.len(), 1);
+    }
+
+    #[test]
+    fn plaintext_3_sig() {
+        let plaintext_3 = plaintext(&[HEADER_3_SIG, &SIGNATURE_3]);
+        let (id_cred_i, signature_3, ead_3) = decode_plaintext_3_sig(&plaintext_3).unwrap();
+        assert_eq!(id_cred_i.as_full_value(), hex!("a104412b"));
+        assert_eq!(signature_3, SIGNATURE_3);
+        assert!(ead_3.is_empty());
+
+        let plaintext_3 = plaintext(&[HEADER_3_SIG, &SIGNATURE_3, EAD]);
+        let (_, signature_3, ead_3) = decode_plaintext_3_sig(&plaintext_3).unwrap();
+        assert_eq!(signature_3, SIGNATURE_3);
+        assert_eq!(ead_3.len(), 1);
+    }
+
+    #[test]
+    fn length_mismatch_is_rejected() {
+        let plaintext_2_mac = plaintext(&[PLAINTEXT_2_MAC]);
+        let plaintext_3_mac = plaintext(&[PLAINTEXT_3_MAC]);
+        let plaintext_2_sig = plaintext(&[HEADER_2_SIG, &SIGNATURE_2]);
+        let plaintext_3_sig = plaintext(&[HEADER_3_SIG, &SIGNATURE_3]);
+
+        assert!(decode_plaintext_2(&plaintext_2_mac).is_ok());
+        assert!(decode_plaintext_3(&plaintext_3_mac).is_ok());
+        assert!(decode_plaintext_2(&plaintext_2_sig).is_err());
+        assert!(decode_plaintext_3(&plaintext_3_sig).is_err());
+        assert!(decode_plaintext_2_sig(&plaintext_2_mac).is_err());
+        assert!(decode_plaintext_3_sig(&plaintext_3_mac).is_err());
+    }
+
+    #[test]
+    fn truncated_signature_is_rejected() {
+        let plaintext_2 = plaintext(&[HEADER_2_SIG, &SIGNATURE_2[1..]]);
+        let plaintext_3 = plaintext(&[HEADER_3_SIG, &SIGNATURE_3[1..]]);
+
+        assert!(decode_plaintext_2_sig(&plaintext_2).is_err());
+        assert!(decode_plaintext_3_sig(&plaintext_3).is_err());
     }
 }
