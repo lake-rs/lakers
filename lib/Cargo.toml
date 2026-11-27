@@ -31,6 +31,7 @@ test-ead-none = [ ]
 test-ead-authz = [ ]
 defmt = ["dep:defmt"]
 log = ["dep:log"]
+large_buffers = [ "lakers-shared/large_buffers" ]
 
 [lib]
 crate-type = ["rlib"]

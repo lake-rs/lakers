@@ -54,7 +54,7 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Run unit tests with feature matrix # note that we only add `--package lakers-ead-authz` when testing with that config
-      run: RUST_BACKTRACE=1 cargo test -p lakers -p lakers-crypto -p lakers-shared ${{ matrix.ead == 'ead-authz' && '-p lakers-ead-authz' || '' }}  --no-default-features --features="lakers-crypto/rustcrypto, test-${{ matrix.ead }}${{ matrix.buffers == 'large-buffers' && ', lakers-shared/large_buffers' || '' }}" --no-fail-fast -- --test-threads 1
+      run: RUST_BACKTRACE=1 cargo test -p lakers -p lakers-crypto -p lakers-shared ${{ matrix.ead == 'ead-authz' && '-p lakers-ead-authz' || '' }}  --no-default-features --features="lakers-crypto/rustcrypto, test-${{ matrix.ead }}${{ matrix.buffers == 'large-buffers' && ', lakers/large_buffers' || '' }}" --no-fail-fast -- --test-threads 1
 
 
   build-lake-package:
